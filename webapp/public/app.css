@@ -39,7 +39,29 @@ td.over2{outline:2px solid var(--warn); outline-offset:-2px; font-weight:700; co
 td.over3{outline:2px solid var(--red); outline-offset:-2px; font-weight:700; color:#7F0000}
 td.dbl2{background:var(--warn); color:#fff; font-weight:700}
 td.dbl3{background:var(--red); color:#fff; font-weight:700}
+/* A week placed by hand. Dotted so it never reads as an overlap, which owns solid. */
+td.pinned{outline:2px dotted var(--fg1); outline-offset:-2px}
 tr.qstart th, tr.qstart td{border-top:2px solid var(--fg1)}
+
+/* Engineers mode: weeks DOWN, engineers ACROSS. Only ~8 columns, so they can be wide
+   enough for a project name — which is what the cells hold, and why this axis exists.
+   Carried over from the Apps Script app; the first cut of this client centred the
+   cells at a fixed 104px and looked visibly unlike the tool it is replacing. */
+table.sched.byeng thead th{top:0; height:auto; padding:8px 10px; text-align:left}
+table.sched.byeng thead th.corner{min-width:128px; max-width:128px}
+/* Left, matching the WEEK header above it. Right-aligning suits equal-width numbers,
+   not labels running from "09/07 - 09/13" to "12/28 - 01/03 '27". Sized from the
+   widest of those: 127px of content box. */
+table.sched.byeng tbody th{min-width:128px; max-width:128px; font-size:12px;
+  color:var(--fg2); text-align:left; padding:4px 10px; font-variant-numeric:tabular-nums}
+/* Capped so eight columns always fit the window; the full title is in the tooltip.
+   Uncapped, one long name ("Blue Box Season 2 (Eps 1-2)") stretches its column and
+   pushes the table past the viewport, which is the problem this axis solves. */
+table.sched.byeng td{min-width:120px; max-width:150px; width:auto; height:auto;
+  padding:4px 10px; text-align:left; overflow:hidden; text-overflow:ellipsis}
+/* This week is marked by bolding its label only. An outline round the whole row
+   competed with the quarter rules and the overlap outlines for no gain. */
+table.sched.byeng tr.nowrow th{color:var(--fg1); font-weight:700}
 .legend{display:flex; gap:16px; font-size:11px; color:var(--fg2); margin-top:10px; flex-wrap:wrap}
 .sw{display:inline-block; width:12px; height:12px; vertical-align:-2px; margin-right:5px;
   border:1px solid rgba(0,0,0,.15)}

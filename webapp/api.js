@@ -61,6 +61,8 @@ function bootstrap(book) {
         phase: b.phase, engineer: b.engineer, start: b.start_date, end: b.end_date, note: b.note || '',
       })),
     })),
+    // the Monday of the current week, so the grid can bold today's row
+    today_week: A.weekStart(A.widx(new Date().toISOString().slice(0, 10))),
     counts: { projects: book.projects.length, live_rows: rows.length,
               over2: d.two, over3: d.three },
   };

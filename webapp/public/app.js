@@ -37,13 +37,15 @@ const PHASE_BG = { Dub:'var(--dub)', Edit:'var(--edit)', Mix:'var(--mix)' };
 function renderSchedule() {
   const d = SCHED;
   if (d.empty) return '<div class="loading">No bookings yet.</div>';
-  let h = '<div class="gridwrap"><table class="sched"><thead><tr><th class="corner">Week</th>';
+  let h = '<div class="gridwrap"><table class="sched byeng"><thead><tr><th class="corner">Week</th>';
   d.labels.forEach(n => { h += `<th>${esc(n)}</th>`; });
   h += '</tr></thead><tbody>';
   let lastQ = null;
   d.weeks.forEach((w, ci) => {
     const starts = w.quarter !== lastQ; lastQ = w.quarter;
-    h += `<tr${starts ? ' class="qstart"' : ''}><th>${numLabel(w)}</th>`;
+    const cls = [starts ? 'qstart' : '', w.start === BOOT.today_week ? 'nowrow' : '']
+      .filter(Boolean).join(' ');
+    h += `<tr${cls ? ` class="${cls}"` : ''}><th>${numLabel(w)}</th>`;
     d.labels.forEach((n, ri) => {
       const c = d.cells[ri][ci];
       let cls = '', style = '', text = '';
@@ -53,6 +55,7 @@ function renderSchedule() {
         if (c.count > 1) cls = deep > 2 ? 'dbl3' : 'dbl2';
         else style = ` style="background:${PHASE_BG[c.phase] || 'transparent'}"`;
         if (deep > 1) cls += (cls ? ' ' : '') + (deep > 2 ? 'over3' : 'over2');
+        if (c.items.some(i => i.hand)) cls += (cls ? ' ' : '') + 'pinned';
       }
       // Each booking in the cell is separately draggable: a cell holding two is one
       // square on screen but two different things you might mean, and dragging "the
@@ -61,11 +64,10 @@ function renderSchedule() {
       if (c) {
         body = c.items.map(it => {
           const label = c.items.length > 1 ? it.p : text;
-          const shortL = label.length > 15 ? label.slice(0, 14) + '…' : label;
           return `<span class="bk" draggable="true" data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
                  ` data-from="${esc(n)}" data-wk="${w.start}"` +
                  (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"' : '') +
-                 `>${esc(shortL)}</span>`;
+                 `>${esc(label)}</span>`;
         }).join('<span class="bksep"> / </span>');
       }
       h += `<td class="${cls}"${style} data-eng="${esc(n)}" data-wk="${w.start}"` +
@@ -79,6 +81,7 @@ function renderSchedule() {
     '<span><span class="sw" style="background:var(--mix)"></span>Mix</span>' +
     '<span><span class="sw" style="border:2px solid var(--warn);background:transparent"></span>2 overlaps this week</span>' +
     '<span><span class="sw" style="border:2px solid var(--red);background:transparent"></span>3 overlaps — reassign</span>' +
+    '<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand — click to undo</span>' +
     '</div>';
   return h;
 }
