@@ -28,7 +28,8 @@ main{padding:20px 22px 64px}
 table.sched{border-collapse:separate; border-spacing:0; font-size:11px; width:auto}
 table.sched th,table.sched td{padding:0; border:none; white-space:nowrap}
 table.sched thead th{position:sticky; top:0; z-index:3; background:var(--black); color:#fff;
-  font-size:11px; padding:7px 4px; text-align:center; border-right:1px solid #333; font-weight:700}
+  font-size:11px; padding:7px 4px; text-align:center; border-right:1px solid #333;
+  font-weight:700; text-transform:uppercase; letter-spacing:0.06em}
 table.sched thead th.corner{left:0; z-index:6; text-align:left; padding-left:12px; min-width:128px}
 /* Following a row across eight columns, and a column down 58 rows, is most of what
    reading this grid IS. Both were in the Apps Script app and neither survived the
@@ -165,12 +166,13 @@ table.projects tbody tr{cursor:pointer}
 label.inline{font-size:10px; font-weight:700; text-transform:uppercase;
   letter-spacing:0.07em; color:var(--fg2); margin:0 2px 0 6px}
 .bar-row select{width:auto; padding:5px 8px; font-size:12px}
-/* Projects mode: weeks ACROSS, ~58 of them, so a column is narrow and the header
-   stacks its two dates. The cell shows initials; the full name is in the tooltip. */
-table.sched thead th.qcol, table.sched td.qcol{border-left:2px solid var(--fg1)}
-table.sched:not(.byeng) tbody th{min-width:210px; max-width:210px; text-align:left;
-  padding:4px 10px; font-size:12px}
-table.sched:not(.byeng) thead th{font-size:9px; line-height:1.15; padding:5px 2px}
-table.sched:not(.byeng) tbody td{width:38px; min-width:38px; font-size:10px;
-  text-align:center; padding:0}
+/* Projects mode. Two sticky header rows: the month band pins to the top and the
+   day-range row pins directly beneath it, offset by the band's height — both at top:0
+   would overlap. */
+table.sched thead tr:first-child th{top:0; height:30px}
+table.sched thead tr:nth-child(2) th{top:30px}
+.monthband th{background:#333; font-size:12px; letter-spacing:0.04em}
+table.sched:not(.byeng) tbody th{min-width:240px; max-width:240px; text-align:left;
+  padding:6px 12px; font-size:13px; font-weight:400; text-transform:uppercase;
+  overflow:hidden; text-overflow:ellipsis}
 td.marker{background:var(--red); color:#fff; font-weight:700}

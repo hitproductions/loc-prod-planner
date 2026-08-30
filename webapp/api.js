@@ -103,7 +103,11 @@ function schedule(book, opts) {
 
   let weeks = [];
   for (let w = min; w <= max; w++) {
-    weeks.push({ week: w, start: A.weekStart(w), label: A.weekLabel(w), quarter: A.quarterOf(w) });
+    weeks.push({ week: w, start: A.weekStart(w), label: A.weekLabel(w),
+                 quarter: A.quarterOf(w),
+                 // Projects mode groups columns under a month band and labels each week
+                 // by day range; Engineers mode uses neither.
+                 month: A.monthLabel(w), day_range: A.weekDayRange(w) });
   }
   // Every quarter present, so the picker can only offer ranges that exist.
   const quarters = [...new Set(weeks.map(w => w.quarter))].sort();

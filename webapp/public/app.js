@@ -126,26 +126,38 @@ function renderEngineerGrid() {
 }
 
 // Projects DOWN, weeks ACROSS — a project is a bar you read left to right, and the
-// deadline is a marker in its own row.
+// deadline is a marker in its own row. Two header rows: a month band, and the day
+// range under it. Fifty-eight columns of "06/22 06/28" is unreadable; grouped under
+// JUN 2026 the eye finds a month without reading a single date.
 function renderProjectGrid() {
   const d = SCHED;
   const mark = {};
   (d.markers || []).forEach(m => { mark[m.row + '|' + m.col] = true; });
-  let h = '<div class="gridwrap"><table class="sched"><thead><tr><th class="corner">Project</th>';
-  let lastQ = null;
+
+  const months = [];
+  let last = null;
   d.weeks.forEach(w => {
-    const starts = w.quarter !== lastQ; lastQ = w.quarter;
-    h += `<th class="${starts ? 'qcol' : ''}">${numLabel(w).replace(' - ', '<br>')}</th>`;
+    if (w.month !== last) { months.push({ m: w.month, n: 1 }); last = w.month; }
+    else months[months.length - 1].n++;
   });
-  h += '</tr></thead><tbody>';
+
+  let h = '<div class="gridwrap"><table class="sched"><thead>';
+  h += '<tr class="monthband"><th class="corner">Project</th>' +
+    months.map(m => `<th colspan="${m.n}">${esc(m.m)}</th>`).join('') + '</tr>';
+  h += '<tr><th class="corner"></th>' +
+    d.weeks.map((w, ci) => `<th data-c="${ci}">${esc(w.day_range)}</th>`).join('') + '</tr>';
+  h += '</thead><tbody>';
+
   d.labels.forEach((name, ri) => {
     h += `<tr><th title="${esc(name)}">${esc(name)}</th>`;
     d.weeks.forEach((w, ci) => {
       const c = d.cells[ri][ci];
-      let cls = [], style = '', text = '';
+      const cls = [];
+      let style = '', text = '';
       if (c) {
         const deep = c.depth || c.count || 1;
         text = c.text;
+        cls.push('cell');
         if (c.count > 1) cls.push(deep > 2 ? 'dbl3' : 'dbl2');
         else style = ` style="background:${PHASE_BG[c.phase] || 'transparent'}"`;
         if (deep > 1) cls.push(deep > 2 ? 'over3' : 'over2');
@@ -153,9 +165,9 @@ function renderProjectGrid() {
       } else if (mark[ri + '|' + ci]) {
         cls.push('marker'); text = '\u25B2';
       }
-      if (w.quarter !== d.weeks[ci - 1]?.quarter) cls.push('qcol');
-      const initials = text.split(' / ').map(n => n.slice(0, 3)).join('/');
-      h += `<td class="${cls.join(' ')}"${style} title="${esc(text || 'deadline')}">${esc(initials)}</td>`;
+      h += `<td data-c="${ci}" class="${cls.join(' ')}"${style}` +
+           ` title="${esc(text ? text + ' \u00b7 ' + w.label : w.label + ' \u00b7 deadline')}">` +
+           `${esc(text)}</td>`;
     });
     h += '</tr>';
   });
