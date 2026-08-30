@@ -74,6 +74,7 @@ without HTTP or Google (`test/webapp.test.js`).
     POST /api/replan-apply  apply the previewed plan, by token
     POST /api/rollback      undo the most recent change
     GET  /api/history       the log; ?event=N for what one change did
+    GET  /api/report        completed work; ?month=YYYY-MM
 
 Nothing is deleted. A row that stops being true is superseded and stays as history.
 
@@ -117,6 +118,18 @@ the header, and re-plan leaves it alone via the `locked` mechanism that already 
 Two columns on the Projects tab, `Status` and `Completed`, appended AFTER `Locked` so
 the Apps Script app's positional columns are undisturbed. That app creates them and
 ignores them; only the web app reads them.
+
+## The monthly report
+
+Keyed on the COMPLETED date, never the deadline. A job can be delivered early or late,
+and the report is about the month it was signed off in. A project with no completion
+date does not appear at all — nothing is inferred from a deadline having passed.
+
+Weeks are booked-row weeks, the same unit the schedule and Analysis use, so the three
+reconcile. An engineer who did two phases on one project counts once under Projects and
+for both phases under Weeks.
+
+Built to be printed: the nav and controls drop out, and it lays out as a document.
 
 ## Not done yet
 

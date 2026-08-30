@@ -65,6 +65,7 @@ const ROUTES = {
   '/api/bootstrap': b => api.bootstrap(b),
   '/api/schedule':  (b, q) => api.schedule(b, { mode: q.get('mode'), from: q.get('from'), to: q.get('to') }),
   '/api/analysis':  (b, q) => api.analysis(b, { from: q.get('from') }),
+  '/api/report':    (b, q) => api.report(b, { month: q.get('month') }),
 };
 
 // Actions are pure too: book + payload -> a change set. The route applies it and hands

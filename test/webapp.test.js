@@ -488,6 +488,77 @@ section('Analysis');
      JSON.stringify(c.slice(0, 2)));
 }
 
+section('The monthly report');
+{
+  fixture._reset();
+  let book = await fixture.read();
+  const t = i => book.projects[i].project_title;
+  const mark = async (i, on) => {
+    await fixture.write(actions.setStatus(book, { title: t(i), status: 'Complete',
+                                                  completed: on }).change);
+    book = await fixture.read();
+  };
+  await mark(0, '2026-08-14');
+  await mark(1, '2026-08-28');
+  await mark(2, '2026-09-03');
+
+  const aug = api.report(book, { month: '2026-08' });
+  ok('only work completed in that month appears', aug.projects.length === 2,
+     aug.projects.map(p => p.title + '@' + p.completed).join(', '));
+  ok('and every one of them is dated inside it',
+     aug.projects.every(p => p.completed.slice(0, 7) === '2026-08'));
+
+  // Keyed on the COMPLETED date, not the deadline. A job delivered in September
+  // against an August deadline belongs to September, and the other way round.
+  const sep = api.report(book, { month: '2026-09' });
+  ok('a project delivered the month after its deadline lands in the later month',
+     sep.projects.length === 1 && sep.projects[0].completed.slice(0, 7) === '2026-09',
+     JSON.stringify(sep.projects.map(p => [p.title, p.deadline, p.completed])));
+
+  ok('the picker offers only months with something in them',
+     aug.months.length === 2 && aug.months.includes('2026-08') && aug.months.includes('2026-09'),
+     aug.months.join(', '));
+  ok('newest month first', aug.months[0] === '2026-09');
+
+  // An unfinished project must never be inferred into a report from its deadline.
+  const unmarked = book.projects.filter(p => p.status !== 'Complete').length;
+  ok('the book still has unfinished work', unmarked > 0);
+  const everyMonth = [...new Set(book.projects.filter(p => p.deadline)
+    .map(p => p.deadline.slice(0, 7)))];
+  const reported = everyMonth.reduce((n, m) => n + api.report(book, { month: m }).projects.length, 0);
+  ok('nothing unfinished is guessed into any month', reported <= 3, `${reported} reported`);
+
+  // the arithmetic
+  const p = aug.projects[0];
+  const mine = A.activeRows(book.bookings).filter(b => b.project === p.title);
+  const weeks = mine.reduce((n, b) => n + (A.widx(b.end_date) - A.widx(b.start_date) + 1), 0);
+  ok('a project\'s weeks are its booking-row weeks', p.weeks === weeks, `${p.weeks} vs ${weeks}`);
+  ok('the total is the sum of them',
+     aug.totals.weeks === aug.projects.reduce((n, x) => n + x.weeks, 0));
+  ok('delivered-against-deadline is signed the readable way',
+     aug.projects.every(x => x.days_early === null ||
+       (x.days_early > 0) === (x.completed < x.deadline)),
+     JSON.stringify(aug.projects.map(x => [x.deadline, x.completed, x.days_early])));
+  ok('on-time and late together account for every project',
+     aug.totals.on_or_before + aug.totals.late === aug.totals.projects);
+
+  // Engineer weeks come from the bookings, so two phases on one project count twice
+  // in weeks and once in projects.
+  const byEng = aug.by_engineer;
+  ok('engineer weeks sum to the month\'s weeks',
+     byEng.reduce((n, e) => n + e.weeks, 0) === aug.totals.weeks,
+     `${byEng.reduce((n, e) => n + e.weeks, 0)} vs ${aug.totals.weeks}`);
+  ok('and nobody is credited with more projects than there were',
+     byEng.every(e => e.projects <= aug.totals.projects));
+  ok('client weeks also sum to the month',
+     aug.by_client.reduce((n, c) => n + c.weeks, 0) === aug.totals.weeks);
+
+  const empty = api.report(book, { month: '2020-01' });
+  ok('a month with nothing in it reports nothing, rather than erroring',
+     empty.projects.length === 0 && empty.totals.weeks === 0);
+  fixture._reset();
+}
+
 section('Re-plan: preview, then apply against the same book');
 {
   // Over HTTP, because the guard lives in the server: the preview is held there with

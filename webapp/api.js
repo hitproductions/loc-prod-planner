@@ -253,4 +253,93 @@ function analysis(book, opts) {
   };
 }
 
-module.exports = { bootstrap, schedule, analysis, depths, projectDepth, engine: A };
+// ---------------------------------------------------------------- the report
+// What was delivered in a month, and by whom.
+//
+// Keyed on the COMPLETED date, not the deadline: a project can be delivered early or
+// late, and the report is about the month the work was signed off in, not the month it
+// was due. A project with no completed date has not been marked done and does not
+// appear at all — the report never guesses.
+function report(book, opts) {
+  const month = (opts && opts.month) || todayLocal().slice(0, 7);
+  const rows = live(book);
+
+  // Every month that has something in it, so the picker only offers real answers.
+  const months = [...new Set(book.projects
+    .filter(p => p.status === 'Complete' && p.completed)
+    .map(p => String(p.completed).slice(0, 7)))].sort().reverse();
+
+  const done = book.projects.filter(p =>
+    p.status === 'Complete' && String(p.completed || '').slice(0, 7) === month);
+
+  const weeksOf = b => A.widx(b.end_date) - A.widx(b.start_date) + 1;
+  const projects = done.map(p => {
+    const mine = rows.filter(b => b.project === p.project_title);
+    const who = phase => [...new Set(mine.filter(b => b.phase === phase)
+      .map(b => b.engineer))].sort();
+    const weeks = mine.reduce((n, b) => n + weeksOf(b), 0);
+    return {
+      title: p.project_title, client: p.client, deadline: p.deadline,
+      completed: p.completed,
+      // Delivered against the deadline, which is the number a producer actually wants.
+      days_early: p.deadline
+        ? Math.round((Date.parse(p.deadline + 'T00:00:00Z') -
+                      Date.parse(p.completed + 'T00:00:00Z')) / 86400000) : null,
+      phases: `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`,
+      dub: who('Dub'), edit: who('Edit'), mix: who('Mix'),
+      weeks,
+      music: /^yes$/i.test(String(p.music_songs || '')),
+      special: /^yes$/i.test(String(p.special_project || '')),
+      atmos: /^yes$/i.test(String(p.atmos_required || '')),
+    };
+  }).sort((a, b) => String(a.completed).localeCompare(String(b.completed)) ||
+                    a.title.localeCompare(b.title));
+
+  const tally = (key) => {
+    const m = {};
+    projects.forEach(p => {
+      const names = Array.isArray(p[key]) ? p[key] : [p[key]];
+      names.filter(Boolean).forEach(n => {
+        m[n] = m[n] || { name: n, projects: 0, weeks: 0 };
+        m[n].projects++;
+      });
+    });
+    return Object.values(m).sort((a, b) => b.projects - a.projects || a.name.localeCompare(b.name));
+  };
+
+  // Engineer weeks are counted from the BOOKINGS, so a person who did two phases on
+  // one project is credited for both — the tally above only counts projects touched.
+  const byEngineer = {};
+  done.forEach(p => {
+    rows.filter(b => b.project === p.project_title).forEach(b => {
+      const e = byEngineer[b.engineer] = byEngineer[b.engineer] ||
+        { name: b.engineer, weeks: 0, projects: new Set(), phases: {} };
+      e.weeks += weeksOf(b);
+      e.projects.add(b.project);
+      e.phases[b.phase] = (e.phases[b.phase] || 0) + weeksOf(b);
+    });
+  });
+
+  const byClient = {};
+  projects.forEach(p => {
+    const c = byClient[p.client] = byClient[p.client] || { name: p.client, projects: 0, weeks: 0 };
+    c.projects++; c.weeks += p.weeks;
+  });
+
+  return {
+    month, months,
+    projects,
+    totals: {
+      projects: projects.length,
+      weeks: projects.reduce((n, p) => n + p.weeks, 0),
+      on_or_before: projects.filter(p => p.days_early !== null && p.days_early >= 0).length,
+      late: projects.filter(p => p.days_early !== null && p.days_early < 0).length,
+    },
+    by_client: Object.values(byClient).sort((a, b) => b.weeks - a.weeks),
+    by_engineer: Object.values(byEngineer)
+      .map(e => ({ ...e, projects: e.projects.size }))
+      .sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name)),
+  };
+}
+
+module.exports = { bootstrap, schedule, analysis, report, depths, projectDepth, engine: A };

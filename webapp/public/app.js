@@ -265,6 +265,98 @@ function wireProjects() {
     tr.addEventListener('click', () => openForm(tr.dataset.title)));
 }
 
+// ---------------------------------------------------------------- the report
+// What was delivered in a month. Keyed on when a project was marked done, not on its
+// deadline — a job can land early or late, and this is about the month it was signed
+// off in. Built to be printed: it is the thing that gets handed to someone.
+async function loadReport(month) {
+  $('view').innerHTML = '<div class="loading">Counting\u2026</div>';
+  REPORT = await get('/api/report' + (month ? '?month=' + encodeURIComponent(month) : ''));
+  MONTH = REPORT.month;
+  paint();
+}
+
+const MONTH_NAME = m => {
+  const [y, mm] = String(m).split('-');
+  return ['January','February','March','April','May','June','July','August',
+          'September','October','November','December'][Number(mm) - 1] + ' ' + y;
+};
+
+function renderReport() {
+  if (!REPORT) return '<div class="loading">Counting\u2026</div>';
+  const r = REPORT;
+
+  let h = '<div class="bar-row noprint">' +
+    '<label class="inline">Month</label><select id="rMonth">' +
+    (r.months.length ? r.months.map(m =>
+        `<option value="${esc(m)}"${m === r.month ? ' selected' : ''}>${esc(MONTH_NAME(m))}</option>`).join('')
+      : `<option>${esc(MONTH_NAME(r.month))}</option>`) +
+    '</select><div class="spacer"></div>' +
+    '<button class="btn small" id="rPrint">Print</button></div>';
+
+  h += `<div class="sheetdoc"><h1>Completed work \u2014 ${esc(MONTH_NAME(r.month))}</h1>`;
+
+  if (!r.projects.length) {
+    h += '<p class="muted">Nothing was marked complete in this month.</p>' +
+      '<p class="hint">A project appears here once you mark it complete on its row in ' +
+      'Projects. Nothing is inferred from deadlines — a job can be delivered early or ' +
+      'late, and guessing would put work in the wrong month.</p></div>';
+    return h;
+  }
+
+  const t = r.totals;
+  h += `<p class="lede"><b>${t.projects} project${t.projects === 1 ? '' : 's'}</b> delivered, ` +
+    `<b>${t.weeks} booked week${t.weeks === 1 ? '' : 's'}</b> of work` +
+    (t.late ? ` \u00b7 ${t.on_or_before} on or before the deadline, <b>${t.late} late</b>`
+            : ' \u00b7 all on or before the deadline') + '.</p>';
+
+  h += '<table class="projects"><thead><tr><th>Delivered</th><th>Project</th><th>Client</th>' +
+    '<th>D/E/M</th><th>Recordist</th><th>Editor</th><th>Mixer</th>' +
+    '<th class="n">Weeks</th><th>Against deadline</th></tr></thead><tbody>' +
+    r.projects.map(p => {
+      const d = p.days_early;
+      const vs = d === null ? '\u2014'
+        : d === 0 ? 'on the day'
+        : d > 0 ? `${d} day${d === 1 ? '' : 's'} early`
+        : `<b style="color:var(--red)">${-d} day${d === -1 ? '' : 's'} late</b>`;
+      let flags = '';
+      if (p.music) flags += '<span class="chip">music</span>';
+      if (p.special) flags += '<span class="chip">special</span>';
+      if (p.atmos) flags += '<span class="chip">atmos</span>';
+      return `<tr><td>${esc(p.completed)}</td><td><b>${esc(p.title)}</b> ${flags}</td>` +
+        `<td>${esc(p.client)}</td><td>${esc(p.phases)}</td>` +
+        `<td>${esc(p.dub.join(' + ') || '\u2014')}</td>` +
+        `<td>${esc(p.edit.join(' + ') || '\u2014')}</td>` +
+        `<td>${esc(p.mix.join(' + ') || '\u2014')}</td>` +
+        `<td class="n">${p.weeks}</td><td>${vs}</td></tr>`;
+    }).join('') + '</tbody></table>';
+
+  h += '<div class="grid2" style="margin-top:22px">' +
+    '<div><h2>By client</h2><table class="projects"><thead><tr><th>Client</th>' +
+    '<th class="n">Projects</th><th class="n">Weeks</th></tr></thead><tbody>' +
+    r.by_client.map(c => `<tr><td>${esc(c.name)}</td><td class="n">${c.projects}</td>` +
+      `<td class="n">${c.weeks}</td></tr>`).join('') + '</tbody></table></div>' +
+    '<div><h2>By engineer</h2><table class="projects"><thead><tr><th>Engineer</th>' +
+    '<th class="n">Projects</th><th class="n">Weeks</th><th>Doing what</th>' +
+    '</tr></thead><tbody>' +
+    r.by_engineer.map(e => `<tr><td>${esc(e.name)}</td><td class="n">${e.projects}</td>` +
+      `<td class="n">${e.weeks}</td><td class="muted-inline">` +
+      esc(Object.keys(e.phases).sort().map(k => `${k} ${e.phases[k]}`).join(' \u00b7 ')) +
+      '</td></tr>').join('') + '</tbody></table></div></div>';
+
+  h += '<p class="hint" style="margin-top:20px">Weeks are booked-row weeks, the same ' +
+    'unit the schedule and Analysis use. An engineer who did two phases on one project ' +
+    'is counted once under Projects and for both phases under Weeks.</p></div>';
+  return h;
+}
+
+function wireReport() {
+  const m = $('rMonth');
+  if (m) m.addEventListener('change', () => loadReport(m.value));
+  const p = $('rPrint');
+  if (p) p.addEventListener('click', () => window.print());
+}
+
 // ---------------------------------------------------------------- history
 // Nothing is ever deleted — a row that stops being true is marked superseded and stays
 // — but the rows alone say WHAT changed, not when or as part of what. The log ties
@@ -785,8 +877,9 @@ async function submitForm(p, dryRun) {
 }
 
 const VIEWS = { schedule: renderSchedule, projects: renderProjects,
-                analysis: renderAnalysis, replan: renderReplan, history: renderHistory };
-let ANALYSIS = null, HISTORY = null, OPENED = null;
+                analysis: renderAnalysis, replan: renderReplan,
+                report: renderReport, history: renderHistory };
+let ANALYSIS = null, HISTORY = null, OPENED = null, REPORT = null, MONTH = null;
 
 function paint() {
   $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
@@ -797,6 +890,7 @@ function paint() {
       () => { ANALYSIS = null; loadAnalysis(); });
     return;
   }
+  if (VIEW === 'report') { if (!REPORT) loadReport(); else wireReport(); return; }
   if (VIEW === 'history') { if (!HISTORY) loadHistory(); else wireHistory(); return; }
   if (VIEW === 'replan') { wireReplan(); return; }
   if (VIEW === 'schedule') {
