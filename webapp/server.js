@@ -61,8 +61,44 @@ const ACTIONS = {
   '/api/reassign':      (b, p) => actions.reassignWeek(b, p),
   '/api/undo':          (b, p) => actions.undoWeekMove(b, p),
   '/api/save-project':  (b, p) => actions.saveProject(b, p),
-  '/api/replan':        (b, p) => actions.replanPreview(b, p.today || TODAY()),
+  '/api/replan':        (b, p) => previewReplan(b, p),
+  '/api/replan-apply':  (b, p) => applyReplan(b, p),
 };
+
+// A re-plan is agreed to in two steps, and the book can move between them — someone
+// else drags a week, or a project is saved. The preview is held server-side with the
+// store version it was computed against; apply refuses if that has changed rather than
+// writing a plan nobody was shown. The client never sends the change set back: it
+// holds the token only.
+let STASH = null;
+
+function previewReplan(book, p) {
+  const r = actions.replanPreview(book, p.today || TODAY());
+  if (r.change) {
+    STASH = { version: store.version(), change: r.change, at: Date.now() };
+    r.token = String(STASH.version);
+  }
+  delete r.change;          // the plan is the server's to hold, not the client's to keep
+  return r;
+}
+
+function applyReplan(book, p) {
+  if (!STASH) return { ok: false, error: 'Nothing to apply — run the preview first.' };
+  if (String(p.token) !== String(STASH.version)) {
+    return { ok: false, error: 'That preview is out of date.' };
+  }
+  if (store.version() !== STASH.version) {
+    STASH = null;
+    return { ok: false, error: 'The book changed since the preview. Run it again to see ' +
+      'what a re-plan would do now.' };
+  }
+  const change = STASH.change;
+  STASH = null;
+  return { ok: true, applied: true,
+           superseded: (change.supersede || []).length,
+           appended: (change.append || []).length,
+           change };
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {

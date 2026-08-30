@@ -68,7 +68,8 @@ without HTTP or Google (`test/webapp.test.js`).
     POST /api/reassign      drag a week; omit `confirmed` for a preview + warnings
     POST /api/undo          give a hand-placed week back to the tool
     POST /api/save-project  add or edit; `dry_run` for availability only
-    POST /api/replan        preview a re-solve
+    POST /api/replan        preview a re-solve; returns a token, never the plan
+    POST /api/replan-apply  apply the previewed plan, by token
 
 Nothing is deleted. A row that stops being true is superseded and stays as history.
 
@@ -80,6 +81,5 @@ showing the previous plan three times over.
 
 - `sources/sheets.js` — read and write the real spreadsheet. Needs a service account
   with access to the sheet. Everything else is built to sit behind it unchanged.
-- Applying a re-plan (preview works; apply needs the stash).
 - Analysis view.
 - Auth. Right now anyone who can reach the port can read and change the book.

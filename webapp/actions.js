@@ -168,9 +168,45 @@ function saveProject(book, payload) {
 
 // ---------------------------------------------------------------- re-plan
 
+// Plain-English names for the objective terms, so the preview can say WHY a re-plan is
+// worth applying. The engine's own guard only answers yes or no; a plan that moves 24
+// assignments and resolves no overlaps looks pointless until you can see that what it
+// actually improved was how evenly the work sits.
+const TERM_NAMES = {
+  reserve_double_booked: 'weeks the reserve is doubled up',
+  total_double_booked: 'overlapped weeks',
+  max_double_booked: 'overlapped weeks on the worst-hit person',
+  forced_projects: 'projects the engine had to compromise on',
+  regular_spread: 'gap between the busiest and quietest engineer',
+  max_consecutive: 'longest unbroken run of booked weeks',
+  reserve_weeks: 'weeks spent out of the reserve',
+  regular_peak: 'weeks on the busiest engineer',
+};
+
+// The first term in the ranked list where the two plans differ — which, the objective
+// being lexicographic, is the whole reason one beat the other.
+function whyBetter(before, after) {
+  for (const term of (A.SOLVE_OBJECTIVE || [])) {
+    if (before[term] === after[term]) continue;
+    return { term, label: TERM_NAMES[term] || term,
+             from: before[term], to: after[term],
+             better: after[term] < before[term] };
+  }
+  return null;
+}
+
 function replanPreview(book, todayISO) {
   const rows = live(book);
   const r = A.replanBook(book.projects, rows, book.engineers, todayISO);
+
+  let why = null;
+  if (!r.no_improvement) {
+    const gone = new Set(r.rows_to_supersede || []);
+    const proposed = rows.filter(b => !gone.has(b.row_number)).concat(r.rows_to_append || []);
+    why = whyBetter(A.scorePlan(rows, book.engineers),
+                    A.scorePlan(proposed, book.engineers));
+  }
+
   return {
     ok: true,
     no_improvement: !!r.no_improvement,
@@ -179,9 +215,11 @@ function replanPreview(book, todayISO) {
     dubs_divided: r.dubs_divided || 0,
     overlaps_after: r.overlaps_after || [],
     overlaps_resolved: r.overlaps_resolved || [],
+    why,
     change: r.no_improvement ? null
       : { supersede: r.rows_to_supersede || [], append: r.rows_to_append || [] },
   };
 }
 
-module.exports = { reassignWeek, undoWeekMove, saveProject, replanPreview, reassignWarnings };
+module.exports = { reassignWeek, undoWeekMove, saveProject, replanPreview,
+                   reassignWarnings, whyBetter };

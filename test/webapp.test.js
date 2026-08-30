@@ -302,6 +302,76 @@ section('Re-plan');
   }
 }
 
+section('Re-plan: preview, then apply against the same book');
+{
+  // Over HTTP, because the guard lives in the server: the preview is held there with
+  // the store version it was computed against, and the client only ever holds a token.
+  const { server, store } = require('../webapp/server.js');
+  fixture._reset();
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  const call = async (path, body) => {
+    const r = await fetch(`http://127.0.0.1:${port}${path}`, body
+      ? { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body) }
+      : undefined);
+    return r.json();
+  };
+
+  // The staleness guard goes FIRST. Ordered the other way, applying the first re-plan
+  // left nothing to improve, the second preview declined, and the most important
+  // assertion in this block quietly skipped itself.
+  const stalePre = await call('/api/replan', {});
+  ok('the preview runs over HTTP', stalePre.ok === true, JSON.stringify(stalePre).slice(0, 120));
+  ok('and never hands the change set to the client', stalePre.change === undefined);
+  ok('an improving preview returns a token', !!stalePre.token,
+     stalePre.no_improvement ? 'declined — the rest of this block proves nothing' : '');
+
+  {
+    const rows = A.activeRows((await fixture.read()).bookings);
+    const run = rows.find(b => A.widx(b.end_date) - A.widx(b.start_date) >= 1);
+    const to = (await call('/api/bootstrap')).engineers.find(n => n !== run.engineer);
+    const moved = await call('/api/reassign', { project: run.project, phase: run.phase,
+      week_start: A.weekStart(A.widx(run.start_date)), to_engineer: to, confirmed: true });
+    ok('something else changed the book in the meantime', moved.ok === true, moved.error);
+    const stale = await call('/api/replan-apply', { token: stalePre.token });
+    ok('a preview applied after the book moved is refused, not written',
+       stale.ok === false && /changed/i.test(stale.error || ''), stale.error);
+  }
+
+  // and the ordinary path, on a freshly previewed book
+  const pre = await call('/api/replan', {});
+  if (pre.no_improvement) {
+    ok('a declined preview offers no token', !pre.token);
+    const nothing = await call('/api/replan-apply', { token: 'anything' });
+    ok('and apply refuses', nothing.ok === false, nothing.error);
+  } else {
+    const wrong = await call('/api/replan-apply', { token: 'not-the-token' });
+    ok('a token that does not match is refused', wrong.ok === false, wrong.error);
+
+    const before = (await call('/api/bootstrap')).counts.live_rows;
+    const done = await call('/api/replan-apply', { token: pre.token });
+    ok('the right token applies', done.ok === true, done.error);
+    ok('and it reports what it wrote', done.superseded > 0 || done.appended > 0,
+       `${done.superseded} superseded, ${done.appended} appended`);
+    ok('the book actually changed',
+       (await call('/api/bootstrap')).counts.live_rows !== before || done.appended === 0);
+
+    // Not just "the second call returns ok:false" — that passes even with the stash
+    // left in place, because the version bump from the first apply refuses it anyway.
+    // What must hold is that nothing is written a second time.
+    const rowsAfterFirst = (await call('/api/bootstrap')).counts.live_rows;
+    const twice = await call('/api/replan-apply', { token: pre.token });
+    const rowsAfterSecond = (await call('/api/bootstrap')).counts.live_rows;
+    ok('the same preview cannot be applied twice', twice.ok === false, twice.error);
+    ok('and nothing is written on the second attempt',
+       rowsAfterSecond === rowsAfterFirst, `${rowsAfterFirst} -> ${rowsAfterSecond}`);
+  }
+
+  await new Promise(r => server.close(r));
+  fixture._reset();
+}
+
 section('The store');
 {
   fixture._reset();

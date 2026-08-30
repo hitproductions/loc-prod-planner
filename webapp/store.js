@@ -26,6 +26,11 @@ function createStore(sourceName, opts) {
   let book = null;
   let loadedAt = 0;
   let inflight = null;
+  // Bumped on every load and every write. A re-plan is previewed against one book and
+  // applied against whatever the book is by then — if those differ, the plan the user
+  // agreed to is not the plan that would land, and applying it anyway is how you get a
+  // schedule nobody chose.
+  let version = 0;
 
   // One refresh at a time. Without this a burst of requests on a cold store each start
   // their own read of the same spreadsheet.
@@ -35,6 +40,7 @@ function createStore(sourceName, opts) {
       const fresh = await source.read();
       book = fresh;
       loadedAt = Date.now();
+      version++;
       inflight = null;
       return book;
     })().catch(e => { inflight = null; throw e; });
@@ -53,10 +59,12 @@ function createStore(sourceName, opts) {
     async write(change) {
       const result = await source.write(change);
       book = null;
+      version++;
       return result;
     },
+    version() { return version; },
     stats() {
-      return { source: sourceName, loaded_at: loadedAt || null,
+      return { source: sourceName, version, loaded_at: loadedAt || null,
                age_ms: loadedAt ? Date.now() - loadedAt : null,
                ttl_ms: ttlMs, rows: book ? book.bookings.length : 0 };
     },

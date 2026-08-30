@@ -250,6 +250,105 @@ function wireProjects() {
     tr.addEventListener('click', () => openForm(tr.dataset.title)));
 }
 
+// ---------------------------------------------------------------- re-plan
+// Two steps on purpose. The preview writes nothing and is held server-side with the
+// version of the book it was computed against; apply sends back only a token. If
+// anything moved the book in between, the server refuses rather than writing a plan
+// nobody was shown.
+let REPLAN = null;
+
+function renderReplan() {
+  let h = '<div class="bar-row"><button class="btn primary" id="rpRun">Preview re-plan</button>' +
+    '<span class="hint" style="margin:0 0 0 12px">Writes nothing until you apply.</span></div>' +
+    '<p class="muted" style="margin-top:0">Re-planning never moves dates — deadlines are fixed, ' +
+    'so a re-solve only ever changes who. Anything already under way is left alone, and so is ' +
+    'anything you set by hand.</p><div id="rpOut"></div>';
+  return h;
+}
+
+function wireReplan() {
+  $('rpRun').addEventListener('click', runReplan);
+  if (REPLAN) $('rpOut').innerHTML = replanBody(REPLAN);
+  if ($('rpApply')) $('rpApply').addEventListener('click', applyReplan);
+}
+
+async function runReplan() {
+  $('rpRun').disabled = true;
+  $('rpOut').innerHTML = '<div class="muted">Trying other arrangements\u2026</div>';
+  REPLAN = await post('/api/replan', {});
+  $('rpRun').disabled = false;
+  $('rpOut').innerHTML = replanBody(REPLAN);
+  if ($('rpApply')) $('rpApply').addEventListener('click', applyReplan);
+}
+
+function replanBody(r) {
+  if (!r.ok) return `<div class="errs">${esc(r.error || 'Re-plan failed.')}</div>`;
+  if (r.no_improvement) {
+    return '<div class="msg soft">Nothing to change. The schedule you have is already the ' +
+      'best arrangement available — every alternative tried was the same or worse.</div>' +
+      '<p class="muted">Re-plan cannot move work that has already started, so the further ' +
+      'into the year you are the less room it has. This is a normal answer, not a failure.</p>';
+  }
+
+  const after = r.overlaps_after || [], resolved = r.overlaps_resolved || [];
+  const deep = after.filter(o => o.projects.length > 2).length;
+  const made = after.filter(o => o.isNew).length;
+
+  // What IMPROVED, not just what moved. A plan that shifts 27 assignments and resolves
+  // no overlaps reads as pointless until you can see it closed the gap between the
+  // busiest and quietest engineer from three weeks to one. The objective is ranked, so
+  // the first term that differs is the whole reason one plan beat the other.
+  let h = `<div class="msg${deep ? '' : ' soft'}">` +
+    `<b>${r.change_count} assignment${r.change_count === 1 ? '' : 's'} would move.</b> ` +
+    (r.why
+      ? `${esc(r.why.label)}: <b>${r.why.from} \u2192 ${r.why.to}</b>.`
+      : 'The arrangement is equivalent on every measure.') +
+    (resolved.length || made
+      ? ` ${resolved.length} overlap${resolved.length === 1 ? '' : 's'} resolved, ${made} new` +
+        (deep ? ` \u2014 ${deep} at three or more` : '') + '.'
+      : ' Overlaps are unchanged.') +
+    '</div>';
+
+  if (after.length || resolved.length) {
+    h += '<h3 style="margin-top:22px;font-size:13px;text-transform:uppercase;' +
+      'letter-spacing:.07em">Who would be holding more than one, week by week</h3>' +
+      '<table class="projects"><thead><tr><th>Week</th><th>Engineer</th>' +
+      '<th>Projects colliding</th><th></th></tr></thead><tbody>' +
+      resolved.map(o => `<tr class="dim"><td>${esc(o.label)}</td><td>${esc(o.engineer)}</td>` +
+        `<td>${esc(o.projects.join('  +  '))}</td><td><span class="chip">resolved</span></td></tr>`).join('') +
+      after.map(o => `<tr><td>${esc(o.label)}</td><td>${esc(o.engineer)}</td>` +
+        `<td>${esc(o.projects.join('  +  '))}</td><td>` +
+        (o.isNew ? '<span class="chip red">new</span>' : '<span class="chip">stays</span>') +
+        (o.projects.length > 2 ? `<span class="chip red">${o.projects.length} at once</span>`
+                               : '<span class="chip warn">2 at once</span>') +
+        '</td></tr>').join('') + '</tbody></table>';
+  }
+
+  h += '<table class="projects" style="margin-top:18px"><thead><tr><th>Project</th>' +
+    '<th>Phase</th><th>From</th><th>To</th></tr></thead><tbody>' +
+    (r.changes || []).map(c => `<tr><td><b>${esc(c.project)}</b></td><td>${esc(c.phase)}</td>` +
+      `<td>${esc(c.from)}</td><td>${esc(c.to)}</td></tr>`).join('') + '</tbody></table>';
+
+  h += '<div class="formactions"><button class="btn primary" id="rpApply">Apply re-plan</button>' +
+    '<span class="hint" style="margin:0">Reversible \u2014 old rows become superseded, ' +
+    'never deleted.</span></div>';
+  return h;
+}
+
+async function applyReplan() {
+  $('rpApply').disabled = true;
+  const r = await post('/api/replan-apply', { token: REPLAN.token });
+  if (!r.ok) {
+    $('rpOut').innerHTML = `<div class="errs">${esc(r.error)}</div>` + replanBody(REPLAN);
+    if ($('rpApply')) $('rpApply').addEventListener('click', applyReplan);
+    return;
+  }
+  REPLAN = null;
+  absorb(r);
+  $('rpOut').innerHTML = '<div class="msg soft">Applied. ' + r.appended + ' row(s) added, ' +
+    r.superseded + ' superseded. Nothing was deleted.</div>';
+}
+
 // ---------------------------------------------------------------- the form
 // Check availability writes nothing and answers "can we take this job". Plot & save
 // commits. Both go through the same engine call, so the answer you were shown is the
@@ -380,9 +479,12 @@ async function submitForm(p, dryRun) {
   $('f_out').innerHTML = h;
 }
 
+const VIEWS = { schedule: renderSchedule, projects: renderProjects, replan: renderReplan };
+
 function paint() {
-  $('view').innerHTML = VIEW === 'schedule' ? renderSchedule() : renderProjects();
+  $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
   topRight();
+  if (VIEW === 'replan') { wireReplan(); return; }
   if (VIEW === 'schedule') {
     wireScheduleBar();
     wireColumnHover();
