@@ -44,9 +44,28 @@ project came from a second copy of something.
     PLANNER_TTL_MS=15000 \
     node webapp/server.js            # once sources/sheets.js exists
 
+## Actions
+
+Each is a pure function of the book returning a CHANGE SET — rows to supersede, rows
+to append. The store applies it to whichever source is configured, so they test
+without HTTP or Google (`test/webapp.test.js`).
+
+    POST /api/reassign      drag a week; omit `confirmed` for a preview + warnings
+    POST /api/undo          give a hand-placed week back to the tool
+    POST /api/save-project  add or edit; `dry_run` for availability only
+    POST /api/replan        preview a re-solve
+
+Nothing is deleted. A row that stops being true is superseded and stays as history.
+
+A write returns fresh `boot` and `schedule` in the SAME response. Re-asking after a
+write is what made the old app feel slow, and a separate re-read is also how it kept
+showing the previous plan three times over.
+
 ## Not done yet
 
 - `sources/sheets.js` — read and write the real spreadsheet. Needs a service account
   with access to the sheet. Everything else is built to sit behind it unchanged.
-- Writes: add/edit project, drag to reassign, re-plan preview/apply.
-- Auth. Right now anyone who can reach the port can read the book.
+- Applying a re-plan (preview works; apply needs the stash).
+- The project form in the client — the action exists, nothing calls it yet.
+- Analysis view.
+- Auth. Right now anyone who can reach the port can read and change the book.

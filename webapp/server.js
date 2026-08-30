@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { register, createStore } = require('./store.js');
 const api = require('./api.js');
+const actions = require('./actions.js');
 
 register('fixture', require('./sources/fixture.js'));
 // register('sheets', require('./sources/sheets.js'));   // once credentials exist
@@ -32,6 +33,34 @@ const ROUTES = {
   '/api/analysis':  b => api.analysis(b),
 };
 
+// Actions are pure too: book + payload -> a change set. The route applies it and hands
+// back fresh state in the same response, so the client never has to ask again — the
+// second round trip is exactly what made the Apps Script version feel slow, and a
+// separate re-read is also how that version kept showing the previous plan.
+const TODAY = () => new Date().toISOString().slice(0, 10);
+const ACTIONS = {
+  '/api/reassign':      (b, p) => actions.reassignWeek(b, p),
+  '/api/undo':          (b, p) => actions.undoWeekMove(b, p),
+  '/api/save-project':  (b, p) => actions.saveProject(b, p),
+  '/api/replan':        (b, p) => actions.replanPreview(b, p.today || TODAY()),
+};
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let n = 0; const parts = [];
+    req.on('data', c => {
+      n += c.length;
+      if (n > 1e6) { reject(new Error('Payload too large')); req.destroy(); return; }
+      parts.push(c);
+    });
+    req.on('end', () => {
+      try { resolve(parts.length ? JSON.parse(Buffer.concat(parts).toString('utf8')) : {}); }
+      catch (e) { reject(new Error('Body is not JSON')); }
+    });
+    req.on('error', reject);
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const started = process.hrtime.bigint();
@@ -46,6 +75,25 @@ const server = http.createServer(async (req, res) => {
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
       return send(res, 200, JSON.stringify(payload));
+    }
+
+    const action = ACTIONS[url.pathname];
+    if (action) {
+      if (req.method !== 'POST') return send(res, 405, '{"error":"POST only"}');
+      const body = await readBody(req);
+      const book = await store.get();
+      const result = action(book, body);
+      // A change is written to the source before anything is reported as done, so a
+      // failed write can never leave the app showing a state the sheet does not have.
+      if (result.ok && result.change) {
+        await store.write(result.change);
+        const next = await store.get(true);
+        result.boot = api.bootstrap(next);
+        result.schedule = api.schedule(next);
+      }
+      const ms = Number(process.hrtime.bigint() - started) / 1e6;
+      res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
+      return send(res, 200, JSON.stringify(result));
     }
     // static client
     let p = url.pathname === '/' ? '/index.html' : url.pathname;

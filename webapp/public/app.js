@@ -54,8 +54,22 @@ function renderSchedule() {
         else style = ` style="background:${PHASE_BG[c.phase] || 'transparent'}"`;
         if (deep > 1) cls += (cls ? ' ' : '') + (deep > 2 ? 'over3' : 'over2');
       }
-      const short = text.length > 15 ? text.slice(0, 14) + '…' : text;
-      h += `<td class="${cls}"${style} title="${esc(text)}">${esc(short)}</td>`;
+      // Each booking in the cell is separately draggable: a cell holding two is one
+      // square on screen but two different things you might mean, and dragging "the
+      // cell" would silently pick one of them.
+      let body = '';
+      if (c) {
+        body = c.items.map(it => {
+          const label = c.items.length > 1 ? it.p : text;
+          const shortL = label.length > 15 ? label.slice(0, 14) + '…' : label;
+          return `<span class="bk" draggable="true" data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
+                 ` data-from="${esc(n)}" data-wk="${w.start}"` +
+                 (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"' : '') +
+                 `>${esc(shortL)}</span>`;
+        }).join('<span class="bksep"> / </span>');
+      }
+      h += `<td class="${cls}"${style} data-eng="${esc(n)}" data-wk="${w.start}"` +
+           ` title="${esc(text)}">${body}</td>`;
     });
     h += '</tr>';
   });
@@ -90,6 +104,100 @@ function renderProjects() {
 function paint() {
   $('view').innerHTML = VIEW === 'schedule' ? renderSchedule() : renderProjects();
   topRight();
+  if (VIEW === 'schedule') wireDrag();
+}
+
+// ---------------------------------------------------------------- drag a week
+// Weeks never move — only who does them — so a booking may only be dropped in its own
+// row. Anything else is refused while the drag is in flight rather than explained
+// afterwards.
+let DRAG = null;
+
+function wireDrag() {
+  const wrap = document.querySelector('.gridwrap');
+  if (!wrap) return;
+  const clear = () => wrap.querySelectorAll('.dropok,.dropno,.dragging')
+    .forEach(el => el.classList.remove('dropok', 'dropno', 'dragging'));
+
+  wrap.querySelectorAll('.bk').forEach(el => {
+    el.addEventListener('dragstart', ev => {
+      DRAG = { p: el.dataset.p, ph: el.dataset.ph, from: el.dataset.from,
+               wk: el.dataset.wk, row: el.closest('tr') };
+      el.classList.add('dragging');
+      try { ev.dataTransfer.setData('text/plain', DRAG.p); } catch (e) {}
+      ev.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => { DRAG = null; clear(); });
+  });
+
+  wrap.querySelectorAll('.bk[data-hand]').forEach(el => {
+    el.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      if (!confirm(`Give this week back to the tool?\n\n${el.dataset.p} · ${el.dataset.ph}` +
+                   `\nweek of ${el.dataset.wk}\n\nYour other manual changes stay.`)) return;
+      const r = await post('/api/undo', { project: el.dataset.p, phase: el.dataset.ph,
+                                          week_start: el.dataset.wk });
+      if (!r.ok) return alert(r.error || 'Could not undo that.');
+      absorb(r);
+    });
+  });
+
+  wrap.querySelectorAll('td[data-eng]').forEach(td => {
+    td.addEventListener('dragover', ev => {
+      if (!DRAG) return;
+      const sameWeek = td.closest('tr') === DRAG.row;
+      const sameEng = td.dataset.eng === DRAG.from;
+      if (sameWeek && !sameEng) {
+        ev.preventDefault();                 // preventDefault IS "yes, drop here"
+        ev.dataTransfer.dropEffect = 'move';
+        td.classList.add('dropok');
+      } else if (!sameWeek) td.classList.add('dropno');
+    });
+    td.addEventListener('dragleave', () => td.classList.remove('dropok', 'dropno'));
+    td.addEventListener('drop', async ev => {
+      ev.preventDefault();
+      if (!DRAG || td.closest('tr') !== DRAG.row) { clear(); return; }
+      const move = { project: DRAG.p, phase: DRAG.ph, week_start: DRAG.wk,
+                     to_engineer: td.dataset.eng };
+      DRAG = null; clear();
+      await confirmMove(move);
+    });
+  });
+}
+
+// Two calls on purpose: the first asks what the move would cost and writes nothing,
+// the second commits. Warning from data the client already holds would put the
+// eligibility rules in two places and let them drift.
+async function confirmMove(move) {
+  const pre = await post('/api/reassign', move);
+  if (!pre.ok) return alert(pre.error || 'Could not move that.');
+  const lines = [`${move.project} · ${move.phase}`,
+                 `week of ${move.week_start}`,
+                 `${pre.from}  →  ${move.to_engineer}`];
+  if (pre.warnings.length) lines.push('', ...pre.warnings.map(w => '• ' + w.text));
+  lines.push('', 'Weeks never move — only who does them.');
+  if (!confirm(lines.join('\n'))) return;
+  const done = await post('/api/reassign', { ...move, confirmed: true });
+  if (!done.ok) return alert(done.error || 'Could not move that.');
+  absorb(done);
+}
+
+// A write hands back fresh state in the same response, so there is nothing to re-ask
+// for. Re-asking is what made the old app feel slow, and a second read is also how it
+// managed to keep showing the previous plan.
+function absorb(r) {
+  if (r.boot) BOOT = r.boot;
+  if (r.schedule) SCHED = r.schedule;
+  paint();
+}
+
+async function post(path, body) {
+  const t0 = performance.now();
+  const r = await fetch(path, { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await r.json();
+  LAST_MS = performance.now() - t0;
+  return out;
 }
 
 document.querySelectorAll('.nav button').forEach(b => {

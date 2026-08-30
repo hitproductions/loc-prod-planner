@@ -52,3 +52,15 @@ table.projects th{font-size:10px; text-transform:uppercase; letter-spacing:0.06e
 .chip.warn{border-color:var(--warn); color:var(--warn); font-weight:700}
 .chip.red{border-color:var(--red); color:var(--red); font-weight:700}
 .timing{font-variant-numeric:tabular-nums}
+
+/* ---- drag to reassign ------------------------------------------------ */
+.bk{display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis;
+  vertical-align:middle; cursor:grab}
+.bk:active{cursor:grabbing}
+.bk.dragging{opacity:.4}
+.bksep{opacity:.5; padding:0 1px}
+/* Lit only while a drag is in flight, so the grid is unchanged at rest. Inset shadow
+   rather than outline: outline is already spoken for by the overlap markers, and two
+   rings on one cell is unreadable. */
+table.sched td.dropok{box-shadow:inset 0 0 0 2px var(--red); cursor:copy}
+table.sched td.dropno{opacity:.35}
