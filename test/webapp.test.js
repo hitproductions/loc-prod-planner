@@ -812,11 +812,23 @@ section('Reading a real spreadsheet layout');
 {
   const sheets = require('../webapp/sources/sheets.js');
   const { isoFrom, mapper } = sheets;
+  const { P_HEADERS } = require('../core/engine.js').loadAppsScript();
 
   // The log tab is created on FIRST WRITE, so a sheet that predates it — or a brand
   // new copy — does not have one. It must never be part of the required read: adding
   // it to TABS made read() ask Google for "History!A:Z", which does not parse, and
   // every read of the whole book failed. Caught against the real sheet, not here.
+  // A write maps by header NAME, so a column the sheet does not have is skipped and
+  // the value never lands — the screen says saved and the next read says otherwise.
+  // Any column this app writes must either exist or be created, never dropped.
+  ok('the columns the app manages are declared, so they can be created if absent',
+     Array.isArray(sheets.MANAGED_COLUMNS) &&
+     sheets.MANAGED_COLUMNS.includes('Status') && sheets.MANAGED_COLUMNS.includes('Completed'),
+     JSON.stringify(sheets.MANAGED_COLUMNS));
+  ok('and every one of them is in the header the setup writes',
+     sheets.MANAGED_COLUMNS.every(c => P_HEADERS.includes(c)),
+     sheets.MANAGED_COLUMNS.filter(c => !P_HEADERS.includes(c)).join(', '));
+
   ok('the log tab is not one of the tabs the book is read from',
      !Object.values(sheets.TABS || {}).includes('History'),
      JSON.stringify(sheets.TABS));

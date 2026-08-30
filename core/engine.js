@@ -41,6 +41,9 @@ const EXPORTS = [
   'computeCapacity', 'weekSeries', 'freeCapacityByQuarter', 'bottleneck',
   'streaks', 'pipeline', 'weeksPerEngineer',
   'receditPool', 'advMixPool', 'advMixPoolWithOverflow',
+  // the sheet's column contract, so the web app can check it manages nothing the
+  // setup does not create
+  'P_HEADERS', 'P_COL', 'E_HEADERS',
 ];
 
 function appsScriptDir() { return path.join(__dirname, '..', 'appsscript'); }

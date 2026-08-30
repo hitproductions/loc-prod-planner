@@ -17,6 +17,8 @@ const { createAuth } = require('./google-auth.js');
 const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers' };
 const EVENTS_TAB = 'History';
 const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended'];
+// Columns this app writes that an older sheet may not have. Created on demand.
+const MANAGED_COLUMNS = ['Status', 'Completed', 'Invoiced'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
 const HEADER_ROW = { Projects: 2, Bookings: 1, Engineers: 1 };
 
@@ -31,6 +33,11 @@ function isoFrom(v) {
 }
 
 const norm = h => String(h == null ? '' : h).trim().toLowerCase();
+const colName = n => {
+  let out = '';
+  for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(65 + (n - 1) % 26) + out;
+  return out;
+};
 
 // Returns a getter: pick(row, 'Deadline') — and null for a header that is not there,
 // so a caller can decide whether absence is fatal or just an older sheet.
@@ -197,6 +204,7 @@ function createSheetsSource(opts) {
     }
 
     const appendedRows = [];
+    let skipped = [];
     const append = change.append || [];
     if (append.length) {
       // Built against the header, so a tab with columns in a different order still
@@ -228,6 +236,8 @@ function createSheetsSource(opts) {
     // row does not is an orphan: it renders on the schedule and cannot be selected to
     // cancel, because the schedule is built from bookings and the list from Projects.
     if (change.project) {
+      const added = await ensureProjectColumns();
+      if (added.length) console.log('Added missing Projects column(s): ' + added.join(', '));
       const p = change.project;
       const o = change.outputs || {};
       const was = String(change.original_title || '').trim() || p.project_title;
@@ -251,11 +261,15 @@ function createSheetsSource(opts) {
       // decision this code knows nothing about. It also leaves a sheet without the
       // Atmos column untouched instead of writing past its last header.
       const data = [];
+      const have = projectsMeta.header.map(norm);
       projectsMeta.header.forEach((h, i) => {
         const v = cell[norm(h)];
         if (v === undefined) return;
         data.push({ range: `${TABS.projects}!${colLetter(i)}${rowNumber}`, values: [[v]] });
       });
+      // Loud, not silent. A value with nowhere to go means the sheet is missing a
+      // column, and the caller should hear about it rather than discover it later.
+      skipped = Object.keys(cell).filter(k => cell[k] !== undefined && !have.includes(k));
       if (data.length) {
         await auth.api(`spreadsheets/${id}/values:batchUpdate`, {
           method: 'POST',
@@ -267,8 +281,34 @@ function createSheetsSource(opts) {
     bookingsMeta = null;   // row numbers have moved
     projectsMeta = null;
     return { superseded: supersede.length, appended: append.length,
-             appended_rows: appendedRows,
+             appended_rows: appendedRows, skipped_columns: skipped,
              project: change.project ? change.project.project_title : null };
+  }
+
+  // Columns this app writes that a sheet may not have yet. Set up sheets creates them,
+  // but a book built before they existed will not, and the write maps by header name —
+  // so a missing column is silently skipped and the value never lands. That is the
+  // worst kind of failure: the screen says saved and the next read says otherwise.
+  // Appending to the header row moves nothing.
+  const MANAGED = MANAGED_COLUMNS;
+  async function ensureProjectColumns() {
+    if (!projectsMeta) await read();
+    const have = projectsMeta.header.map(norm);
+    const missing = MANAGED.filter(h => !have.includes(norm(h)));
+    if (!missing.length) return [];
+    const at = projectsMeta.header.length;
+    await auth.api(`spreadsheets/${id}/values/` +
+      encodeURIComponent(`${TABS.projects}!${colName(at)}${HEADER_ROW.Projects}`) +
+      '?valueInputOption=RAW', {
+      method: 'PUT', body: JSON.stringify({ values: [missing] }),
+    });
+    // The header changed, so the cached map of it is wrong. Re-read straight away
+    // rather than just invalidating: the caller writes on the very next line, and
+    // clearing the map without refilling it left it reading rowOf off null.
+    projectsMeta = null;
+    bookingsMeta = null;
+    await read();
+    return missing;
   }
 
   // The log lives in its own tab, created the first time something is written. Not
@@ -319,4 +359,4 @@ function createSheetsSource(opts) {
   return { read, write, readEvents, appendEvent, email: auth.email };
 }
 
-module.exports = { createSheetsSource, isoFrom, mapper, TABS, EVENTS_TAB };
+module.exports = { createSheetsSource, isoFrom, mapper, TABS, EVENTS_TAB, MANAGED_COLUMNS };
