@@ -1,0 +1,623 @@
+# Loc Prod Planner — handoff
+
+**Internal — Hit Productions / HAIST. Contains client project names. Do not share externally.**
+
+Written 2026-08-13, revised 2026-08-15. This supersedes the original build brief,
+kept as `HANDOFF_original.md`; where they disagree, this document is later. An
+interim addendum existed and has been removed — everything load-bearing from it is
+folded in here.
+
+A scheduling tool for Hit Productions' Netflix localization work: you enter a
+project's deadline and how many weeks of dub, edit and mix it needs, and it
+decides who does each phase and when, without double-booking anyone.
+
+---
+
+## 1. What it is, physically
+
+An **Apps Script web app** bound to a Google Sheet.
+
+- The **sheet** is the database — four tabs, readable and repairable by hand.
+- The **web app** (`doGet` → `Index.html`) is the interface. Four views:
+  - **Projects** — the master list. Sort toggle: deadline (default) or A–Z, with
+    numeric collation so "Eps 3-4" precedes "Eps 11-12". Per-row Lock button, and a
+    left edge marker on locked rows.
+  - **Schedule** — two orientations, deliberately. Projects mode runs weeks ACROSS.
+    Engineers mode runs weeks DOWN with one column per person: its cells hold project
+    names, so the week columns widened to fit them and the table reached **7,749px,
+    5.2x the screen** — seeing one year meant five screens of sideways scrolling.
+    Transposed it is ~1,266px and scrolls vertically, and a single row answers "who is
+    free that week". The transpose happens in the client; `apiSchedule` still returns
+    `cells[label][week]` for both modes, so its contract and tests are untouched.
+    Optional quarter-to-quarter range; clipping also drops projects with no work in
+    range (but keeps every engineer, since an empty row there means free all quarter).
+  - **Analysis** — two sections: can we take work, who is overloaded. See §10.
+  - **Re-plan** — §8.
+- The **sheet menu** (`Engineer Assignment`) holds diagnostics and admin actions.
+
+The distinction matters operationally: **menu code runs the latest pushed script
+immediately**, while the **web app serves a published deployment version**. A
+`clasp push` reaches the menu at once and the app not at all until someone does
+Deploy → Manage deployments → New version. Several hours were lost to this;
+if a fix seems not to have landed, check that first.
+
+### Deploying
+
+```
+cd appsscript && clasp push --force
+```
+
+`--force` overwrites the whole manifest, which is why `appsscript.json` carries
+its `webapp` block in source. It was once written only by the Deploy UI, and a
+forced push silently stripped it — after which `doGet` was unreachable and the
+menu's URL lookup returned null while insisting the app wasn't deployed.
+
+A push updates what the **menu** runs immediately, but the web app serves a
+**published version**. To ship a change without breaking anyone's bookmark:
+
+```
+clasp create-version "what changed"
+clasp redeploy <deploymentId> --versionNumber <n>
+```
+
+The URL belongs to the **deployment**, not the version, so `redeploy` keeps it.
+"New deployment" mints a new URL and orphans the bookmark — reach for it only when
+you actually want a second, parallel app. `clasp list-deployments` shows which id is
+which; the one pinned to a number is the live app, the `@HEAD` one is scratch.
+
+---
+
+## 2. The data model
+
+### Projects tab — the master list
+
+Columns 1–10 are yours, 11–19 the engine writes, 20 is yours again:
+
+| | |
+|---|---|
+| 1–7 | Project, Client, Deadline, Phases D/E/M, Mix level, Music, Special |
+| 8–10 | Recordist pick, Editor pick, Mixer pick — `Auto` or a name |
+| 11–19 | Dub/Edit/Mix wks, Recordist, Editor, Mixer, Warnings, Notes, **Plotted** |
+| 20 | **Locked** — a checkbox; re-plan skips this project entirely |
+
+`Locked` sits *after* the engine block rather than beside the other inputs
+specifically so adding it did not shift any existing column. Inserting one
+mid-table costs a full re-paste of every row.
+
+`Plotted` is the date a project was last plotted. Its code name is `P_COL.PLOTTED`;
+it was called `COMMITTED` until 2026-08-13, a leftover from a Commit checkbox that
+no longer exists.
+
+### Bookings tab — the schedule itself
+
+One row per contiguous block: `project, phase, engineer, start_date, end_date,
+source, note, status`. Weeks run Monday–Sunday.
+
+**Rows are never deleted.** Superseding sets `status = superseded`, and superseded
+rows are never read as live. The one exception is the build-only wipe (§7).
+
+**The Schedule view is drawn from this tab, not from Projects.** That has a
+consequence worth internalising: deleting a project's row by hand leaves its
+bookings behind, and it keeps rendering on the schedule with no way to select it.
+See `Clear ghost projects` in §7.
+
+**`project` is the join key — the title string itself. There is no ID.**
+`orphanProjects_` matches `b.project` against the titles in Projects, so *renaming a
+project in the sheet orphans every one of its bookings at once*. The symptom is
+alarming and the data is fine: detection is read-only, and the cleanup only marks
+rows superseded.
+
+**Drag-to-reassign writes here, and that is the whole reason it behaves as it does.**
+The Engineers view lets you drag one week of one phase to another engineer
+(`apiReassignWeek`). The unit is the week because that is what the view shows; the
+write is row surgery — supersede the run, write back up to three pieces — and never
+touches the engine.
+
+It has to live in Bookings because the Projects tab **cannot express it**: its three
+pick columns are per-phase, so there is no cell that says "this person, this week".
+That single fact decides the rest of the feature:
+
+- A **re-plan** honors it — the moved row is noted `manual / moved by hand`, and
+  `isLocked` skips anything matching `/manual/i`.
+- A **re-plot** destroys it, because `apiSaveProject` rebuilds from the project row
+  alone. Only that project, only when someone deliberately saves it. The form warns
+  first and names the weeks at stake.
+- Everything else is safe: `plotAllUnplotted` only takes rows with no Plotted stamp,
+  and the lock toggle never re-plots.
+
+That was measured against every supersede path rather than assumed. If the loss ever
+becomes a real problem, the fix is to have `apiSaveProject` supersede only the
+non-manual rows and reconcile the generated ones in the wrapper — the engine still
+does not need to change.
+
+**Renaming through the web app is safe and is the only supported way.**
+`apiSaveProject` carries `original_title`, supersedes the bookings under both names,
+rewrites the title cell and re-plots. A sheet-side rename bypasses all of that.
+
+`Relink a renamed project` (§7) is the undo. It moves **live rows only** — superseded
+rows are history and belong to the name they were booked under — in a single batched
+write, and it is its own inverse. Do **not** reach for `Clear ghost projects`, which
+supersedes exactly the rows worth keeping and forces a re-plot that will not
+reproduce the same assignments. That is why relink sits *above* clear in the menu: a
+renamed project and a deleted one present identically, and only one of the two fixes
+is recoverable.
+
+A stable `project_id` column is the real fix and was considered on 2026-08-15. It
+was declined as too large a change this close to go-live: it touches the schema,
+every read/write path, both engines and the whole test suite, and needs the existing
+book migrated. If titles ever start changing routinely, that is the thing to build.
+
+### Engineers tab — the roster
+
+`name, can_record, can_edit, can_mix, mix_level, music_specialist, overflow_only,
+does_specials`.
+
+- **`does_specials`** (Kyle) — replaced `non_netflix_router` on 2026-08-13. Routing
+  now keys off the project's own **Special** flag rather than the client name, since
+  non-Netflix work *is* the special work. A non-Netflix project left unflagged goes
+  to the regular pool.
+- **`overflow_only`** (Daryl) — the reserve. Spent last, never balanced against the
+  regular six. But he is also the **rank-1 music specialist**, and music projects are
+  legitimately his first-choice work: most of his weeks are the two music titles, and
+  that is correct. Do not "fix" it — excluding him was measured and made the schedule
+  worse on two metrics.
+- **`music_specialist`** is an **order, not a yes/no** (2026-08-15). `1` = first
+  choice (Daryl), `2` = second (Josiah). `Yes` still parses as rank 1, so a roster
+  nobody has migrated keeps working. Anything else — blank, `No`, `0` — means not a
+  specialist. See §3.
+
+  Its cell rule is a **convenience dropdown that allows anything**, deliberately: a
+  strict list would reject a legacy `Yes` and would block a third specialist without
+  a code change. The cost is that a typo cannot be caught at entry, so
+  `rosterProblems()` catches it instead — including the case nobody would notice,
+  **zero ranked specialists**, which silently routes music like ordinary work.
+
+  This column was a Yes/No dropdown until the rank landed, so typing `1` was marked
+  invalid. If red flags appear after a rules change, run **Admin → Refresh engineer
+  dropdowns**, *not* Set up sheets — the latter clears the Projects tab.
+- **`mix_level`** must read `Advanced` or `Developing`. It is canonicalised on read,
+  because the engine compares it case-sensitively while every other flag is
+  case-insensitive — `advanced` once took Kyle from 15 mix weeks to **zero** while
+  he appeared completely free. Unrecognised values are reported, not guessed at.
+
+---
+
+## 3. How assignment works
+
+Phases are plotted **backward from the deadline**, contiguous, no gaps: mix ends
+the week before the deadline week, edit before mix, dub before edit. Dates are
+never negotiable — only *who* is.
+
+For record/edit, in order:
+
+1. **Divide the dub** between engineers, week by week, keeping the edit whole.
+2. One engineer takes the whole block.
+3. Dub to one, edit to another.
+4. **Force an overlap** — deliberately double-book, and say so.
+
+Dividing the dub comes first because each dub week is its own recording block,
+whereas editing wants continuity within a title. Whether a given project's dub is
+actually divided is decided **per project, by measuring the finished plan** — the
+solver tries it both ways and keeps whichever scores better. Dividing everywhere
+was measured and is worse: more small pieces fragment every calendar.
+
+Mixing is never split. Rule 8 is one-directional — a Developing mixer never takes
+an Advanced project, but an Advanced mixer may take easier work, with the
+Developing mixer getting first refusal.
+
+### Music titles
+
+A project flagged **Music/Songs = Yes** is assigned from the music specialists and
+**only** from them, for every phase including the mix. If they cannot cover it the
+engine forces an overlap *among them* rather than reaching outside.
+
+This replaced a pool that was **widened** by the specialists rather than replaced by
+them — they were concatenated onto the ordinary record/edit pool, so the engine
+remained free to pick someone with no music expertise, and on a re-plan it did. That
+was a reported bug, not a tuning question.
+
+Rank is a **tiebreak inside the ladder, not a narrower pool**. Daryl is preferred
+wherever he is free; Josiah takes what is left, and the dub and the edit may be split
+between the two of them. An earlier attempt made rank a pool filter — take the whole
+block from the first tier, else drop to the second — which meant that if Daryl could
+not cover the *entire* block it went to Josiah wholesale. A share between them is
+usually the better answer.
+
+The rule costs something and the cost is accepted: overloaded weeks 2 → 3, spread
+2 → 3, longest run 14 → 16. None of the overloads are music titles. The mechanism is
+indirect — a reserve committed to music is a reserve that cannot absorb overflow.
+
+### The order search
+
+The engine is **greedy with no backtracking**: it assigns each project against
+whatever is already booked and never revisits. So the order projects are processed
+in changes the outcome — and since every project's dates come from its own
+deadline, order changes *only who*, never a single date.
+
+`plotBatch` therefore runs the same engine under **202 seeded orderings** and keeps
+the best plan. Deadline order is always tried first and only replaced by something
+strictly better, so it can never do worse. The seed is fixed: same inputs, same
+plan, always.
+
+This is why **the first solve must be a batch**. Plotting project-by-project is
+plain greedy, and the early projects land on an empty book where every candidate
+ties and the alphabetically-first name wins. That is how a mix ended up on Josiah
+while Kyle sat free. Measured: incremental gives 9 overloaded weeks, one batch
+solve gives 2.
+
+---
+
+## 4. The objective — this is the whole policy
+
+```js
+var SOLVE_OBJECTIVE = [
+  'reserve_double_booked',   // never double-book the reserve
+  'total_double_booked',     // then the fewest overloaded engineer-weeks anywhere
+  'max_double_booked',       // then don't concentrate what remains on one person
+  'forced_projects',         // then fewest projects compromised
+  'regular_spread',          // then flattest load across the regular pool
+  'max_consecutive',         // then prefer handing off, all else equal
+  'reserve_weeks',           // then spend as little of the reserve as possible
+  'regular_peak',            // then the lowest peak in the regular pool
+];
+```
+
+Reorder this list to change the policy. Nothing else needs touching. The search
+optimises whatever ranks highest, faithfully, and anything ranked low is traded
+away without comment.
+
+**Overlap ranks first, and the reason is the most important thing in this
+document.** The list previously ranked `max_consecutive` second, presented as
+burnout protection. That was wrong: `max_consecutive` counts weeks with *any*
+work, so it penalised continuous employment, while an **overlap is the actual
+overload** — two projects in one week. Tara's correction, 2026-08-13.
+
+Measured on the seeded book:
+
+| | overloaded weeks | spread across | longest run |
+|---|---|---|---|
+| burnout ranked 2nd | 6 | **four people** | 9 |
+| overlap ranked 1st | **2** | **one person** | 14 |
+
+And the 14-week runs contain **zero** overloaded weeks — fourteen weeks of one
+project at a time, which is simply a job. The shorter runs in the old plan were
+idle gaps, which bought nobody anything.
+
+If a real strain metric is ever wanted it is **consecutive doubled weeks**, not
+consecutive booked weeks.
+
+**Nothing was added to this list on 2026-08-15. Three terms were tried and all three
+withdrawn**, and the pattern behind that is worth more than any of them:
+
+- **`idle_regular_months`** — fewest people with a whole month of nothing. Removed: it
+  reads as harmless but the `divide_dub` tuner optimises against the whole objective,
+  so it split projects to move the figure by one. More splitting in all five scenarios
+  tried; its supposed benefit on overloads was noise.
+- **`split_phases`** — fewest phases held by more than one engineer. Added to stop the
+  solver breaking ties badly, and **removed the same day**: measured in the real
+  workflow it cut divided dubs from 6 to 2 and pushed forced overlaps UP. Dividing a
+  dub is the cheap alternative to double-booking someone; discouraging it drives the
+  solver toward the expensive answer. Tara caught this from the grid.
+- **`DIVIDE_WHEN_FREE`** — the lean-season rules, see below.
+
+**The lesson, which cost most of a day: a single fixture scenario is not evidence.**
+Every one of these was justified with figures from one book, and every figure
+evaporated under a second and third scenario. Measure any change to `SOLVE_OBJECTIVE`
+across several seed-and-chunk combinations, and against **incremental use**, before
+believing it — the noise between runs is larger than most effects being chased.
+
+**Discretionary splitting predates all of this and was NOT touched.** The tuner tries
+each project divided and whole and keeps whichever measures better, so a dub can be
+shared by two engineers with the edit going to a third. v46 and the current build
+produce identical output here. If it is ever unwanted the lever is `tuneDivision`, not
+the objective: turning it off cuts splits from 12 to 4 on the seeded book, costing one
+overloaded week and one forced project. Measured, not done.
+
+### Re-plan is allowed to decline
+
+**Re-plan never proposes a schedule worse than the one you have** (fixed 2026-08-15).
+Its `baseline` used to be its own first attempt in deadline order, not the live book,
+so it picked the best of 202 tries and proposed it even when every one was worse than
+doing nothing — a book plotted at 3 overloaded weeks came back at 4. It now scores the
+current book and returns `no_improvement` when nothing beats it.
+
+This matters more the longer the tool runs. Re-plan cannot move work already under
+way, so its freedom shrinks as the year fills: with 12 rows started it had nothing to
+offer, with none started it improved the same book from 3 to 2. **Wiping and
+re-plotting is not an alternative** — projects arrive when they arrive — so re-plan
+has to be safe to run at any moment, which means being allowed to say no.
+
+**Known and unfixed: re-plan does not divide dubs.** The two engines use different
+machinery — assign has the wrapper's `divide_dub` tuner plus `spreadDub`, which hands
+out dub weeks one at a time; replan has neither, and its `tryShare` looks for the
+smallest covering set, which is one dubber plus one editor by construction. So a
+re-plan collapses divided dubs. It no longer makes the book worse overall, but it does
+not find those splits. The fix is to port `spreadDub` into the second engine.
+
+### Where the plan stands
+
+3 overloaded engineer-weeks — one each on Kyle, Mat and Josiah; 2 forced projects;
+spread 3; reserve 16 weeks; 73 booking rows across 24 projects.
+
+None are misallocation. Kyle's is **structural**: he is the only `does_specials`
+engineer *and* one of three Advanced mixers, so special work collides with his mix
+work — a hiring or cross-training question. Mat's and Josiah's are the **price of the
+music rule** (§3), which reserves two people for music and so leaves less slack
+everywhere else. Before that rule the figure was 2, both Kyle.
+
+---
+
+## 5. Layers, and why the engine is fenced off
+
+```
+Sheet  ──▶  21_Io.gs      reads/writes, memoised, canonicalises input
+       ──▶  11_Wrapper.gs validation, order search, scoring, replan fixes
+       ──▶  00/01/02_Engine_*.gs   the assignment logic
+```
+
+`engine/*.js` holds the **original, untouched** engine as delivered.
+`test/engine_drift.test.js` byte-compares the live `.gs` copies against it and
+permits *only* declared changes — seven rewritten regions in assign.js, two in
+replan.js, plus named one-line substitutions and two `||=` desugarings the V8
+runtime demands.
+
+Two kinds of declaration, and the difference matters. A **rewritten region** is cut
+from both sides: use it where the logic was genuinely replaced. A **substitution**
+transforms the reference into the live line and leaves everything else compared, so
+it is the honest tool for a signature change or a rename. The music work is all
+substitutions — the same people are eligible, only the tiebreak between them is new
+— which is why it reads as a short list rather than another fenced-off block.
+
+**That test is the authoritative record of what changed in the engine.** It fails
+on any undeclared edit; verified by injecting one. Prose drifts, it doesn't.
+
+Anything that can be fixed *outside* the engine is, on that principle: blank mix
+levels, mis-cased mix levels, superseded-row filtering, the replan defects.
+
+---
+
+## 6. Tests — 263, all passing
+
+| suite | count | what it protects |
+|---|---|---|
+| `wrapper.test.js` | 115 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
+| `io_roundtrips.test.js` | 107 | Sheets round trips, wipe, ghosts, relink, drag reassignment, roster validation |
+| `engine_drift.test.js` | 28 | the engine has not changed except where declared |
+| `views.test.js` | 13 | the `.html` files parse and their `api()` calls exist |
+
+```bash
+for t in test/*.test.js; do node "$t"; done
+```
+
+**The round-trip suite has earned its keep by being made more like Sheets, not more
+convenient.** Three real bugs came from tightening its fakes:
+
+- dates as `Date` objects, not ISO strings → found a timezone lookup running **once
+  per date cell**, 167 server round trips on one page load. That was the "stuck
+  reading the book" hang.
+- counting every accessor, not just reads/writes → proved nothing else scales with
+  row count.
+- `deleteRows` and `clearContent` were stubs that did nothing → the wipe passed in
+  Node and threw in the real sheet.
+
+Any stub that returns `this` without doing anything is a place a bug can hide.
+
+**A failing test is not automatically a stale test.** When the music rule landed, four
+wrapper assertions failed and three were genuinely out of date. The fourth —
+`cap 2 keeps every share to two engineers` — was reading `recordist`, which
+concatenates the dubbers *and* the editor. A correctly capped project with two dubbers
+plus a separate whole-edit holder reads as three names and looked like a breach.
+SHARE_CAP has only ever limited the dub. It now counts the Dub rows. Check what an
+assertion measures before you update it to whatever the code now does.
+
+`views.test.js` exists for a different reason: the `.gs` files were syntax-checked by
+the other suites and the `.html` files by nothing. Appending code past a closing
+`</script>` killed the whole app twice in one day — both times caught only because
+someone opened the preview. It now checks that every script block parses, that no
+JavaScript sits outside one, that `</body>` follows the last `</script>`, and that
+every `api()` the views call exists server-side. Verified against all four failures.
+
+---
+
+## 7. The sheet menu
+
+| item | what it does |
+|---|---|
+| **Check bookings for problems** | roster errors, duplicate live rows, ghost projects, validation failures |
+| **Relink a renamed project** | moves a stranded schedule onto its renamed project row. Live rows only, one batched write, reversible. Listed above *Clear* deliberately |
+| **Clear ghost projects** | supersedes bookings whose project no longer exists in Projects |
+| **Why this mixer?** | for one project: every engineer, ✓/✗, and the reason — wrong level, not a mixer, reserve, or busy which weeks |
+| Admin → **Set up sheets** | builds/repairs tabs. **Wipes the Projects tab**; leaves Bookings alone |
+| Admin → **Plot all unplotted rows** | one batch solve over everything without a Plotted date |
+| Admin → **Refresh engineer dropdowns** | reapplies validation to the Projects pick columns *and* the Engineers tab. Validation only — no cell value is read or written |
+| Admin → **Wipe the schedule (build only)** | **delete this before go-live** |
+
+`Why this mixer?` exists because the tie-break is genuinely counterintuitive:
+`pick` ranks on **total load across all phases**, so a heavy record/edit week makes
+someone *less* likely to be handed a mix. An idle-looking mixer being passed over
+is often correct.
+
+There is no "Open the app" item. It read the URL from `ScriptApp.getService()
+.getUrl()`, which returns null unless the manifest has a `webapp` block *and* a
+matching deployment exists — state managed in the editor, not here. It reported
+"Not deployed yet" while the app was running. Bookmark the URL instead.
+
+---
+
+## 8. Re-plan
+
+Re-solves the **movable** part of the book against its current state, shows a diff,
+and writes nothing until you apply. Old rows are superseded, never deleted.
+
+Locked from moving:
+
+1. anything starting **this week or earlier** — you don't reassign work underway
+2. anything **hand-picked** (rule 11)
+3. any project with **Locked** ticked, or the lock toggled in the Projects list
+
+The lock is wired into `replan.js` itself, not just the wrapper. If only the wrapper
+knew, the engine would classify those rows as movable, supersede them, and never
+re-emit them — which is exactly fix D's failure mode.
+
+**It was removed on 2026-08-13 and restored the same day.** The argument for removal
+— manual picks cover it — was wrong: incremental plotting has no way to re-solve an
+assignment that was right when made and is stale now, and manual picks only fix the
+instance you happen to notice. The wrapper half was recovered from **script version
+4** via `clasp clone-script <id> 4` rather than rewritten, because fix D is
+data-losing and not something to reconstruct from a description.
+
+Note that a full batch re-solve reaches the same plan. Re-plan's value is the
+locking and the preview, which matter once assignments are out with people.
+
+---
+
+## 9. Known gaps
+
+**Nothing is verified in a real Apps Script session.** Every check ran in Node or
+the preview harness, which stubs `google.script.run` and `SpreadsheetApp`.
+
+**`tools/build_app_preview.js` reimplements the read models, and they drift.**
+The preview stubs the `api*` surface in the browser rather than running the real
+`40_WebApp.gs`, so `listProjects_`, `apiBootstrap` and `apiSchedule` all exist
+twice. By 2026-08-30 the copies had diverged badly: the stub still derived
+`forced` from the FORCED note (the bug removed from the real code weeks earlier),
+still returned the retired `counts.forced_rows`, and had never gained the
+per-booking `items` — which meant drag-and-drop was silently dead in the preview
+and nobody noticed, because the preview is the only place drag can be tried
+outside a deployment. Patched to match, but the duplication is the real defect.
+The fix is to drop the hand-written stub and run the genuine functions over an
+in-memory sheet — `loadWithSheet` in `test/io_roundtrips.test.js` already does
+exactly this in Node, and is now exported so it can be reused.
+
+This is the same failure as the five stale-note surfaces: two implementations of
+one fact, and no test comparing them. If the preview disagrees with the app, the
+preview is the thing that gets trusted, because it is the thing you can see.
+
+**No refresh in the app.** Views cache in `LOADED` and never refetch, so sheet-side
+changes are invisible until a browser reload. A header refresh button is a few lines.
+
+**Services required (Atmos)** is not modelled. The engine can express `mix_level`
+and nothing else, so it will assign someone who cannot do the job. Same shape as
+rule 7, fits cleanly. This is a correctness gap.
+
+**A project's title is its primary key** (§2). Renaming one in the sheet orphans its
+whole schedule; renaming it in the app is safe. Declined a `project_id` column as too
+big a change pre-launch — revisit if titles start changing routinely.
+
+**Series vs feature.** Blue Box Season 2 is one recurring show with a fixed crew in
+the real tracker, but six independent projects here — which is why its engineers
+churn across the year.
+
+**One specials engineer.** Kyle is a single point of failure and the source of one
+remaining overlap.
+
+**Two music specialists, and the roster must say so.** Music is confined to whoever
+carries a `music_specialist` rank, so the pool is exactly as deep as that column. If
+only one name is ranked, every music title in a week belongs to one person and the
+engine will force overlaps onto them rather than reach outside — correctly, but
+expensively. Adding a third would relieve it; the code needs no change, only the
+column. Conversely, blanking the column makes music route like ordinary work again,
+silently.
+
+**Leave and availability are not modelled, by request.** The engine assumes everyone
+is available every week. This is the loc lead's decision, not an oversight: who is on
+leave, who is coming back mid-week, who should not be given a hard title right now —
+that is human judgment, and the tool is not to guess at it.
+
+The intended mechanism is the **manual pick**, which is why pins are expected rather
+than regrettable. It is also why the Analysis page does not count them (§10): a pin is
+often the correct answer to something the tool was never meant to know, so the number
+cannot distinguish a wrong rule from a right decision.
+
+Do not "fix" this by adding an availability calendar. If it is ever revisited it needs
+the loc lead's agreement first, because it moves a judgment call out of a person's
+hands and into a spreadsheet.
+
+**No phase-length estimation, deliberately.** The human entering phase lengths has
+already weighed word count, runtime and complexity. An LLM estimator was built and
+removed the same day for failing to reproduce three of 24 known projects. A phase
+length wrong by one week cascades through every later project; a confidently wrong
+schedule is worse than an obviously wrong one.
+
+---
+
+## 10. The Analysis page
+
+Two sections, deliberately. It was five, with ten stat tiles, four charts, a heatmap
+and two "tightest weeks" lists — most of it different renderings of the same facts, and
+one of them actively wrong.
+
+| section | contents |
+|---|---|
+| Can we take work? | **forced overlaps**; demand-vs-supply chart per role; who is free week by week, by name; where the work comes from |
+| Who is overloaded? | weeks booked per engineer per quarter; overloaded weeks, naming what collides |
+
+Forced overlaps lead the page. They were rendered three times — a header pill for the
+count, an 11px banner for the role split, and a table at the very bottom for the
+detail — so the most actionable fact on the page ("Kyle is carrying both of these")
+was in its smallest type.
+
+A third section, "Is this working?", counted manual pins as a process-health metric.
+Removed: see the leave decision in §9 for why that number could not mean what it
+claimed.
+
+Four things are worth not undoing:
+
+**Overload is doubled weeks, not long runs.** The old Balance table flagged rows red
+at eight-plus consecutive booked weeks and called it burnout. Since the objective now
+deliberately produces 14-week runs (§4), that would paint the correct plan as a
+failure.
+
+**Free capacity is names and weeks, never a quarterly sum.** "Open record/edit: 12"
+implied capacity is interchangeable across time. It is not — deadlines are fixed, so
+a quarter can show twelve open weeks while every week you need is full. Same error the
+page warns about for roles, one axis over.
+
+**Busy and short-handed are different questions, and the page keeps them apart by
+showing different things rather than different columns.** A week where nobody is free is
+a scheduling problem — re-plan or move a date. A week where more projects need a role
+than there are people who can do it is a hiring problem. The **charts** show the second
+(bars above the supply line), and the **forced overlaps** card names the projects it
+actually cost.
+
+A "How full each quarter is" table used to count both per quarter. It was dropped on
+2026-08-13 once the forced-overlaps card existed: its two columns were exact
+aggregations of the red chart bars and the "nobody free" rows, so it restated two things
+already on the page and added nothing but reach beyond the ten-week window.
+
+**Labels carry their own meaning, so the page has almost no prose.** Two tests of
+this held: the demand charts label their own supply line and their own over-capacity
+bars, so they need no legend — the legend was removed as redundant. And the quarter
+table's columns were renamed from "Full"/"Short-handed" to **"Weeks with nobody free"**
+and **"Weeks needing more people"**, at which point its explanatory subtitle could go.
+An explanation is usually a label that is not doing its job.
+
+**The capacity charts start at the current week.** Past weeks cannot be acted on — you
+cannot hire retroactively — and including them made the axis grow without limit as
+history accumulated: five years of bookings would be ~260 bars in the same width, under
+2px each. Rolling the start keeps the width at "how far ahead we plan", which is
+constant year over year. `tools/capacity_report.js` prints the full series for a look
+back. The axis is labelled by month boundary, not week range: week labels were long
+enough ("Dec 28 - Jan 3") to collide with each other on a 57-week axis.
+
+The page is one column, capped at 1180px and left aligned. That cap is not cosmetic:
+the charts scale to their container via `viewBox`, so a full-width column magnified
+every internal label — at 1900px by 1.5x, at 2500px by 2x. A fixed ceiling is the only
+way the labels can be sized once and be right.
+
+---
+
+## 11. Before go-live
+
+1. Delete `resetSchedule()` from `23_Entry.gs` and its Admin menu item, and
+   `saveProject()` from `27_Form.gs` — nothing calls it. It is a leftover from the
+   sidebar form the web app replaced, and it is a *second* supersede-and-re-plot
+   path. A live but unreachable write path is what someone wires back up later
+   without knowing the rules moved.
+2. Bump the deployment version so the app serves current code — `create-version`
+   then `redeploy`, per §1, so the bookmark survives.
+3. Run `Check bookings for problems` on the real roster — it will name any
+   mis-cased `mix_level`, which silently disqualifies a mixer.
+4. Build the initial book as a **seed batch plus small batches**, not one project at
+   a time — a batch of four or five together beats four separate saves. The full
+   24-at-once solve is a test-fixture scenario, not how this is worked; see §4.

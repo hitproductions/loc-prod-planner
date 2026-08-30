@@ -1,0 +1,319 @@
+<style>
+/* Hit Productions design system — radius 0 everywhere, flat, no gradients, no
+   shadows, no emoji. 60% white / 30% black / 10% red, red as accent only.
+   Light only: this is an internal tool that lives beside Sheets, which is light. */
+:root{
+  --black:#000; --red:#EF4123; --red-hover:#D4341A; --white:#fff;
+  --gray:#646667; --cool:#D0D0CE;
+  --fg1:var(--black); --fg2:var(--gray); --fg3:#8A8C8D;
+  --bg1:var(--white); --bg2:#F5F5F4; --surface:#FCFCFB; --line:var(--cool);
+  /* tracker phase colours — identical to the sheet grid so both reconcile by eye */
+  --dub:#FFC000; --edit:#BDD7EE; --mix:#EA9999;
+  /* sequential ramp, one hue, monotonic lightness 0.95 -> 0.43 */
+  --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
+  --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box; border-radius:0 !important}
+html,body{margin:0; padding:0; background:var(--bg1); color:var(--fg1);
+  font-family:var(--font); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0; font-weight:700; letter-spacing:-0.02em; line-height:1.15}
+a{color:var(--red)}
+button{font-family:var(--font); cursor:pointer}
+:focus-visible{outline:2px solid var(--red); outline-offset:2px}
+
+/* ---- chrome ---------------------------------------------------------- */
+.top{position:sticky; top:0; z-index:20; background:var(--bg1);
+  border-bottom:2px solid var(--black); display:flex; align-items:center;
+  gap:24px; padding:12px 22px}
+.brand{font-size:17px; font-weight:700; letter-spacing:-0.02em; white-space:nowrap}
+.nav{display:flex; gap:2px}
+.nav button{background:none; border:1px solid transparent; color:var(--fg2);
+  font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em;
+  padding:7px 12px}
+.nav button:hover{color:var(--fg1); border-color:var(--line)}
+.nav button.on{background:var(--black); color:#fff; border-color:var(--black)}
+.top .right{margin-left:auto; display:flex; align-items:center; gap:14px;
+  font-size:12px; color:var(--fg2); white-space:nowrap}
+.pill{border:1px solid var(--line); padding:3px 8px; font-size:11px; color:var(--fg2)}
+.pill.bad{border-color:var(--red); color:var(--red); font-weight:700}
+
+main{padding:20px 22px 64px}
+.view{display:none}
+.view.on{display:block}
+
+/* ---- buttons --------------------------------------------------------- */
+.btn{font-size:12px; font-weight:700; padding:9px 16px; border:1px solid var(--fg1);
+  background:var(--bg1); color:var(--fg1); text-transform:uppercase; letter-spacing:0.06em}
+.btn:hover{background:var(--fg1); color:var(--bg1)}
+.btn.primary{background:var(--red); border-color:var(--red); color:#fff}
+.btn.primary:hover{background:var(--red-hover); border-color:var(--red-hover)}
+.btn.danger{border-color:var(--red); color:var(--red); background:var(--bg1)}
+.btn.danger:hover{background:var(--red); color:#fff}
+.btn.small{font-size:11px; padding:5px 10px}
+.btn:disabled{opacity:.4; cursor:default}
+.btn:disabled:hover{background:var(--bg1); color:var(--fg1)}
+
+/* ---- section heads --------------------------------------------------- */
+.head{display:flex; align-items:baseline; gap:10px; margin:0 0 4px}
+.head .bar{width:18px; height:3px; background:var(--red); flex:none}
+.head h2{font-size:14px; text-transform:uppercase; letter-spacing:0.08em}
+.lead{font-size:12px; color:var(--fg2); margin:0 0 14px 28px; max-width:88ch}
+.bar-row{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+.spacer{flex:1}
+
+/* ---- tables ---------------------------------------------------------- */
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{text-align:left; padding:7px 10px 7px 0; border-bottom:1px solid var(--line);
+  vertical-align:top}
+th{font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--fg2);
+  font-weight:700; white-space:nowrap}
+td.n,th.n{text-align:right; font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--bg2)}
+tr.rowbad td{color:var(--red)}
+tr.dim td{color:var(--fg3)}
+.tname{font-weight:700}
+
+/* ---- cards / panels -------------------------------------------------- */
+.card{border:1px solid var(--line); background:var(--surface); padding:14px}
+.card.flag{border:2px solid var(--red)}
+.card .t{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em}
+.card .s{font-size:11px; color:var(--fg2); margin-bottom:10px}
+.grid{display:grid; gap:14px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+@media (max-width:1000px){.g2,.g3{grid-template-columns:1fr}}
+.stat{font-size:34px; font-weight:700; letter-spacing:-0.03em; line-height:1}
+.stat.warn{color:var(--red)}
+.stat .u{font-size:12px; font-weight:400; color:var(--fg2); letter-spacing:0; margin-left:4px}
+.sub{font-size:11px; color:var(--fg2); margin-top:6px}
+
+/* ---- forms ----------------------------------------------------------- */
+.form{border:1px solid var(--black); padding:18px; background:var(--surface);
+  margin-bottom:18px}
+.form.editing{border-left:4px solid var(--red)}
+.form h3{font-size:13px; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:2px}
+.form .note{font-size:12px; color:var(--fg2); margin-bottom:16px}
+.fields{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+@media (max-width:1000px){.fields{grid-template-columns:repeat(2,1fr)}}
+.f{display:flex; flex-direction:column}
+.f.wide{grid-column:span 2}
+label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em;
+  color:var(--fg2); margin-bottom:4px}
+input[type=text],input[type=date],input[type=number],select{
+  padding:9px 10px; font-family:var(--font); font-size:15px; background:var(--bg1);
+  color:var(--fg1); border:1px solid var(--line); width:100%}
+input.bad,select.bad{border-color:var(--red); border-width:2px}
+.hint{font-size:11px; color:var(--fg2); margin-top:4px}
+.phases{display:flex; gap:8px}
+.phases .p{flex:1}
+.checks{display:flex; gap:18px; align-items:center; height:38px}
+.checks label{display:flex; align-items:center; gap:7px; text-transform:none;
+  letter-spacing:0; font-size:14px; font-weight:400; color:var(--fg1); margin:0}
+.checks input{width:16px; height:16px}
+.formactions{display:flex; gap:10px; align-items:center; margin-top:18px}
+
+/* ---- result / messages ---------------------------------------------- */
+.result{margin-top:16px; border:1px solid var(--line); background:var(--bg1); padding:14px}
+.result.dry{border-left:3px solid var(--fg2)}
+.result.saved{border-left:3px solid #1B7F3B}
+.result.alarm{border:2px solid var(--red)}
+.result h4{margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.07em}
+.kv{display:flex; gap:10px; font-size:14px; margin-bottom:3px}
+.kv b{min-width:100px; font-weight:700; color:var(--fg2); font-size:10px;
+  text-transform:uppercase; letter-spacing:0.06em; padding-top:3px}
+.warn{border-left:3px solid var(--red); background:var(--bg2); padding:10px 12px;
+  font-size:13px; margin-top:10px; font-weight:700; color:var(--red)}
+.errs{border:2px solid var(--red); padding:12px; font-size:14px; margin-top:14px}
+.errs ul{margin:6px 0 0 20px; padding:0}
+.muted{font-size:12px; color:var(--fg2); margin-top:10px}
+.banner{border-left:3px solid var(--red); background:var(--bg2); padding:10px 14px;
+  font-size:12px; color:var(--fg2); margin-bottom:16px}
+.empty{padding:56px 0; text-align:center; color:var(--fg2); font-size:13px}
+.loading{padding:64px 0; text-align:center; color:var(--fg2); font-size:13px}
+
+/* ---- chips ----------------------------------------------------------- */
+.chip{display:inline-block; font-size:9px; padding:2px 6px; border:1px solid var(--line);
+  color:var(--fg2); text-transform:uppercase; letter-spacing:0.06em; margin-right:4px;
+  white-space:nowrap}
+.chip.red{border-color:var(--red); color:var(--red); font-weight:700}
+.chip.pin{border-color:var(--fg1); color:var(--fg1); font-weight:700}
+.sw{display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:-1px;
+  border:1px solid rgba(0,0,0,.25)}
+.legend{font-size:11px; color:var(--fg2); margin-top:10px}
+.legend span{margin-right:14px; white-space:nowrap}
+
+/* ---- schedule grid --------------------------------------------------- */
+.gridwrap{overflow:auto; border:1px solid var(--line); max-height:70vh}
+table.sched{border-collapse:separate; border-spacing:0; font-size:11px; width:auto}
+table.sched th,table.sched td{padding:0; border:none; white-space:nowrap}
+table.sched thead th{position:sticky; z-index:3; background:var(--black);
+  color:#fff; font-size:11px; padding:7px 4px; text-align:center;
+  border-right:1px solid #333; font-weight:700}
+/* the month band pins to the top; the day-range row pins directly beneath it,
+   offset by the band's own height. Both rows at top:0 would overlap. */
+table.sched thead tr:first-child th{top:0; height:30px}
+table.sched thead tr:nth-child(2) th{top:30px}
+table.sched thead th.corner{left:0; z-index:6; text-align:left; padding-left:12px;
+  min-width:240px; max-width:240px}
+table.sched tbody th{position:sticky; left:0; z-index:2; background:var(--bg2);
+  text-align:left; padding:6px 12px; font-size:13px; font-weight:400;
+  border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  min-width:240px; max-width:240px; overflow:hidden; text-overflow:ellipsis}
+table.sched tbody td{width:62px; min-width:62px; height:34px; text-align:center;
+  font-size:12px; border-right:1px solid var(--bg1); border-bottom:1px solid var(--bg1);
+  overflow:hidden}
+td.cell{color:#000}
+/* the outline marks a single double-booked WEEK, never a whole project row */
+td.overlap{outline:2px solid var(--red); outline-offset:-2px; font-weight:700; color:#7F0000}
+td.pinned{outline:2px dotted var(--fg1); outline-offset:-2px}
+td.marker{background:var(--red); color:#fff; font-weight:700}
+td.dbl{background:var(--red); color:#fff; font-weight:700}
+
+/* ---- drag to reassign (Engineers view) -------------------------------- */
+/* Each booking inside a cell is its own draggable element, because a cell holding
+   two bookings is one square but two different things you might mean. */
+.bk{display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis;
+  vertical-align:middle; cursor:grab}
+.bk:active{cursor:grabbing}
+.bk.dragging{opacity:0.4}
+.bksep{opacity:0.5; padding:0 1px}
+/* Drop targets are lit only while a drag is in flight, so the grid is unchanged
+   at rest. Inset shadow rather than outline: outline is already spoken for by the
+   overlap and pinned markers, and two rings on one cell is unreadable. */
+table.sched td.dropok{box-shadow:inset 0 0 0 2px var(--red); cursor:copy}
+table.sched td.dropno{opacity:0.35}
+.monthband th{background:#333; font-size:12px; letter-spacing:0.04em}
+
+/* ---- heatmap --------------------------------------------------------- */
+.hm{border-collapse:collapse}
+.hm td,.hm th{border:none; padding:0}
+.hm .cell{width:36px; height:22px; text-align:center; font-size:11px;
+  font-variant-numeric:tabular-nums; border:1px solid var(--bg1)}
+
+/* ---- charts ---------------------------------------------------------- */
+svg{display:block; overflow:visible}
+svg text{font-family:var(--font); fill:var(--fg2)}
+.axis{stroke:var(--line); stroke-width:1}
+.gridline{stroke:var(--line); stroke-width:1; opacity:.5}
+.supply{stroke:var(--fg1); stroke-width:2; stroke-dasharray:4 3}
+.mark:hover{stroke:var(--fg1); stroke-width:1.5}
+.tip{position:fixed; pointer-events:none; z-index:60; background:var(--black);
+  color:#fff; border:1px solid var(--red); padding:6px 9px; font-size:12px;
+  max-width:300px; display:none}
+.toggle{background:none; border:1px solid var(--line); color:var(--fg2);
+  font-size:9px; text-transform:uppercase; letter-spacing:0.06em; padding:4px 8px}
+.toggle:hover{border-color:var(--red); color:var(--red)}
+.tblview{display:none; margin-top:10px; max-height:240px; overflow:auto}
+.cardhead{display:flex; justify-content:space-between; align-items:flex-start; gap:8px}
+
+/* ---- toast ----------------------------------------------------------- */
+.toast{position:fixed; bottom:22px; left:22px; z-index:80; max-width:520px;
+  background:var(--black); color:#fff; padding:12px 16px; font-size:13px;
+  border-left:3px solid var(--red); display:none}
+.toast.good{border-left-color:#1B7F3B}
+
+/* A frozen project has to be findable by scanning a long list, so it gets a left
+   edge marker rather than a colour change — colour is already spoken for by
+   forced (red) and cancelled (grey), and a locked row can be either of those too.
+   The border is always present and transparent, so locking never shifts layout. */
+table.projects td:first-child{border-left:3px solid transparent; padding-left:9px}
+table.projects th:first-child{padding-left:12px}
+tr.locked{background:var(--surface)}
+tr.locked td:first-child{border-left-color:var(--fg1)}
+tr.locked:hover{background:var(--bg2)}
+
+/* Projects table: the engine writes short, known values into these columns, so
+   let the project title take the slack instead of padding every name column. */
+table.projects td, table.projects th{white-space:nowrap}
+table.projects th.dem, table.projects td.dem{width:1%; text-align:right; padding-right:18px}
+table.projects th.who, table.projects td.who{width:1%; padding-right:22px}
+table.projects td.tname{white-space:normal}
+table.projects th:nth-child(2){width:auto}
+
+/* Lock toggle — a frozen project must be obvious at a glance in a long list */
+.lockcell{white-space:nowrap}
+.lockbtn{font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  padding:5px 10px; border:1px solid var(--line); background:var(--bg1); color:var(--fg2);
+  cursor:pointer}
+.lockbtn:hover{border-color:var(--fg1); color:var(--fg1)}
+.lockbtn.on{background:var(--fg1); border-color:var(--fg1); color:#fff}
+.chip.lock{border-color:var(--fg1); color:var(--fg1)}
+
+/* Analysis: a week with nobody free is the actionable case, so it reads as such */
+td.none{color:var(--red); font-weight:700}
+td.n.bad{color:var(--red); font-weight:700}
+td.wk{white-space:nowrap; color:var(--fg2)}
+
+.qsel{font-size:11px; color:var(--fg2); text-transform:uppercase; letter-spacing:.06em;
+  display:inline-flex; align-items:center; gap:5px; margin-right:10px}
+.qsel select{font-size:11px; padding:4px 6px; border:1px solid var(--line);
+  background:var(--bg1); color:var(--fg1)}
+
+/* Analysis is one column, capped and LEFT aligned rather than stretched to the
+   window. Stretching hurt twice: tables grew huge gaps between their columns, and
+   the charts scale with their container via viewBox — at 1900px every internal
+   label was magnified 1.5x. A fixed ceiling makes the chart render at a predictable
+   size on any screen, which is the only way its labels can be sized once. */
+#v-analysis{font-size:14px; max-width:1180px}
+#v-analysis .grid{gap:20px}
+/* the closing note is a root child, so it needs its own space above */
+#v-analysis > .banner:last-child{margin-top:30px}
+#v-analysis .card{padding:18px 20px}
+#v-analysis .card .t{font-size:13px}
+#v-analysis .card .s{font-size:12.5px; max-width:80ch}
+#v-analysis th, #v-analysis td{padding:9px 14px 9px 0; font-size:13.5px}
+#v-analysis th:last-child, #v-analysis td:last-child{padding-right:0}
+#v-analysis .stat{font-size:34px}
+/* Tables size to their CONTENT and sit left, rather than stretching to the card.
+   Stretched, the first column absorbed every spare pixel — "Quarter" was 794px wide
+   to hold "2026-Q3", and "Client" 997px to hold "Netflix". */
+#v-analysis table{width:auto; max-width:100%}
+#v-analysis td.n, #v-analysis th.n{white-space:nowrap; text-align:right}
+
+/* Hovering a cell tracks its COLUMN: the week header lights up and a hairline runs
+   down the column. Not a background tint — the cells already carry phase colour,
+   deadline red, an overlap outline and a pinned outline, and a fifth signal would
+   compete with the phase colours, which are the tracker's own vocabulary. */
+table.sched thead th.colhi{background:var(--red)}
+table.sched td.colhi{box-shadow:inset 1px 0 0 var(--line), inset -1px 0 0 var(--line)}
+
+/* Engineers mode: weeks DOWN, engineers ACROSS. Only ~8 columns, so they can be wide
+   enough for a project name — which is what the cells hold, and why this axis exists. */
+table.sched.byeng thead th{top:0; height:auto; padding:8px 10px; text-align:left}
+table.sched.byeng thead th.corner{left:0; z-index:6; min-width:96px; max-width:96px}
+/* Left, matching the WEEK header above it and every other table in the app. It was
+   right-aligned to hug the data — a habit that suits equal-width numbers, not labels
+   that run from "9/7 - 13" to "12/28 - 1/3 '27". */
+table.sched.byeng tbody th{min-width:96px; max-width:96px; font-size:12px; color:var(--fg2);
+  text-align:left; padding:4px 10px; font-variant-numeric:tabular-nums}
+/* Capped so eight columns always fit the window; the full title is in the tooltip.
+   Uncapped, one long name ("Blue Box Season 2 (Eps 1-2)") stretched its column and
+   pushed the table back past the viewport, which is the problem this axis solves. */
+table.sched.byeng td{min-width:120px; max-width:150px; padding:4px 10px; text-align:left;
+  overflow:hidden; text-overflow:ellipsis}
+/* The month band, as a spanning row rather than a header strip.
+   z-index 2 — BELOW the sticky header (3) so it scrolls underneath rather than over
+   it. At 5 it painted on top and hid the engineer names.
+   The label is a sticky SPAN, not a sticky cell: the cell spans the whole table, so
+   pinning it does nothing — its content still sits at its left edge and scrolls out of
+   view, which is why the band read "2026" instead of "Sep 2026". */
+/* One rule per quarter — rhythm for a 58-row scroll, without asserting a month
+   boundary that the row labels would contradict. Four or five landmarks instead of
+   fourteen; months remain readable from the aligned digits in the labels.
+   2px, not 1px: row boundaries land on half-pixels here, so a 1px line anti-aliases
+   into two half-intensity lines and that blend reads differently against a coloured
+   cell than against white — which looked like the rule breaking beside the pink mix
+   cells. 2px spans the boundary and renders solid on any background. */
+table.sched.byeng tr.qstart th, table.sched.byeng tr.qstart td{
+  border-top:2px solid var(--fg1)}
+/* Sized from the measured widest label — "12/28 - 01/03 '27" needs 127px of content
+   box. At 118px the two year rows clipped, which is exactly the case the padding was
+   meant to make predictable. */
+table.sched.byeng tbody th{min-width:128px; max-width:128px}
+/* This week is marked by bolding its label only. An outline round the whole row
+   competed with the quarter rules and the double-booked outlines for no gain — the
+   bold date is enough to find today. */
+table.sched.byeng tr.nowrow th{color:var(--fg1); font-weight:700}
+.gridwrap.tall{max-height:76vh}
+</style>

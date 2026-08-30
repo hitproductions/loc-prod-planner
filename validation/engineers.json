@@ -1,0 +1,90 @@
+[
+  {
+    "name": "Jek",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "Yes",
+    "mix_level": "Developing",
+    "music_specialist": "No",
+    "overflow_only": "No",
+    "does_specials": "No",
+    "atmos": "No"
+  },
+  {
+    "name": "John",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "No",
+    "mix_level": "",
+    "music_specialist": "No",
+    "overflow_only": "No",
+    "does_specials": "No",
+    "atmos": "No"
+  },
+  {
+    "name": "Jetrho",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "No",
+    "mix_level": "",
+    "music_specialist": "No",
+    "overflow_only": "No",
+    "does_specials": "No",
+    "atmos": "No"
+  },
+  {
+    "name": "Via",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "Yes",
+    "mix_level": "Advanced",
+    "music_specialist": "No",
+    "overflow_only": "No",
+    "does_specials": "No",
+    "atmos": "No"
+  },
+  {
+    "name": "Mat",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "No",
+    "mix_level": "",
+    "music_specialist": "No",
+    "overflow_only": "No",
+    "does_specials": "No",
+    "atmos": "No"
+  },
+  {
+    "name": "Kyle",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "Yes",
+    "mix_level": "Advanced",
+    "music_specialist": "No",
+    "overflow_only": "No",
+    "does_specials": "Yes",
+    "atmos": "Yes"
+  },
+  {
+    "name": "Josiah",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "Yes",
+    "mix_level": "Advanced",
+    "music_specialist": "2",
+    "overflow_only": "No",
+    "does_specials": "No",
+    "atmos": "No"
+  },
+  {
+    "name": "Daryl",
+    "can_record": "Yes",
+    "can_edit": "Yes",
+    "can_mix": "Yes",
+    "mix_level": "Advanced",
+    "music_specialist": "1",
+    "overflow_only": "Yes",
+    "does_specials": "No",
+    "atmos": "No"
+  }
+]

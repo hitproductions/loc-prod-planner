@@ -1,0 +1,15 @@
+const fs = require('fs'), path = require('path');
+const src = fs.readFileSync(path.join(__dirname, 'io_roundtrips.test.js'), 'utf8');
+eval(src.slice(0, src.indexOf('// ---- reads are memoised')));
+const { api } = loadWithSheet(buildTabs());
+const d = api.apiSchedule('engineer', null);
+const mid = api.widx(d.weeks[Math.floor(d.weeks.length / 2)].start);
+console.log('weeks', d.weeks.length, '| mid idx', mid, '| mid start', d.weeks[Math.floor(d.weeks.length/2)].start);
+const live = api.activeRows(api.readBookings());
+console.log('live rows', live.length);
+const span = live.filter(b => api.widx(b.start_date) < mid && api.widx(b.end_date) > mid);
+console.log('strictly spanning mid:', span.length);
+const multi = live.filter(b => api.widx(b.end_date) > api.widx(b.start_date));
+console.log('multi-week bookings:', multi.length, multi.slice(0,3).map(b=>`${b.project}/${b.phase} ${b.start_date}..${b.end_date}`));
+console.log('api has weekStart?', typeof api.weekStart, '| widx?', typeof api.widx);
+console.log('exported keys sample:', Object.keys(api).filter(k=>/week|widx|Reassign/i.test(k)));

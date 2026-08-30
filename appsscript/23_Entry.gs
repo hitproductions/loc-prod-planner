@@ -1,0 +1,155 @@
+// Bulk plotting, for loading a batch of projects pasted straight into the sheet.
+//
+// This replaces the old Commit-checkbox + installable onEdit trigger. There is
+// no trigger in this tool any more: the web app has buttons, so nothing needs a
+// checkbox pretending to be one, and nothing mutates a cell behind you.
+//
+// Everyday entry is the web app. This exists for the one-off case — pasting the
+// historical book, or a batch someone prepared in a spreadsheet.
+
+function plotAllUnplotted() {
+  var ui = SpreadsheetApp.getUi();
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) {
+    ss().toast('Another change is already running. Try again in a moment.', 'Busy', 5);
+    return;
+  }
+  try {
+    var engineers = readEngineers();
+    var bookings = readBookings();
+    assertValidBook(bookings, engineers);
+
+    // A row counts as unplotted when it has a title but no Plotted stamp.
+    var candidates = readProjectRows().filter(function (p) {
+      return p.project_title && !p.plotted;
+    });
+    if (!candidates.length) {
+      ss().toast('Every project row already has a Plotted date. Nothing to do.', 'Nothing to plot', 6);
+      return;
+    }
+
+    var resp = ui.alert('Plot ' + candidates.length + ' project(s)?',
+      candidates.slice(0, 12).map(function (p) {
+        return '• ' + p.project_title + '  ' + (p.deadline || '(no deadline)') + '  ' + (p.phases || '');
+      }).join('\n') +
+      (candidates.length > 12 ? '\n…and ' + (candidates.length - 12) + ' more.' : '') +
+      '\n\nThey are processed in deadline order, earliest first. Rows with a problem are ' +
+      'skipped and the reason is written into their Notes cell.',
+      ui.ButtonSet.YES_NO);
+    if (resp !== ui.Button.YES) return;
+
+    // Validate everything first, so one bad row never half-commits the batch.
+    var good = [], bad = [];
+    candidates.forEach(function (p) {
+      var res = normalizeProject(p);
+      if (res.errors.length) bad.push({ row: p._row, errors: res.errors });
+      else good.push({ row: p._row, project: res.project });
+    });
+    bad.forEach(function (b) { writeProjectError(b.row, b.errors.join(' ')); });
+
+    if (!good.length) {
+      ui.alert('Nothing plotted', 'All ' + bad.length + ' row(s) had problems — see the Notes ' +
+        'column on each.', ui.ButtonSet.OK);
+      return;
+    }
+
+    var titles = good.map(function (g) { return g.project.project_title; });
+    var retired = supersedeProjectBookings(titles);
+
+    // Solved rather than simply sorted: the same greedy engine is run under
+    // several orderings and the best plan kept. Ordering changes only WHO is
+    // picked — every phase window still comes from its own deadline.
+    var rowOf = {};
+    good.forEach(function (g) { rowOf[g.project.project_title] = g.row; });
+
+    var batch = plotBatch(good.map(function (g) { return g.project; }),
+                          readBookings(), engineers);
+    appendBookings(batch.new_rows);
+
+    var newRows = batch.new_rows, forcedCount = 0;
+    good = batch.results.filter(function (r) { return r.result; }).map(function (r) {
+      if (r.result.forced) forcedCount++;
+      return { row: rowOf[r.project.project_title], project: r.project, out: r.result };
+    });
+
+    var stamp = todayISO();
+    good.forEach(function (g) {
+      var out = g.out;
+      clearProjectOutputs(g.row);
+      writeProjectOutputs(g.row, {
+        dub_weeks: g.project.dub_weeks,
+        edit_weeks: g.project.edit_weeks,
+        mix_weeks: g.project.mix_weeks,
+        recordist: out.dubber || out.recordist,
+        editor: out.editor || out.recordist,
+        mixer: out.mixer,
+        warnings: out.warnings,
+        notes: [out.record_note, out.mix_note].filter(String).join(' | '),
+        plotted: stamp,
+        forced: out.forced,
+      });
+    });
+
+    var s = batch.solve, b0 = s.baseline;
+    ui.alert('Plotted',
+      good.length + ' project(s) plotted.\n' +
+      newRows.length + ' booking rows written' + (retired ? ', ' + retired + ' superseded' : '') + '.\n' +
+      (forcedCount ? forcedCount + ' project(s) needed a FORCED OVERLAP — someone is double-booked.\n' : '') +
+      (bad.length ? bad.length + ' row(s) skipped, see their Notes cell.\n' : '') +
+      '\nTried ' + s.candidates_tried + ' orderings' +
+      (s.improved
+        ? ' and found a better one than plain deadline order:\n' +
+          '   forced projects ' + b0.forced_projects + ' → ' + s.score.forced_projects + '\n' +
+          '   load spread across the regular pool ' + b0.regular_spread + ' → ' + s.score.regular_spread + ' weeks\n' +
+          '   double-booked weeks ' + b0.total_double_booked + ' → ' + s.score.total_double_booked
+        : '; deadline order was already the best of them.') +
+      '\n\nOpen the web app to see the schedule.',
+      ui.ButtonSet.OK);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Build-time only — delete this function and its menu item when the tool goes live.
+function resetSchedule() {
+  var ui = SpreadsheetApp.getUi();
+  var n = readBookings().length;
+  if (ui.alert('Delete all ' + n + ' booking rows?',
+      'Not reversible. Projects are kept. Plotted dates AND locks are cleared so you ' +
+      'can re-plot from scratch.',
+      ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+
+  // Sheets refuses to delete EVERY non-frozen row ("it is not possible to delete
+  // all non-frozen rows"), and this tab freezes its header. So keep one row and
+  // blank it — readBookings skips rows with no project, so it reads as empty.
+  var sh = sheetOrThrow(TAB.BOOKINGS);
+  var last = sh.getLastRow();
+  if (last > B_HEADER_ROW) {
+    if (last > B_HEADER_ROW + 1) sh.deleteRows(B_HEADER_ROW + 2, last - B_HEADER_ROW - 1);
+    sh.getRange(B_HEADER_ROW + 1, 1, 1, B_HEADERS.length).clearContent();
+  }
+
+  // Plotted must go too, or plotAllUnplotted finds nothing to do.
+  var psh = sheetOrThrow(TAB.PROJECTS);
+  var width = P_OUTPUT_LAST - P_OUTPUT_FIRST + 1;
+  var blanks = [];
+  for (var i = 0; i < P_ROWS; i++) {
+    var row = [];
+    for (var c = 0; c < width; c++) row.push('');
+    blanks.push(row);
+  }
+  psh.getRange(P_FIRST_DATA_ROW, P_OUTPUT_FIRST, P_ROWS, width)
+    .setValues(blanks).setBackground(COLOR.OUTPUT_BG);
+
+  // Locked is column 20 — deliberately AFTER the engine's block, so that adding it
+  // shifted no existing column. The consequence is that the sweep above stops one
+  // column short of it, and a lock survived the wipe: you would re-plot, get fresh
+  // bookings nobody had reviewed, and find them already frozen against the next
+  // re-plan. A lock means "these dates are promised"; a wipe destroys the dates, so
+  // the promise cannot outlive them.
+  psh.getRange(P_FIRST_DATA_ROW, P_COL.LOCKED, P_ROWS, 1)
+    .setValues(blanks.map(function () { return [false]; }));
+  ioInvalidate();
+
+  ss().toast('Deleted ' + n + ' rows. Now run Admin > Plot all unplotted rows.', 'Wiped', 6);
+}

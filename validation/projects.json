@@ -1,0 +1,674 @@
+[
+  {
+    "project_title": "Call My Agent! The Movie",
+    "client": "Netflix",
+    "deadline": "2026-08-22",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jetrho",
+    "_expect_mix": "Josiah",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-07-20",
+      "2026-08-02"
+    ],
+    "_edit": [
+      "2026-08-03",
+      "2026-08-09"
+    ],
+    "_mix": [
+      "2026-08-10",
+      "2026-08-16"
+    ]
+  },
+  {
+    "project_title": "MIRKWOOD S2",
+    "client": "Netflix",
+    "deadline": "2026-08-29",
+    "mix_level_required": "Advanced",
+    "music_songs": "Yes",
+    "dub_weeks": 3,
+    "edit_weeks": 3,
+    "mix_weeks": 3,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Daryl",
+    "_expect_mix": "Kyle",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-06-22",
+      "2026-07-12"
+    ],
+    "_edit": [
+      "2026-07-13",
+      "2026-08-02"
+    ],
+    "_mix": [
+      "2026-08-03",
+      "2026-08-23"
+    ]
+  },
+  {
+    "project_title": "Blue Box Season 2 (Eps 1-2)",
+    "client": "Netflix",
+    "deadline": "2026-08-31",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "John",
+    "_expect_mix": "Via",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-08-10",
+      "2026-08-16"
+    ],
+    "_edit": [
+      "2026-08-17",
+      "2026-08-23"
+    ],
+    "_mix": [
+      "2026-08-24",
+      "2026-08-30"
+    ]
+  },
+  {
+    "project_title": "Fight for '84",
+    "client": "Netflix",
+    "deadline": "2026-09-05",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 1,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Mat",
+    "_expect_mix": "Josiah",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-07-27",
+      "2026-08-09"
+    ],
+    "_edit": [
+      "2026-08-10",
+      "2026-08-16"
+    ],
+    "_mix": [
+      "2026-08-17",
+      "2026-08-30"
+    ]
+  },
+  {
+    "project_title": "Animals",
+    "client": "Netflix",
+    "deadline": "2026-09-08",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 1,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Via",
+    "_expect_mix": "Kyle",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-08-03",
+      "2026-08-16"
+    ],
+    "_edit": [
+      "2026-08-17",
+      "2026-08-23"
+    ],
+    "_mix": [
+      "2026-08-24",
+      "2026-09-06"
+    ]
+  },
+  {
+    "project_title": "Campioni",
+    "client": "Netflix",
+    "deadline": "2026-09-11",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 3,
+    "edit_weeks": 1,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jek",
+    "_expect_mix": "Daryl",
+    "_expect_status": "Daryl overflow",
+    "_dub": [
+      "2026-07-27",
+      "2026-08-16"
+    ],
+    "_edit": [
+      "2026-08-17",
+      "2026-08-23"
+    ],
+    "_mix": [
+      "2026-08-24",
+      "2026-09-06"
+    ]
+  },
+  {
+    "project_title": "Project A (Valorant)",
+    "client": "Liquid Violet",
+    "deadline": "2026-09-25",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 0,
+    "mix_weeks": 0,
+    "special_project": "Yes",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Kyle",
+    "_expect_mix": "\u2014",
+    "_expect_status": "Client rule -> Kyle",
+    "_dub": [
+      "2026-09-14",
+      "2026-09-20"
+    ],
+    "_edit": [
+      null,
+      null
+    ],
+    "_mix": [
+      null,
+      null
+    ]
+  },
+  {
+    "project_title": "Blue Box Season 2 (Eps 3-4)",
+    "client": "Netflix",
+    "deadline": "2026-09-28",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "John",
+    "_expect_mix": "Josiah",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-09-07",
+      "2026-09-13"
+    ],
+    "_edit": [
+      "2026-09-14",
+      "2026-09-20"
+    ],
+    "_mix": [
+      "2026-09-21",
+      "2026-09-27"
+    ]
+  },
+  {
+    "project_title": "Ray Gunn",
+    "client": "Netflix",
+    "deadline": "2026-10-03",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 2,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jetrho",
+    "_expect_mix": "Via",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-08-17",
+      "2026-08-30"
+    ],
+    "_edit": [
+      "2026-08-31",
+      "2026-09-13"
+    ],
+    "_mix": [
+      "2026-09-14",
+      "2026-09-27"
+    ]
+  },
+  {
+    "project_title": "Heartland",
+    "client": "Netflix",
+    "deadline": "2026-10-10",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 2,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Mat",
+    "_expect_mix": "Kyle",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-08-24",
+      "2026-09-06"
+    ],
+    "_edit": [
+      "2026-09-07",
+      "2026-09-20"
+    ],
+    "_mix": [
+      "2026-09-21",
+      "2026-10-04"
+    ]
+  },
+  {
+    "project_title": "Quasimodo",
+    "client": "Netflix",
+    "deadline": "2026-10-12",
+    "mix_level_required": "Advanced",
+    "music_songs": "Yes",
+    "dub_weeks": 2,
+    "edit_weeks": 2,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Josiah (dub) / Jek (edit)",
+    "_expect_mix": "Josiah",
+    "_expect_status": "Split (load balance)",
+    "_dub": [
+      "2026-08-31",
+      "2026-09-13"
+    ],
+    "_edit": [
+      "2026-09-14",
+      "2026-09-27"
+    ],
+    "_mix": [
+      "2026-09-28",
+      "2026-10-11"
+    ]
+  },
+  {
+    "project_title": "Grown Ups",
+    "client": "Netflix",
+    "deadline": "2026-10-14",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 3,
+    "edit_weeks": 3,
+    "mix_weeks": 3,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jek",
+    "_expect_mix": "Daryl",
+    "_expect_status": "FORCED OVERLAP",
+    "_dub": [
+      "2026-08-10",
+      "2026-08-30"
+    ],
+    "_edit": [
+      "2026-08-31",
+      "2026-09-20"
+    ],
+    "_mix": [
+      "2026-09-21",
+      "2026-10-11"
+    ]
+  },
+  {
+    "project_title": "Blue Box Season 2 (Eps 5-6)",
+    "client": "Netflix",
+    "deadline": "2026-10-19",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "John",
+    "_expect_mix": "Via",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-09-28",
+      "2026-10-04"
+    ],
+    "_edit": [
+      "2026-10-05",
+      "2026-10-11"
+    ],
+    "_mix": [
+      "2026-10-12",
+      "2026-10-18"
+    ]
+  },
+  {
+    "project_title": "The Good Lawyer",
+    "client": "Netflix",
+    "deadline": "2026-10-20",
+    "mix_level_required": "Developing",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 2,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Via + Jetrho",
+    "_expect_mix": "Jek",
+    "_expect_status": "Development slot",
+    "_dub": [
+      "2026-09-07",
+      "2026-09-20"
+    ],
+    "_edit": [
+      "2026-09-21",
+      "2026-10-04"
+    ],
+    "_mix": [
+      "2026-10-05",
+      "2026-10-18"
+    ]
+  },
+  {
+    "project_title": "Fool Night",
+    "client": "Netflix",
+    "deadline": "2026-10-30",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 4,
+    "edit_weeks": 3,
+    "mix_weeks": 3,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "John",
+    "_expect_mix": "Kyle",
+    "_expect_status": "FORCED OVERLAP",
+    "_dub": [
+      "2026-08-17",
+      "2026-09-13"
+    ],
+    "_edit": [
+      "2026-09-14",
+      "2026-10-04"
+    ],
+    "_mix": [
+      "2026-10-05",
+      "2026-10-25"
+    ]
+  },
+  {
+    "project_title": "Blue Box Season 2 (Eps 7-8)",
+    "client": "Netflix",
+    "deadline": "2026-11-02",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Mat",
+    "_expect_mix": "Josiah",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-10-12",
+      "2026-10-18"
+    ],
+    "_edit": [
+      "2026-10-19",
+      "2026-10-25"
+    ],
+    "_mix": [
+      "2026-10-26",
+      "2026-11-01"
+    ]
+  },
+  {
+    "project_title": "Steps",
+    "client": "Netflix",
+    "deadline": "2026-11-07",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 3,
+    "edit_weeks": 2,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Josiah + Mat",
+    "_expect_mix": "Via",
+    "_expect_status": "Shared",
+    "_dub": [
+      "2026-09-14",
+      "2026-10-04"
+    ],
+    "_edit": [
+      "2026-10-05",
+      "2026-10-18"
+    ],
+    "_mix": [
+      "2026-10-19",
+      "2026-11-01"
+    ]
+  },
+  {
+    "project_title": "Blue Box Season 2 (Eps 9-10)",
+    "client": "Netflix",
+    "deadline": "2026-11-16",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jetrho",
+    "_expect_mix": "Kyle",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-10-26",
+      "2026-11-01"
+    ],
+    "_edit": [
+      "2026-11-02",
+      "2026-11-08"
+    ],
+    "_mix": [
+      "2026-11-09",
+      "2026-11-15"
+    ]
+  },
+  {
+    "project_title": "Blue Box Season 2 (Eps 11-12)",
+    "client": "Netflix",
+    "deadline": "2026-11-30",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 1,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Josiah",
+    "_expect_mix": "Via",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-11-09",
+      "2026-11-15"
+    ],
+    "_edit": [
+      "2026-11-16",
+      "2026-11-22"
+    ],
+    "_mix": [
+      "2026-11-23",
+      "2026-11-29"
+    ]
+  },
+  {
+    "project_title": "Ordinary Time (Narnia)",
+    "client": "Netflix",
+    "deadline": "2026-12-10",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 1,
+    "mix_weeks": 1,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jetrho",
+    "_expect_mix": "Kyle",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-11-09",
+      "2026-11-22"
+    ],
+    "_edit": [
+      "2026-11-23",
+      "2026-11-29"
+    ],
+    "_mix": [
+      "2026-11-30",
+      "2026-12-06"
+    ]
+  },
+  {
+    "project_title": "Mercenary: An Extraction Series S1",
+    "client": "Netflix",
+    "deadline": "2027-01-12",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 3,
+    "edit_weeks": 2,
+    "mix_weeks": 3,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Mat",
+    "_expect_mix": "Via",
+    "_expect_status": "OK",
+    "_dub": [
+      "2026-11-16",
+      "2026-12-06"
+    ],
+    "_edit": [
+      "2026-12-07",
+      "2026-12-20"
+    ],
+    "_mix": [
+      "2026-12-21",
+      "2027-01-10"
+    ]
+  },
+  {
+    "project_title": "Project Nero 3 (Eps 1-4)",
+    "client": "Netflix",
+    "deadline": "2027-04-10",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 3,
+    "edit_weeks": 3,
+    "mix_weeks": 3,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "John",
+    "_expect_mix": "Josiah",
+    "_expect_status": "OK",
+    "_dub": [
+      "2027-02-01",
+      "2027-02-21"
+    ],
+    "_edit": [
+      "2027-02-22",
+      "2027-03-14"
+    ],
+    "_mix": [
+      "2027-03-15",
+      "2027-04-04"
+    ]
+  },
+  {
+    "project_title": "Project Nero 3 (Eps 5-8)",
+    "client": "Netflix",
+    "deadline": "2027-06-22",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 3,
+    "edit_weeks": 3,
+    "mix_weeks": 3,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jek",
+    "_expect_mix": "Kyle",
+    "_expect_status": "OK",
+    "_dub": [
+      "2027-04-19",
+      "2027-05-09"
+    ],
+    "_edit": [
+      "2027-05-10",
+      "2027-05-30"
+    ],
+    "_mix": [
+      "2027-05-31",
+      "2027-06-20"
+    ]
+  },
+  {
+    "project_title": "Saturn Return",
+    "client": "Netflix",
+    "deadline": "2027-07-30",
+    "mix_level_required": "Advanced",
+    "music_songs": "No",
+    "dub_weeks": 2,
+    "edit_weeks": 2,
+    "mix_weeks": 2,
+    "special_project": "No",
+    "recordist_override": "Auto",
+    "mixer_override": "Auto",
+    "_expect_rec": "Jetrho",
+    "_expect_mix": "Via",
+    "_expect_status": "OK",
+    "_dub": [
+      "2027-06-14",
+      "2027-06-27"
+    ],
+    "_edit": [
+      "2027-06-28",
+      "2027-07-11"
+    ],
+    "_mix": [
+      "2027-07-12",
+      "2027-07-25"
+    ]
+  }
+]

@@ -1,0 +1,9 @@
+# Build output of tools/build_app_preview.js — regenerate with `node tools/build_app_preview.js`
+preview/
+
+# clasp credentials, never commit
+.clasprc.json
+**/.clasprc.json
+
+node_modules/
+.DS_Store
