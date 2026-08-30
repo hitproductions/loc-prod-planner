@@ -9,6 +9,8 @@ const A = loadAppsScript();
 
 const yes = v => /^yes$/i.test(String(v == null ? '' : v).trim());
 const live = book => A.activeRows(book.bookings);
+const todayLocal = () =>
+  new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
 // Overlapped engineer-weeks by DEPTH. Two at once is ordinary — a series still
 // recording while its edit starts — and three is overflow that wants reassigning.
@@ -61,8 +63,12 @@ function bootstrap(book) {
         phase: b.phase, engineer: b.engineer, start: b.start_date, end: b.end_date, note: b.note || '',
       })),
     })),
-    // the Monday of the current week, so the grid can bold today's row
-    today_week: A.weekStart(A.widx(new Date().toISOString().slice(0, 10))),
+    // The Monday of the current week, so the grid can bold today's row.
+    // LOCAL date, not UTC. toISOString() is UTC, and Manila is UTC+8, so between
+    // midnight and 8am it returns yesterday — which put the bold on last week's row
+    // for the whole of every early morning. The Apps Script app reads the
+    // spreadsheet's own timezone for the same reason.
+    today_week: A.weekStart(A.widx(todayLocal())),
     counts: { projects: book.projects.length, live_rows: rows.length,
               over2: d.two, over3: d.three },
   };

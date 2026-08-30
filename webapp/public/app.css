@@ -30,11 +30,21 @@ table.sched th,table.sched td{padding:0; border:none; white-space:nowrap}
 table.sched thead th{position:sticky; top:0; z-index:3; background:var(--black); color:#fff;
   font-size:11px; padding:7px 4px; text-align:center; border-right:1px solid #333; font-weight:700}
 table.sched thead th.corner{left:0; z-index:6; text-align:left; padding-left:12px; min-width:128px}
+/* Following a row across eight columns, and a column down 58 rows, is most of what
+   reading this grid IS. Both were in the Apps Script app and neither survived the
+   rewrite. */
+table.sched tbody tr:hover td{background-color:rgba(0,0,0,.05)}
+table.sched tbody tr:hover th{background:var(--cool)}
+/* The column marker is on the HEADER, not a wash down the cells: the cells already
+   carry phase colours, and tinting them competes with the tracker's own vocabulary. */
+table.sched thead th.colhi{background:var(--red)}
+table.sched td.colhi{box-shadow:inset 1px 0 0 var(--line), inset -1px 0 0 var(--line)}
 table.sched tbody th{position:sticky; left:0; z-index:2; background:var(--bg2); text-align:left;
   padding:6px 12px; font-size:12px; font-weight:400; border-right:1px solid var(--line);
   border-bottom:1px solid var(--line); min-width:128px; font-variant-numeric:tabular-nums}
-table.sched tbody td{width:104px; min-width:104px; height:34px; text-align:center; font-size:11px;
-  border-right:1px solid var(--bg1); border-bottom:1px solid var(--bg1); overflow:hidden}
+table.sched tbody td{width:62px; min-width:62px; height:34px; text-align:center;
+  font-size:12px; border-right:1px solid var(--bg1); border-bottom:1px solid var(--bg1);
+  overflow:hidden}
 td.over2{outline:2px solid var(--warn); outline-offset:-2px; font-weight:700; color:#1B4F80}
 td.over3{outline:2px solid var(--red); outline-offset:-2px; font-weight:700; color:#7F0000}
 td.dbl2{background:var(--warn); color:#fff; font-weight:700}
@@ -57,8 +67,8 @@ table.sched.byeng tbody th{min-width:128px; max-width:128px; font-size:12px;
 /* Capped so eight columns always fit the window; the full title is in the tooltip.
    Uncapped, one long name ("Blue Box Season 2 (Eps 1-2)") stretches its column and
    pushes the table past the viewport, which is the problem this axis solves. */
-table.sched.byeng td{min-width:120px; max-width:150px; width:auto; height:auto;
-  padding:4px 10px; text-align:left; overflow:hidden; text-overflow:ellipsis}
+table.sched.byeng td{min-width:120px; max-width:150px; padding:4px 10px; text-align:left;
+  overflow:hidden; text-overflow:ellipsis}
 /* This week is marked by bolding its label only. An outline round the whole row
    competed with the quarter rules and the overlap outlines for no gain. */
 table.sched.byeng tr.nowrow th{color:var(--fg1); font-weight:700}

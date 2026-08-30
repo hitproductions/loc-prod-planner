@@ -38,7 +38,7 @@ function renderSchedule() {
   const d = SCHED;
   if (d.empty) return '<div class="loading">No bookings yet.</div>';
   let h = '<div class="gridwrap"><table class="sched byeng"><thead><tr><th class="corner">Week</th>';
-  d.labels.forEach(n => { h += `<th>${esc(n)}</th>`; });
+  d.labels.forEach((n, i) => { h += `<th data-c="${i}">${esc(n)}</th>`; });
   h += '</tr></thead><tbody>';
   let lastQ = null;
   d.weeks.forEach((w, ci) => {
@@ -70,8 +70,8 @@ function renderSchedule() {
                  `>${esc(label)}</span>`;
         }).join('<span class="bksep"> / </span>');
       }
-      h += `<td class="${cls}"${style} data-eng="${esc(n)}" data-wk="${w.start}"` +
-           ` title="${esc(text)}">${body}</td>`;
+      h += `<td class="${cls}"${style} data-c="${ri}" data-eng="${esc(n)}"` +
+           ` data-wk="${w.start}" title="${esc(text)}">${body}</td>`;
     });
     h += '</tr>';
   });
@@ -79,6 +79,8 @@ function renderSchedule() {
     '<span><span class="sw" style="background:var(--dub)"></span>Dub</span>' +
     '<span><span class="sw" style="background:var(--edit)"></span>Edit</span>' +
     '<span><span class="sw" style="background:var(--mix)"></span>Mix</span>' +
+    '<span><span class="sw" style="background:var(--warn)"></span>2 at once</span>' +
+    '<span><span class="sw" style="background:var(--red)"></span>3 at once</span>' +
     '<span><span class="sw" style="border:2px solid var(--warn);background:transparent"></span>2 overlaps this week</span>' +
     '<span><span class="sw" style="border:2px solid var(--red);background:transparent"></span>3 overlaps — reassign</span>' +
     '<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand — click to undo</span>' +
@@ -107,7 +109,28 @@ function renderProjects() {
 function paint() {
   $('view').innerHTML = VIEW === 'schedule' ? renderSchedule() : renderProjects();
   topRight();
-  if (VIEW === 'schedule') wireDrag();
+  if (VIEW === 'schedule') { wireDrag(); wireColumnHover(); }
+}
+
+// Delegated, and it only ever touches the column being left and the one being
+// entered — eight class toggles per move rather than several hundred.
+function wireColumnHover() {
+  const wrap = document.querySelector('.gridwrap');
+  if (!wrap) return;
+  let current = null;
+  const mark = (ci, on) => {
+    if (ci === null) return;
+    wrap.querySelectorAll(`[data-c="${ci}"]`).forEach(el => el.classList.toggle('colhi', on));
+  };
+  wrap.addEventListener('mouseover', e => {
+    const cell = e.target.closest('[data-c]');
+    const ci = cell ? cell.getAttribute('data-c') : null;
+    if (ci === current) return;
+    mark(current, false);
+    current = ci;
+    mark(current, true);
+  });
+  wrap.addEventListener('mouseleave', () => { mark(current, false); current = null; });
 }
 
 // ---------------------------------------------------------------- drag a week
