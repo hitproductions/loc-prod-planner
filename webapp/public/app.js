@@ -151,7 +151,13 @@ function openForm(title) {
         <datalist id="clientList">${(BOOT.clients || []).map(c => `<option>${esc(c)}</option>`).join('')}</datalist></div>
       <div class="f"><label for="f_deadline">Deadline</label>
         <input type="date" id="f_deadline" value="${p ? esc(p.deadline) : ''}"></div>
-      <div class="f"><label>Weeks per phase</label><div class="phases">
+      <div class="f"><label for="f_level">Mix level</label><select id="f_level">
+        <option${p && p.mix_level === 'Developing' ? '' : ' selected'}>Advanced</option>
+        <option${p && p.mix_level === 'Developing' ? ' selected' : ''}>Developing</option></select></div>
+    </div>
+
+    <div class="fields row2">
+      <div class="f span2"><label>Weeks per phase</label><div class="phases">
         <div class="p"><input type="number" id="f_dub" min="0" max="52" value="${p ? p.dub : 0}">
           <div class="hint"><span class="sw" style="background:var(--dub)"></span>Dub</div></div>
         <div class="p"><input type="number" id="f_edit" min="0" max="52" value="${p ? p.edit : 0}">
@@ -159,22 +165,25 @@ function openForm(title) {
         <div class="p"><input type="number" id="f_mix" min="0" max="52" value="${p ? p.mix : 0}">
           <div class="hint"><span class="sw" style="background:var(--mix)"></span>Mix</div></div>
       </div><div class="hint">Zero is valid \u2014 the phase does not exist. Phases plot backward from the deadline.</div></div>
-      <div class="f"><label for="f_level">Mix level</label><select id="f_level">
-        <option${p && p.mix_level === 'Developing' ? '' : ' selected'}>Advanced</option>
-        <option${p && p.mix_level === 'Developing' ? ' selected' : ''}>Developing</option></select></div>
-      <div class="f"><label>Flags</label><div class="checks">
+      <div class="f span2"><label>Flags</label><div class="checks">
         <label><input type="checkbox" id="f_music"${p && p.music ? ' checked' : ''}> Music</label>
         <label><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
         <label><input type="checkbox" id="f_atmos"${p && p.atmos ? ' checked' : ''}> Atmos</label>
-      </div><div class="hint">Atmos is separate from Special: it means the mix needs the room.</div></div>
-      <div class="f"><label for="f_rec">Recordist pick</label><select id="f_rec">${opts(p && p.recordist_pick)}</select>
-        <div class="hint">Auto lets the engine choose.</div></div>
-      <div class="f"><label for="f_rec2">Second recordist</label><select id="f_rec2">${opts(p && p.recordist_pick_2)}</select>
-        <div class="hint">Splits the dub between the two, first name taking the earlier weeks.</div></div>
-      <div class="f"><label for="f_ed">Editor pick</label><select id="f_ed">${opts(p && p.editor_pick)}</select>
-        <div class="hint">Auto keeps the edit with the recordist.</div></div>
-      <div class="f"><label for="f_mixer">Mixer pick</label><select id="f_mixer">${opts(p && p.mixer_pick)}</select>
-        <div class="hint">A manual pick overrides every rule and is flagged on the schedule.</div></div>
+      </div><div class="hint">Atmos is separate from Special: Special routes the work to the
+        specials engineer, Atmos means the mix needs the room.</div></div>
+    </div>
+
+    <div class="picks">
+      <div class="pickhead">Who does it \u2014 leave on Auto and the engine decides</div>
+      <div class="fields">
+        <div class="f"><label for="f_rec">Recordist</label><select id="f_rec">${opts(p && p.recordist_pick)}</select></div>
+        <div class="f"><label for="f_rec2">Second recordist</label><select id="f_rec2">${opts(p && p.recordist_pick_2)}</select>
+          <div class="hint">Splits the dub between the two, first name taking the earlier weeks.</div></div>
+        <div class="f"><label for="f_ed">Editor</label><select id="f_ed">${opts(p && p.editor_pick)}</select>
+          <div class="hint">Auto keeps the edit with the recordist.</div></div>
+        <div class="f"><label for="f_mixer">Mixer</label><select id="f_mixer">${opts(p && p.mixer_pick)}</select>
+          <div class="hint">A manual pick overrides every rule and is flagged.</div></div>
+      </div>
     </div>
     <div class="formactions">
       <button class="btn" id="f_check">Check availability</button>
@@ -232,11 +241,11 @@ async function submitForm(p, dryRun) {
         `${esc(x.phase)}</td><td>${esc(x.engineer)}</td><td>${esc(x.start)}</td>` +
         `<td>${esc(x.end)}</td></tr>`).join('') + '</tbody></table>';
   }
-  if (deep > 2) h += '<div class="warn">THREE AT ONCE \u2014 someone now holds three bookings in ' +
+  if (deep > 2) h += '<div class="msg">THREE AT ONCE \u2014 someone now holds three bookings in ' +
     'the same week. Reassign one of them.</div>';
-  else if (deep) h += '<div class="warn soft">Two at once \u2014 someone doubles up for part of ' +
+  else if (deep) h += '<div class="msg soft">Two at once \u2014 someone doubles up for part of ' +
     'this run. Normal where a shoot is still recording while its edit starts.</div>';
-  if (r.warnings) h += `<div class="warn">${esc(r.warnings)}</div>`;
+  if (r.warnings) h += `<div class="msg">${esc(r.warnings)}</div>`;
   const note = [r.record_note, r.mix_note].filter(Boolean).join(' \u00b7 ');
   if (note) h += `<div class="muted">${esc(note)}</div>`;
   if (dryRun) h += '<div class="muted">Nothing saved yet. Press Plot &amp; save to commit.</div>';

@@ -133,12 +133,30 @@ input.bad,select.bad{border-color:var(--red); border-width:2px}
 .kv{display:flex; gap:10px; font-size:14px; margin-bottom:3px}
 .kv b{min-width:100px; font-weight:700; color:var(--fg2); font-size:10px;
   text-transform:uppercase; letter-spacing:0.06em; padding-top:3px}
-.warn{border-left:3px solid var(--red); background:var(--bg2); padding:10px 12px;
+/* A message box, and deliberately NOT called .warn. As a bare class it collided with
+   the .chip warn and .pill warn modifiers — same specificity, declared later, so it
+   won on padding and font-size and blew the little chips up to 13px boxes. That is
+   the second time today: .stat.warn in the Apps Script app was the same mistake. A
+   block class and a modifier class must not share a word. */
+.msg{border-left:3px solid var(--red); background:var(--bg2); padding:10px 12px;
   font-size:13px; margin-top:10px; font-weight:700; color:var(--red)}
-.warn.soft{border-left-color:var(--warn); color:var(--warn)}
+.msg.soft{border-left-color:var(--warn); color:var(--warn)}
 .errs{border:2px solid var(--red); padding:12px; font-size:14px; margin-top:14px}
 .errs ul{margin:6px 0 0 20px; padding:0}
 .muted{font-size:12px; color:var(--fg2); margin-top:10px}
 table.projects tbody tr{cursor:pointer}
 .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:14px}
 .spacer{flex:1}
+
+/* The four picks are one decision — "who does it" — and were split across two rows
+   with Mix level and Flags wedged between them. Grouped, and boxed so the grouping is
+   visible. Fields align to the TOP of their row: the hints are different lengths, and
+   without this a wrapping hint pushed its neighbours' inputs down. */
+.fields{align-items:start; margin-bottom:14px}
+.f.span2{grid-column:span 2}
+.picks{border:1px solid var(--line); background:var(--bg2); padding:14px 14px 2px;
+  margin-top:4px}
+.picks .pickhead{font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--fg2); margin-bottom:12px}
+.picks .fields{margin-bottom:0}
+.picks .hint{min-height:2.4em}
