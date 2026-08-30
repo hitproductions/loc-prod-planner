@@ -9,6 +9,7 @@ const path = require('path');
 const { register, createStore } = require('./store.js');
 const api = require('./api.js');
 const actions = require('./actions.js');
+const { solveReplan, DEFAULT_RESTARTS } = require('./solver.js');
 
 register('fixture', require('./sources/fixture.js'));
 
@@ -61,7 +62,7 @@ const ACTIONS = {
   '/api/reassign':      (b, p) => actions.reassignWeek(b, p),
   '/api/undo':          (b, p) => actions.undoWeekMove(b, p),
   '/api/save-project':  (b, p) => actions.saveProject(b, p),
-  '/api/replan':        (b, p) => previewReplan(b, p),
+  '/api/replan':        (b, p) => previewReplan(b, p),      // async
   '/api/replan-apply':  (b, p) => applyReplan(b, p),
 };
 
@@ -72,8 +73,12 @@ const ACTIONS = {
 // holds the token only.
 let STASH = null;
 
-function previewReplan(book, p) {
-  const r = actions.replanPreview(book, p.today || TODAY());
+async function previewReplan(book, p) {
+  // Off the main thread: a deep search takes seconds, and the grid must still load for
+  // anyone else looking at it while this one is thinking.
+  const rows = actions.live(book);
+  const raw = await solveReplan(book, p.today || TODAY());
+  const r = actions.shapeReplan(book, rows, raw);
   if (r.change) {
     STASH = { version: store.version(), change: r.change, at: Date.now() };
     r.token = String(STASH.version);
@@ -137,7 +142,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method !== 'POST') return send(res, 405, '{"error":"POST only"}');
       const body = await readBody(req);
       const book = await store.get();
-      const result = action(book, body);
+      const result = await action(book, body);
       // A change is written to the source before anything is reported as done, so a
       // failed write can never leave the app showing a state the sheet does not have.
       if (result.ok && result.change) {
@@ -163,7 +168,8 @@ const server = http.createServer(async (req, res) => {
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`Loc Prod Planner (new) on http://localhost:${PORT}  source=${SOURCE}`);
+    console.log(`Loc Prod Planner (new) on http://localhost:${PORT}  source=${SOURCE}` +
+      `  search=${DEFAULT_RESTARTS}`);
   });
 }
 module.exports = { server, store, api };

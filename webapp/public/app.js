@@ -697,6 +697,15 @@ async function confirmMove(move) {
   const lines = [`${move.project} · ${move.phase}`,
                  `week of ${move.week_start}`,
                  `${pre.from}  →  ${move.to_engineer}`];
+  // What it costs, measured against the same ranked objective the planner uses. The
+  // move is still yours to make — a hand pick beats every rule — but you get to make
+  // it knowing rather than guessing.
+  if (pre.effect) {
+    lines.push('', (pre.effect.better ? '✓ ' : '✗ ') +
+      `${pre.effect.label}: ${pre.effect.from} → ${pre.effect.to}`);
+  } else {
+    lines.push('', 'No measurable change to the book.');
+  }
   if (pre.warnings.length) lines.push('', ...pre.warnings.map(w => '• ' + w.text));
   lines.push('', 'Weeks never move — only who does them.');
   if (!confirm(lines.join('\n'))) return;

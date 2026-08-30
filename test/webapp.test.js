@@ -179,6 +179,42 @@ section('Dragging a week to another engineer');
   ok('without confirmation it previews and writes nothing',
      dry.ok && dry.preview && !dry.change, JSON.stringify(dry).slice(0, 120));
 
+  // What the move would cost, before it is made. Every experiment used to be a write.
+  ok('the preview says what the move would do to the book',
+     dry.effect === null || (typeof dry.effect.from === 'number' &&
+       typeof dry.effect.to === 'number' && typeof dry.effect.better === 'boolean'),
+     JSON.stringify(dry.effect));
+
+  // And it has to be the SAME move that gets committed — a preview describing one
+  // arrangement and a commit writing another is the whole failure this guards.
+  const committed = actions.reassignWeek(book, { project: run.project, phase: run.phase,
+    week_start: week, to_engineer: to, confirmed: true });
+  ok('the previewed effect matches the committed one',
+     JSON.stringify(dry.effect) === JSON.stringify(committed.effect),
+     `${JSON.stringify(dry.effect)} vs ${JSON.stringify(committed.effect)}`);
+  // The prediction has to survive contact with the book. Pick a target whose first
+  // differing term IS the overlap count, so the predicted number can be checked against
+  // the one you actually get — taking whatever the first engineer happened to be left
+  // this skipping itself.
+  {
+    const target = book.engineers.map(e => e.name).filter(n => n !== run.engineer)
+      .map(n => ({ n, r: actions.reassignWeek(book, { project: run.project,
+        phase: run.phase, week_start: week, to_engineer: n }) }))
+      .find(x => x.r.ok && x.r.effect && x.r.effect.term === 'total_double_booked');
+
+    ok('some move changes the overlap count, or this proves nothing', !!target,
+       'no candidate move altered total_double_booked');
+    if (target) {
+      const done = actions.reassignWeek(book, { project: run.project, phase: run.phase,
+        week_start: week, to_engineer: target.n, confirmed: true });
+      const per = depthOf(A.activeRows(apply(book, done.change).bookings));
+      const actual = Object.values(per).filter(n => n > 1).length;
+      ok('the number it predicted is the number you get',
+         actual === target.r.effect.to,
+         `predicted ${target.r.effect.to}, got ${actual} (moving to ${target.n})`);
+    }
+  }
+
   const done = actions.reassignWeek(book, { project: run.project, phase: run.phase,
     week_start: week, to_engineer: to, confirmed: true });
   ok('confirmed, it returns a change set', done.ok && !!done.change);
@@ -434,6 +470,74 @@ section('Re-plan: preview, then apply against the same book');
 
   await new Promise(r => server.close(r));
   fixture._reset();
+}
+
+section('The deeper search');
+{
+  // Apps Script capped execution at six minutes and every solve blocked the user, so
+  // the engine settled for 200 orderings. Measured on an incrementally built book:
+  // 202 gives spread 5 / peak 19; 1000 gives spread 1 / peak 17; 5000 gives the same
+  // plan as 1000 for five times the wait. Worth having, and worth not overpaying for.
+  const { loadAppsScript } = require('../core/engine.js');
+  const engineers = require('../validation/engineers.json');
+  const projects = require('../validation/projects.json');
+  const byD = projects.slice().sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)));
+
+  // Through the RE-PLAN, not just the initial plot. The first measurement of this only
+  // plotted, found both depths scored the same, and would have concluded the extra
+  // search bought nothing — when where it actually pays is re-solving a book that is
+  // already full.
+  const solveAt = restarts => {
+    const E = loadAppsScript({ restarts });
+    let book = [];
+    for (let i = 0; i < byD.length; i += 4) {
+      book = book.concat(E.plotBatch(byD.slice(i, i + 4), book, engineers).new_rows);
+    }
+    book = book.map((b, i) => ({ ...b, status: '', row_number: i + 2 }));
+    const rows = projects.map(p => ({ ...E.normalizeProject(p).project, locked: false }));
+    const r = E.replanBook(rows, book, engineers, '2026-06-01');
+    if (r.no_improvement) return E.scorePlan(book, engineers);
+    const gone = new Set(r.rows_to_supersede || []);
+    return E.scorePlan(book.filter(b => !gone.has(b.row_number))
+      .concat(r.rows_to_append || []), engineers);
+  };
+
+  const shallow = solveAt(200);
+  const deep = solveAt(1000);
+
+  // Lexicographic: a deeper search may never be worse on a higher-ranked term.
+  const order = loadAppsScript().SOLVE_OBJECTIVE;
+  let verdict = 'identical';
+  for (const term of order) {
+    if (deep[term] === shallow[term]) continue;
+    verdict = deep[term] < shallow[term] ? 'better' : 'WORSE';
+    ok(`a deeper search is not worse: first difference is ${term}`,
+       deep[term] <= shallow[term], `${term}: ${shallow[term]} -> ${deep[term]}`);
+    break;
+  }
+  ok('and searching harder actually changed something', verdict !== 'identical',
+     'the two searches produced the same score — the depth is buying nothing');
+
+  // The search depth must not change what is LEGAL, only which legal plan is chosen.
+  const E = loadAppsScript({ restarts: 1000 });
+  let book = [];
+  for (let i = 0; i < byD.length; i += 4) {
+    book = book.concat(E.plotBatch(byD.slice(i, i + 4), book, engineers).new_rows);
+  }
+  const yes = v => /^yes$/i.test(String(v || '').trim());
+  const byName = {}; engineers.forEach(e => { byName[e.name] = e; });
+  const projByName = {}; projects.forEach(p => { projByName[p.project_title] = p; });
+  const illegal = book.filter(b => {
+    const e = byName[b.engineer], p = projByName[b.project];
+    if (!e || !p) return false;
+    if (b.phase === 'Mix' && yes(p.atmos_required) && !yes(e.atmos)) return true;
+    if (b.phase === 'Mix' && String(p.mix_level_required).trim() === 'Advanced' &&
+        e.mix_level !== 'Advanced') return true;
+    if (yes(p.special_project) && b.phase !== 'Mix' && !yes(e.does_specials)) return true;
+    return false;
+  });
+  ok('a deeper search still obeys every eligibility rule', illegal.length === 0,
+     illegal.slice(0, 3).map(b => `${b.project}/${b.phase}=${b.engineer}`).join(' | '));
 }
 
 section('The store');

@@ -39,6 +39,7 @@ project came from a second copy of something.
 ## Running it
 
     node webapp/server.js            # http://localhost:8127, fixture data
+    PLANNER_SEARCH=5000 node webapp/server.js    # deeper re-plan search
 
 Against the real spreadsheet:
 
@@ -76,6 +77,22 @@ Nothing is deleted. A row that stops being true is superseded and stays as histo
 A write returns fresh `boot` and `schedule` in the SAME response. Re-asking after a
 write is what made the old app feel slow, and a separate re-read is also how it kept
 showing the previous plan three times over.
+
+## The search
+
+Apps Script capped execution at six minutes and every solve blocked the user, so the
+engine settled for 200 shuffled orderings. Measured through a re-plan on an
+incrementally built book:
+
+| restarts | time | overlapped | spread | peak |
+|---|---|---|---|---|
+| 202 | 1.4s | 2 | 5 | 19 |
+| 1000 | 7.0s | 2 | **1** | **17** |
+| 5000 | 34.5s | 2 | 1 | 17 |
+
+A thousand is worth having; five thousand is the same plan for five times the wait. So
+the default is 1000, set by `PLANNER_SEARCH`, and it runs on a worker thread — a grid
+request measured 0.9ms while a 3.5s search was in flight.
 
 ## Not done yet
 

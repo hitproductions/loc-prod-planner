@@ -57,31 +57,45 @@ function reassignWeek(book, payload) {
   if (row.engineer === to) return { ok: false, error: `${to} already has that week.` };
 
   const warnings = reassignWarnings(row, wi, to, rows, book.engineers);
+
+  // What the move would COST, before it is made. Every experiment used to be a write;
+  // the book is in memory now, so the same ranked objective that judges a re-plan can
+  // judge a drag, and say so while the dialog is still open.
+  const preview = () => {
+    const after = rows.map(b => b === row ? null : b).filter(Boolean)
+      .concat(splitRun(row, wi, to));
+    return whyBetter(A.scorePlan(rows, book.engineers), A.scorePlan(after, book.engineers));
+  };
+
   if (!p.confirmed) {
     return { ok: true, preview: true, from: row.engineer, to, project, phase,
-             week_start: week, warnings };
+             week_start: week, warnings, effect: preview() };
   }
 
-  // A booking row is a contiguous block, so taking one week out of the middle leaves
-  // two remainders — up to three rows where there was one. Rows are cheap; a wrong
-  // date is not.
+  const append = splitRun(row, wi, to);
+  return { ok: true, moved: true, from: row.engineer, to, project, phase,
+           week_start: week, warnings, effect: preview(),
+           change: { supersede: [row.row_number], append } };
+}
+
+// A booking row is a contiguous block, so taking one week out of the middle leaves two
+// remainders — up to three rows where there was one. Rows are cheap; a wrong date is
+// not. Shared by the preview and the commit so the two cannot describe different moves.
+function splitRun(row, wi, to) {
   const s = A.widx(row.start_date), e = A.widx(row.end_date);
-  const append = [];
+  const out = [];
   const piece = (a, b, who, note) => {
     if (a > b) return;
-    append.push({ project, phase, engineer: who,
-                  start_date: A.weekStart(a), end_date: A.weekEnd(b),
-                  source: 'manual', note });
+    out.push({ project: row.project, phase: row.phase, engineer: who,
+               start_date: A.weekStart(a), end_date: A.weekEnd(b),
+               source: 'manual', note });
   };
   piece(s, wi - 1, row.engineer, row.note || '');
   // The previous engineer is recorded in the note so the undo needs no guessing —
-  // inferring it from neighbouring rows failed on a one-week phase, which has none.
+  // inferring it from neighbours failed on a one-week phase, which has none.
   piece(wi, wi, to, `manual / moved by hand (was ${row.engineer})`);
   piece(wi + 1, e, row.engineer, row.note || '');
-
-  return { ok: true, moved: true, from: row.engineer, to, project, phase,
-           week_start: week, warnings,
-           change: { supersede: [row.row_number], append } };
+  return out;
 }
 
 // ---------------------------------------------------------------- undo a drag
@@ -195,10 +209,10 @@ function whyBetter(before, after) {
   return null;
 }
 
-function replanPreview(book, todayISO) {
-  const rows = live(book);
-  const r = A.replanBook(book.projects, rows, book.engineers, todayISO);
-
+// Shapes a replanBook result into the preview payload. Split out so the search can run
+// wherever it likes — inline, or on a worker thread with a far deeper search — without
+// two places deciding what a preview looks like.
+function shapeReplan(book, rows, r) {
   let why = null;
   if (!r.no_improvement) {
     const gone = new Set(r.rows_to_supersede || []);
@@ -221,5 +235,10 @@ function replanPreview(book, todayISO) {
   };
 }
 
+function replanPreview(book, todayISO) {
+  const rows = live(book);
+  return shapeReplan(book, rows, A.replanBook(book.projects, rows, book.engineers, todayISO));
+}
+
 module.exports = { reassignWeek, undoWeekMove, saveProject, replanPreview,
-                   reassignWarnings, whyBetter };
+                   shapeReplan, reassignWarnings, whyBetter, live };
