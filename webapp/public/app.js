@@ -88,11 +88,23 @@ function renderSchedule() {
   return h;
 }
 
+let SORT = 'deadline';
+
 function renderProjects() {
-  const ps = BOOT.projects.slice().sort((a, b) =>
-    String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')));
-  let h = '<table class="projects"><thead><tr><th>Deadline</th><th>Project</th><th>Client</th>' +
-    '<th>D/E/M</th><th>Flags</th></tr></thead><tbody>';
+  const byTitle = (a, b) =>
+    String(a.title).localeCompare(String(b.title), undefined, { numeric: true });
+  const ps = BOOT.projects.slice().sort(SORT === 'title' ? byTitle : (a, b) =>
+    String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')) || byTitle(a, b));
+
+  let h = '<div class="bar-row"><button class="btn primary" id="addBtn">+ Add project</button>' +
+    '<div class="spacer"></div>' +
+    `<button class="btn small${SORT === 'deadline' ? ' primary' : ''}" data-sort="deadline">Deadline</button>` +
+    `<button class="btn small${SORT === 'title' ? ' primary' : ''}" data-sort="title">A\u2013Z</button>` +
+    '<span class="hint" style="margin:0 0 0 12px">Click a row to edit it.</span></div>' +
+    '<div id="formHost"></div>';
+
+  h += '<table class="projects"><thead><tr><th>Deadline</th><th>Project</th><th>Client</th>' +
+    '<th>D/E/M</th><th>Recordist</th><th>Mixer</th><th>Flags</th></tr></thead><tbody>';
   ps.forEach(p => {
     let flags = '';
     if (p.overlap > 2) flags += '<span class="chip red">3 overlaps</span>';
@@ -100,16 +112,151 @@ function renderProjects() {
     if (p.music) flags += '<span class="chip">music</span>';
     if (p.special) flags += '<span class="chip">special</span>';
     if (p.atmos) flags += '<span class="chip">atmos</span>';
-    h += `<tr><td>${esc(p.deadline)}</td><td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
-      `<td>${p.dub}/${p.edit}/${p.mix}</td><td>${flags}</td></tr>`;
+    const who = ph => [...new Set(p.rows.filter(r => r.phase === ph).map(r => r.engineer))]
+      .join(' + ') || '\u2014';
+    h += `<tr data-title="${esc(p.title)}"><td>${esc(p.deadline)}</td>` +
+      `<td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
+      `<td>${p.dub}/${p.edit}/${p.mix}</td><td>${esc(who('Dub'))}</td><td>${esc(who('Mix'))}</td>` +
+      `<td>${flags}</td></tr>`;
   });
   return h + '</tbody></table>';
+}
+
+function wireProjects() {
+  const add = $('addBtn');
+  if (add) add.addEventListener('click', () => openForm(null));
+  document.querySelectorAll('[data-sort]').forEach(b =>
+    b.addEventListener('click', () => { SORT = b.dataset.sort; paint(); }));
+  document.querySelectorAll('table.projects tbody tr').forEach(tr =>
+    tr.addEventListener('click', () => openForm(tr.dataset.title)));
+}
+
+// ---------------------------------------------------------------- the form
+// Check availability writes nothing and answers "can we take this job". Plot & save
+// commits. Both go through the same engine call, so the answer you were shown is the
+// answer you get.
+function openForm(title) {
+  const p = title ? BOOT.projects.find(x => x.title === title) : null;
+  const opts = sel => ['Auto', ...BOOT.engineers]
+    .map(n => `<option${n === sel ? ' selected' : ''}>${esc(n)}</option>`).join('');
+
+  $('formHost').innerHTML = `<div class="form${p ? ' editing' : ''}">
+    <h3>${p ? 'Edit ' + esc(p.title) : 'Add project'}</h3>
+    <div class="note">Check availability first if you are deciding whether to take the job.</div>
+    <div class="fields">
+      <div class="f"><label for="f_title">Project</label>
+        <input type="text" id="f_title" value="${p ? esc(p.title) : ''}"></div>
+      <div class="f"><label for="f_client">Client</label>
+        <input type="text" id="f_client" list="clientList" value="${esc(p ? p.client : 'Netflix')}">
+        <datalist id="clientList">${(BOOT.clients || []).map(c => `<option>${esc(c)}</option>`).join('')}</datalist></div>
+      <div class="f"><label for="f_deadline">Deadline</label>
+        <input type="date" id="f_deadline" value="${p ? esc(p.deadline) : ''}"></div>
+      <div class="f"><label>Weeks per phase</label><div class="phases">
+        <div class="p"><input type="number" id="f_dub" min="0" max="52" value="${p ? p.dub : 0}">
+          <div class="hint"><span class="sw" style="background:var(--dub)"></span>Dub</div></div>
+        <div class="p"><input type="number" id="f_edit" min="0" max="52" value="${p ? p.edit : 0}">
+          <div class="hint"><span class="sw" style="background:var(--edit)"></span>Edit</div></div>
+        <div class="p"><input type="number" id="f_mix" min="0" max="52" value="${p ? p.mix : 0}">
+          <div class="hint"><span class="sw" style="background:var(--mix)"></span>Mix</div></div>
+      </div><div class="hint">Zero is valid \u2014 the phase does not exist. Phases plot backward from the deadline.</div></div>
+      <div class="f"><label for="f_level">Mix level</label><select id="f_level">
+        <option${p && p.mix_level === 'Developing' ? '' : ' selected'}>Advanced</option>
+        <option${p && p.mix_level === 'Developing' ? ' selected' : ''}>Developing</option></select></div>
+      <div class="f"><label>Flags</label><div class="checks">
+        <label><input type="checkbox" id="f_music"${p && p.music ? ' checked' : ''}> Music</label>
+        <label><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
+        <label><input type="checkbox" id="f_atmos"${p && p.atmos ? ' checked' : ''}> Atmos</label>
+      </div><div class="hint">Atmos is separate from Special: it means the mix needs the room.</div></div>
+      <div class="f"><label for="f_rec">Recordist pick</label><select id="f_rec">${opts(p && p.recordist_pick)}</select>
+        <div class="hint">Auto lets the engine choose.</div></div>
+      <div class="f"><label for="f_rec2">Second recordist</label><select id="f_rec2">${opts(p && p.recordist_pick_2)}</select>
+        <div class="hint">Splits the dub between the two, first name taking the earlier weeks.</div></div>
+      <div class="f"><label for="f_ed">Editor pick</label><select id="f_ed">${opts(p && p.editor_pick)}</select>
+        <div class="hint">Auto keeps the edit with the recordist.</div></div>
+      <div class="f"><label for="f_mixer">Mixer pick</label><select id="f_mixer">${opts(p && p.mixer_pick)}</select>
+        <div class="hint">A manual pick overrides every rule and is flagged on the schedule.</div></div>
+    </div>
+    <div class="formactions">
+      <button class="btn" id="f_check">Check availability</button>
+      <button class="btn primary" id="f_save">${p ? 'Save &amp; re-plot' : 'Plot &amp; save'}</button>
+      <button class="btn" id="f_close">Close</button>
+    </div>
+    <div id="f_out"></div></div>`;
+
+  $('formHost').scrollIntoView({ block: 'nearest' });
+  $('f_check').addEventListener('click', () => submitForm(p, true));
+  $('f_save').addEventListener('click', () => submitForm(p, false));
+  $('f_close').addEventListener('click', () => { $('formHost').innerHTML = ''; });
+}
+
+function formValues(p, dryRun) {
+  return {
+    title: $('f_title').value.trim(),
+    original_title: p ? p.title : '',
+    client: $('f_client').value.trim(),
+    deadline: $('f_deadline').value,
+    dub: +$('f_dub').value, edit: +$('f_edit').value, mix: +$('f_mix').value,
+    mix_level: $('f_level').value,
+    music: $('f_music').checked, special: $('f_special').checked, atmos: $('f_atmos').checked,
+    recordist: $('f_rec').value, recordist2: $('f_rec2').value,
+    editor: $('f_ed').value, mixer: $('f_mixer').value,
+    dry_run: dryRun,
+  };
+}
+
+async function submitForm(p, dryRun) {
+  $('f_check').disabled = $('f_save').disabled = true;
+  $('f_out').innerHTML = '<div class="muted">' + (dryRun ? 'Checking' : 'Plotting') + '\u2026</div>';
+  const r = await post('/api/save-project', formValues(p, dryRun));
+  $('f_check').disabled = $('f_save').disabled = false;
+
+  if (!r.ok) {
+    $('f_out').innerHTML = '<div class="errs"><b>Not plotted.</b><ul>' +
+      (r.errors || []).map(e => `<li>${esc(e)}</li>`).join('') + '</ul></div>';
+    return;
+  }
+
+  // Depth comes from the freshly returned book, so the banner and the row you see a
+  // moment later cannot tell you different things.
+  const deep = !dryRun && r.boot
+    ? (r.boot.projects.find(x => x.title === r.title) || {}).overlap || 0 : 0;
+  let h = `<div class="result ${deep > 2 ? 'alarm' : dryRun ? 'dry' : 'saved'}">` +
+    `<h4>${dryRun ? 'Availability check \u2014 nothing was written' : 'Saved'}</h4>` +
+    `<div class="kv"><b>Recordist</b><span>${esc(r.dubber || r.recordist)}</span></div>` +
+    `<div class="kv"><b>Editor</b><span>${esc(r.editor || r.recordist)}</span></div>` +
+    `<div class="kv"><b>Mixer</b><span>${esc(r.mixer)}</span></div>`;
+  if (r.rows && r.rows.length) {
+    h += '<table class="projects" style="margin-top:10px"><thead><tr><th>Phase</th>' +
+      '<th>Engineer</th><th>From</th><th>To</th></tr></thead><tbody>' +
+      r.rows.map(x => `<tr><td><span class="sw" style="background:${PHASE_BG[x.phase] || 'transparent'}"></span>` +
+        `${esc(x.phase)}</td><td>${esc(x.engineer)}</td><td>${esc(x.start)}</td>` +
+        `<td>${esc(x.end)}</td></tr>`).join('') + '</tbody></table>';
+  }
+  if (deep > 2) h += '<div class="warn">THREE AT ONCE \u2014 someone now holds three bookings in ' +
+    'the same week. Reassign one of them.</div>';
+  else if (deep) h += '<div class="warn soft">Two at once \u2014 someone doubles up for part of ' +
+    'this run. Normal where a shoot is still recording while its edit starts.</div>';
+  if (r.warnings) h += `<div class="warn">${esc(r.warnings)}</div>`;
+  const note = [r.record_note, r.mix_note].filter(Boolean).join(' \u00b7 ');
+  if (note) h += `<div class="muted">${esc(note)}</div>`;
+  if (dryRun) h += '<div class="muted">Nothing saved yet. Press Plot &amp; save to commit.</div>';
+  h += '</div>';
+
+  if (!dryRun && r.boot) {
+    BOOT = r.boot;
+    if (r.schedule) SCHED = r.schedule;
+    paint();
+    // paint() rebuilt the page, so the result has to be re-hung on the new form host
+    openForm(r.title);
+  }
+  $('f_out').innerHTML = h;
 }
 
 function paint() {
   $('view').innerHTML = VIEW === 'schedule' ? renderSchedule() : renderProjects();
   topRight();
   if (VIEW === 'schedule') { wireDrag(); wireColumnHover(); }
+  else wireProjects();
 }
 
 // Delegated, and it only ever touches the column being left and the one being

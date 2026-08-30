@@ -81,6 +81,6 @@ showing the previous plan three times over.
 - `sources/sheets.js` — read and write the real spreadsheet. Needs a service account
   with access to the sheet. Everything else is built to sit behind it unchanged.
 - Applying a re-plan (preview works; apply needs the stash).
-- The project form in the client — the action exists, nothing calls it yet.
 - Analysis view.
+- The Projects/Engineers grid toggle and the quarter range picker.
 - Auth. Right now anyone who can reach the port can read and change the book.

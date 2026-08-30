@@ -245,6 +245,45 @@ section('The store');
   })());
 }
 
+section('A saved project reaches the Projects list, not just the schedule');
+{
+  // Caught by clicking through the UI, not by a test: the save appended four booking
+  // rows and the project never appeared in the list. Bookings with no Projects row is
+  // the ORPHAN state — it renders on the schedule and cannot be selected to cancel,
+  // because the schedule is built from bookings and the list from Projects.
+  fixture._reset();
+  const book = await fixture.read();
+  const before = book.projects.length;
+
+  const saved = actions.saveProject(book, { title: 'Brand New Show', client: 'Netflix',
+    deadline: '2026-11-20', dub: 2, edit: 1, mix: 2, mix_level: 'Advanced' });
+  ok('the change set carries the project, not only its bookings',
+     !!saved.change.project && saved.change.project.project_title === 'Brand New Show');
+  ok('and the engine outputs, so the sheet can record who got it',
+     !!saved.change.outputs && !!saved.change.outputs.mixer, JSON.stringify(saved.change.outputs));
+
+  await fixture.write(saved.change);
+  const after = await fixture.read();
+  ok('the project is in the list after saving', after.projects.length === before + 1,
+     `${before} -> ${after.projects.length}`);
+  ok('and it is the one we saved',
+     after.projects.some(p => p.project_title === 'Brand New Show'));
+  ok('its bookings are there too',
+     A.activeRows(after.bookings).some(b => b.project === 'Brand New Show'));
+
+  // a rename must move the existing row, not add a second one
+  const renamed = actions.saveProject(after, { title: 'Renamed Show',
+    original_title: 'Brand New Show', client: 'Netflix', deadline: '2026-11-20',
+    dub: 2, edit: 1, mix: 2, mix_level: 'Advanced' });
+  await fixture.write(renamed.change);
+  const last = await fixture.read();
+  ok('a rename updates the row rather than leaving two',
+     last.projects.filter(p => /Brand New Show|Renamed Show/.test(p.project_title)).length === 1,
+     last.projects.filter(p => /Brand New Show|Renamed Show/.test(p.project_title))
+       .map(p => p.project_title).join(', '));
+  fixture._reset();
+}
+
 section('Reading a real spreadsheet layout');
 {
   const { isoFrom, mapper } = require('../webapp/sources/sheets.js');

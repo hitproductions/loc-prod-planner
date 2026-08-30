@@ -153,7 +153,16 @@ function saveProject(book, payload) {
     rows: (out.booking_rows || []).map(b => ({ phase: b.phase, engineer: b.engineer,
       start: b.start_date, end: b.end_date })),
     project,
-    change: p.dry_run ? null : { supersede, append: out.booking_rows, project },
+    // `project` and `original_title` are what let a source upsert the Projects row.
+    // Appending only the bookings leaves the schedule showing a project the Projects
+    // tab has never heard of — an orphan, which the Apps Script app has a whole
+    // feature for detecting because it happened.
+    change: p.dry_run ? null
+      : { supersede, append: out.booking_rows, project, original_title: original,
+          outputs: { recordist: out.dubber || out.recordist,
+                     editor: out.editor || out.recordist, mixer: out.mixer,
+                     warnings: out.warnings || '',
+                     notes: [out.record_note, out.mix_note].filter(Boolean).join(' | ') } },
   };
 }
 

@@ -34,7 +34,16 @@ module.exports = {
     (change.append || []).forEach(r => {
       held.bookings.push({ ...r, status: '', row_number: held.bookings.length + 2 });
     });
-    return { superseded: (change.supersede || []).length, appended: (change.append || []).length };
+    // The project row, not just its bookings. Without this a saved project has a
+    // schedule and no entry in the list — the orphan state.
+    if (change.project) {
+      const was = String(change.original_title || '').trim() || change.project.project_title;
+      const i = held.projects.findIndex(p => p.project_title === was);
+      if (i >= 0) held.projects[i] = { ...held.projects[i], ...change.project };
+      else held.projects.push({ ...change.project });
+    }
+    return { superseded: (change.supersede || []).length, appended: (change.append || []).length,
+             project: change.project ? change.project.project_title : null };
   },
   // tests reset between cases
   _reset() { held = null; },

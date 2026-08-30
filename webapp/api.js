@@ -53,6 +53,10 @@ function bootstrap(book) {
   return {
     engineers: book.engineers.map(e => e.name),
     roster: book.engineers,
+    // Offered as suggestions on the form, not a closed list — a new client should not
+    // need a code change to be typed in.
+    clients: [...new Set(book.projects.map(p => String(p.client || '').trim())
+      .filter(Boolean))].sort(),
     projects: book.projects.map(p => ({
       title: p.project_title, client: p.client, deadline: p.deadline,
       dub: p.dub_weeks, edit: p.edit_weeks, mix: p.mix_weeks,

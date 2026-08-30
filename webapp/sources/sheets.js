@@ -55,6 +55,7 @@ function createSheetsSource(opts) {
 
   // Where each booking actually lives, so a supersede writes to the right cell.
   let bookingsMeta = null;
+  let projectsMeta = null;
 
   async function read() {
     const ranges = Object.values(TABS).map(t => `ranges=${encodeURIComponent(t + '!A:Z')}`).join('&');
@@ -144,6 +145,11 @@ function createSheetsSource(opts) {
       .filter(x => x.project && x.start_date && x.end_date);
 
     bookingsMeta = { header: bHead, statusCol, width: Math.max(bHead.length, 8) };
+    projectsMeta = {
+      header: pRows[HEADER_ROW.Projects - 1] || [],
+      rowOf: projects.reduce((m, p) => { m[p.project_title] = p._row; return m; }, {}),
+      nextRow: HEADER_ROW.Projects + 1 + projects.length,
+    };
     return { engineers, projects, bookings };
   }
 
@@ -155,11 +161,10 @@ function createSheetsSource(opts) {
     const { statusCol, header, width } = bookingsMeta;
     if (statusCol < 0) throw new Error('The Bookings tab has no "status" column to mark.');
     const colLetter = n => {
-      let s = '';
-      for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s;
-      return s;
+      let out = '';
+      for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(65 + (n - 1) % 26) + out;
+      return out;
     };
-
     const supersede = change.supersede || [];
     if (supersede.length) {
       await auth.api(`spreadsheets/${id}/values:batchUpdate`, {
@@ -194,8 +199,49 @@ function createSheetsSource(opts) {
       });
     }
 
+    // The Projects row, not just the bookings. A project whose bookings exist but whose
+    // row does not is an orphan: it renders on the schedule and cannot be selected to
+    // cancel, because the schedule is built from bookings and the list from Projects.
+    if (change.project) {
+      const p = change.project;
+      const o = change.outputs || {};
+      const was = String(change.original_title || '').trim() || p.project_title;
+      const rowNumber = projectsMeta.rowOf[was] || projectsMeta.nextRow;
+      const cell = {
+        'project': p.project_title, 'client': p.client, 'deadline': p.deadline,
+        'phases d/e/m': `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`,
+        'mix level': p.mix_level_required,
+        'music': p.music_songs, 'special': p.special_project, 'atmos': p.atmos_required,
+        'recordist pick': p.recordist_override, 'recordist pick 2': p.recordist_override_2,
+        'editor pick': p.editor_override, 'mixer pick': p.mixer_override,
+        'dub wks': p.dub_weeks, 'edit wks': p.edit_weeks, 'mix wks': p.mix_weeks,
+        'recordist': o.recordist, 'editor': o.editor, 'mixer': o.mixer,
+        'warnings': o.warnings, 'notes': o.notes,
+        'plotted': new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+          .toISOString().slice(0, 10),
+      };
+      // ONE RANGE PER COLUMN, not one write of the whole row. Writing the row would
+      // blank every column we have no value for — Locked above all, which is a user
+      // decision this code knows nothing about. It also leaves a sheet without the
+      // Atmos column untouched instead of writing past its last header.
+      const data = [];
+      projectsMeta.header.forEach((h, i) => {
+        const v = cell[norm(h)];
+        if (v === undefined) return;
+        data.push({ range: `${TABS.projects}!${colLetter(i)}${rowNumber}`, values: [[v]] });
+      });
+      if (data.length) {
+        await auth.api(`spreadsheets/${id}/values:batchUpdate`, {
+          method: 'POST',
+          body: JSON.stringify({ valueInputOption: 'RAW', data }),
+        });
+      }
+    }
+
     bookingsMeta = null;   // row numbers have moved
-    return { superseded: supersede.length, appended: append.length };
+    projectsMeta = null;
+    return { superseded: supersede.length, appended: append.length,
+             project: change.project ? change.project.project_title : null };
   }
 
   return { read, write, email: auth.email };
