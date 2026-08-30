@@ -219,14 +219,24 @@ table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:9px}
   font-size:12px; color:var(--fg2); margin-top:16px}
 /* One hue, lightness stepping down monotonically, so "darker = busier" is true at a
    glance and does not depend on telling two colours apart. */
-table.hm{border-collapse:collapse; width:auto; font-size:12px}
-table.hm th{font-size:10px; text-transform:uppercase; letter-spacing:0.06em;
-  color:var(--fg2); padding:4px 8px; text-align:left; border:none; white-space:nowrap}
-table.hm td{border:1px solid var(--bg1); padding:0}
-table.hm td.cell{width:56px; height:30px; text-align:center;
+/* Sized to their content, not stretched. Full width pushed "Netflix | 136 | 24" to
+   opposite ends of a 1900px row, which reads as three unrelated facts — the eye has to
+   travel to pair a number with its label. */
+.card table.projects{width:auto; min-width:min(100%, 560px)}
+.card table.projects th, .card table.projects td{padding-right:32px}
+.card table.projects th:last-child, .card table.projects td:last-child{padding-right:0}
+
+/* The heatmap is the densest thing on the page and was the smallest. Bigger cells and
+   a real type size: it is a grid of numbers you compare against each other. */
+table.hm{border-collapse:collapse; width:auto; font-size:14px}
+table.hm th{font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+  color:var(--fg2); padding:6px 12px; text-align:left; border:none; white-space:nowrap}
+table.hm tbody th{font-size:13px; color:var(--fg1); font-weight:700}
+table.hm td{border:2px solid var(--bg1); padding:0}
+table.hm td.cell{width:84px; height:42px; text-align:center; font-weight:700;
   font-variant-numeric:tabular-nums}
-table.hm td.n{padding:0 10px; text-align:right; font-variant-numeric:tabular-nums;
-  white-space:nowrap}
+table.hm td.n{padding:0 14px; text-align:right; font-size:15px;
+  font-variant-numeric:tabular-nums; white-space:nowrap}
 table.projects th.n, table.projects td.n{text-align:right;
   font-variant-numeric:tabular-nums}
 .card{border:1px solid var(--line); background:var(--surface); padding:14px; margin-bottom:14px}
