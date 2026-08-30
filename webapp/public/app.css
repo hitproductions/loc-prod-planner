@@ -269,6 +269,11 @@ table.projects tbody tr.on{background:var(--bg2); box-shadow:inset 3px 0 0 var(-
   color:var(--fg2); margin:0 0 8px}
 .sheetdoc .lede{font-size:15px; margin:0 0 20px; color:var(--fg1)}
 .sheetdoc table.projects{width:auto; min-width:min(100%, 640px); margin-bottom:4px}
+/* The two summaries stack. Side by side they were squeezed into half a screen each
+   while the whole right-hand side sat empty, and a reader comparing engineers had to
+   work in a narrower column than the page needed. */
+.sheetdoc .grid2{display:block}
+.sheetdoc .grid2 > div{margin-top:26px}
 .sheetdoc table.projects th, .sheetdoc table.projects td{padding-right:26px}
 .sheetdoc table.projects th:last-child,
 .sheetdoc table.projects td:last-child{padding-right:0}
@@ -279,7 +284,7 @@ td.muted-inline{color:var(--fg2); font-size:11px}
   .top, .bar-row, .noprint { display:none !important }
   main { padding:0 }
   .sheetdoc { max-width:none }
-  .grid2 { grid-template-columns:1fr 1fr }
+  .sheetdoc .grid2 { display:block }
   table.projects { page-break-inside:auto }
   tr { page-break-inside:avoid }
   a[href]:after { content:"" }
