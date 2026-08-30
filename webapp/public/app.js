@@ -6,6 +6,19 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g,
   c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
 let BOOT = null, SCHED = null, VIEW = 'schedule', LAST_MS = null;
+let MODE = 'engineer', RANGE = { from: null, to: null };
+
+function scheduleUrl() {
+  const q = new URLSearchParams({ mode: MODE });
+  if (RANGE.from) q.set('from', RANGE.from);
+  if (RANGE.to) q.set('to', RANGE.to);
+  return '/api/schedule?' + q;
+}
+
+async function loadSchedule() {
+  SCHED = await get(scheduleUrl());
+  paint();
+}
 
 async function get(path) {
   const t0 = performance.now();
@@ -34,9 +47,43 @@ function numLabel(w) {
 
 const PHASE_BG = { Dub:'var(--dub)', Edit:'var(--edit)', Mix:'var(--mix)' };
 
-function renderSchedule() {
+function scheduleBar() {
   const d = SCHED;
-  if (d.empty) return '<div class="loading">No bookings yet.</div>';
+  const qs = d.quarters || [];
+  const sel = (id, val) => `<select id="${id}"><option value="">any</option>` +
+    qs.map(q => `<option${q === val ? ' selected' : ''}>${esc(q)}</option>`).join('') + '</select>';
+  return '<div class="bar-row">' +
+    `<button class="btn small${MODE === 'project' ? ' primary' : ''}" data-mode="project">Projects</button>` +
+    `<button class="btn small${MODE === 'engineer' ? ' primary' : ''}" data-mode="engineer">Engineers</button>` +
+    '<div class="spacer"></div>' +
+    `<label class="inline">From</label>${sel('qFrom', RANGE.from)}` +
+    `<label class="inline">To</label>${sel('qTo', RANGE.to)}` +
+    '<button class="btn small" id="qAll">All</button>' +
+    `<span class="hint" style="margin:0 0 0 12px">${d.weeks.length} weeks</span></div>`;
+}
+
+function wireScheduleBar() {
+  document.querySelectorAll('[data-mode]').forEach(b =>
+    b.addEventListener('click', () => { MODE = b.dataset.mode; loadSchedule(); }));
+  const from = $('qFrom'), to = $('qTo');
+  const apply = function () {
+    let f = from.value || null, t = to.value || null;
+    // Keep the ends the right way round rather than returning nothing at all.
+    if (f && t && f > t) { if (this === to) from.value = t; else to.value = f;
+      f = from.value || null; t = to.value || null; }
+    RANGE = { from: f, to: t };
+    loadSchedule();
+  };
+  if (from) from.addEventListener('change', apply);
+  if (to) to.addEventListener('change', apply);
+  const all = $('qAll');
+  if (all) all.addEventListener('click', () => { RANGE = { from: null, to: null }; loadSchedule(); });
+}
+
+// Weeks DOWN, engineers ACROSS. Only ~8 columns, so each is wide enough for a project
+// name — which is what the cells hold, and the whole reason this axis exists.
+function renderEngineerGrid() {
+  const d = SCHED;
   let h = '<div class="gridwrap"><table class="sched byeng"><thead><tr><th class="corner">Week</th>';
   d.labels.forEach((n, i) => { h += `<th data-c="${i}">${esc(n)}</th>`; });
   h += '</tr></thead><tbody>';
@@ -75,7 +122,54 @@ function renderSchedule() {
     });
     h += '</tr>';
   });
-  h += '</tbody></table></div><div class="legend">' +
+  return h + '</tbody></table></div>';
+}
+
+// Projects DOWN, weeks ACROSS — a project is a bar you read left to right, and the
+// deadline is a marker in its own row.
+function renderProjectGrid() {
+  const d = SCHED;
+  const mark = {};
+  (d.markers || []).forEach(m => { mark[m.row + '|' + m.col] = true; });
+  let h = '<div class="gridwrap"><table class="sched"><thead><tr><th class="corner">Project</th>';
+  let lastQ = null;
+  d.weeks.forEach(w => {
+    const starts = w.quarter !== lastQ; lastQ = w.quarter;
+    h += `<th class="${starts ? 'qcol' : ''}">${numLabel(w).replace(' - ', '<br>')}</th>`;
+  });
+  h += '</tr></thead><tbody>';
+  d.labels.forEach((name, ri) => {
+    h += `<tr><th title="${esc(name)}">${esc(name)}</th>`;
+    d.weeks.forEach((w, ci) => {
+      const c = d.cells[ri][ci];
+      let cls = [], style = '', text = '';
+      if (c) {
+        const deep = c.depth || c.count || 1;
+        text = c.text;
+        if (c.count > 1) cls.push(deep > 2 ? 'dbl3' : 'dbl2');
+        else style = ` style="background:${PHASE_BG[c.phase] || 'transparent'}"`;
+        if (deep > 1) cls.push(deep > 2 ? 'over3' : 'over2');
+        if (c.items.some(i => i.hand)) cls.push('pinned');
+      } else if (mark[ri + '|' + ci]) {
+        cls.push('marker'); text = '\u25B2';
+      }
+      if (w.quarter !== d.weeks[ci - 1]?.quarter) cls.push('qcol');
+      const initials = text.split(' / ').map(n => n.slice(0, 3)).join('/');
+      h += `<td class="${cls.join(' ')}"${style} title="${esc(text || 'deadline')}">${esc(initials)}</td>`;
+    });
+    h += '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+function renderSchedule() {
+  const d = SCHED;
+  if (d.empty) return '<div class="loading">No bookings yet.</div>';
+  if (d.clipped) return scheduleBar() +
+    '<div class="loading">No weeks in that range. Widen it or press All.</div>';
+  let h = scheduleBar();
+  h += d.mode === 'project' ? renderProjectGrid() : renderEngineerGrid();
+  h += '<div class="legend">' +
     '<span><span class="sw" style="background:var(--dub)"></span>Dub</span>' +
     '<span><span class="sw" style="background:var(--edit)"></span>Edit</span>' +
     '<span><span class="sw" style="background:var(--mix)"></span>Mix</span>' +
@@ -84,6 +178,8 @@ function renderSchedule() {
     '<span><span class="sw" style="border:2px solid var(--warn);background:transparent"></span>2 overlaps this week</span>' +
     '<span><span class="sw" style="border:2px solid var(--red);background:transparent"></span>3 overlaps — reassign</span>' +
     '<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand — click to undo</span>' +
+    (d.mode === 'project'
+      ? '<span><span class="sw" style="background:var(--red)"></span>Deadline week</span>' : '') +
     '</div>';
   return h;
 }
@@ -264,7 +360,13 @@ async function submitForm(p, dryRun) {
 function paint() {
   $('view').innerHTML = VIEW === 'schedule' ? renderSchedule() : renderProjects();
   topRight();
-  if (VIEW === 'schedule') { wireDrag(); wireColumnHover(); }
+  if (VIEW === 'schedule') {
+    wireScheduleBar();
+    wireColumnHover();
+    // Dragging is an Engineers-mode action: you move a week between engineers, and a
+    // Projects row has no engineer column to drop into.
+    if (SCHED.mode === 'engineer') wireDrag();
+  }
   else wireProjects();
 }
 
@@ -375,8 +477,11 @@ function absorb(r) {
 
 async function post(path, body) {
   const t0 = performance.now();
+  // The view is sent with the write so the fresh schedule comes back in the
+  // orientation and range the user is looking at, not a default one.
   const r = await fetch(path, { method: 'POST',
-    headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...body, mode: MODE, from: RANGE.from, to: RANGE.to }) });
   const out = await r.json();
   LAST_MS = performance.now() - t0;
   return out;
@@ -392,6 +497,6 @@ document.querySelectorAll('.nav button').forEach(b => {
 
 (async () => {
   BOOT = await get('/api/bootstrap');
-  SCHED = await get('/api/schedule');
+  SCHED = await get(scheduleUrl());
   paint();
 })();

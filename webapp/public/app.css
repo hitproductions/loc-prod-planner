@@ -160,3 +160,17 @@ table.projects tbody tr{cursor:pointer}
   letter-spacing:0.07em; color:var(--fg2); margin-bottom:12px}
 .picks .fields{margin-bottom:0}
 .picks .hint{min-height:2.4em}
+
+/* ---- schedule bar + projects mode ------------------------------------ */
+label.inline{font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--fg2); margin:0 2px 0 6px}
+.bar-row select{width:auto; padding:5px 8px; font-size:12px}
+/* Projects mode: weeks ACROSS, ~58 of them, so a column is narrow and the header
+   stacks its two dates. The cell shows initials; the full name is in the tooltip. */
+table.sched thead th.qcol, table.sched td.qcol{border-left:2px solid var(--fg1)}
+table.sched:not(.byeng) tbody th{min-width:210px; max-width:210px; text-align:left;
+  padding:4px 10px; font-size:12px}
+table.sched:not(.byeng) thead th{font-size:9px; line-height:1.15; padding:5px 2px}
+table.sched:not(.byeng) tbody td{width:38px; min-width:38px; font-size:10px;
+  text-align:center; padding:0}
+td.marker{background:var(--red); color:#fff; font-weight:700}

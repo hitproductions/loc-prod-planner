@@ -56,7 +56,8 @@ section('Read models');
   ok('two-at-once count matches the book', boot.counts.over2 === two, `${boot.counts.over2} vs ${two}`);
   ok('three-at-once count matches the book', boot.counts.over3 === three, `${boot.counts.over3} vs ${three}`);
 
-  const sch = api.schedule(book);
+  // Explicit: the default is PROJECT mode, matching the Apps Script app.
+  const sch = api.schedule(book, { mode: 'engineer' });
   ok('the grid has one column per engineer', sch.labels.length === book.engineers.length);
   ok('and every cell reports its depth so it can be coloured', (() => {
     let bad = 0;
@@ -74,6 +75,92 @@ section('Read models');
   ok('the grid and the header agree on which weeks are overlapped',
      gridDeep.size === bookDeep.size && [...gridDeep].every(k => bookDeep.has(k)),
      `grid ${gridDeep.size} vs book ${bookDeep.size}`);
+}
+
+section('Both grid orientations, and the quarter range');
+{
+  const book = await freshBook();
+  const eng = api.schedule(book, { mode: 'engineer' });
+  const prj = api.schedule(book, { mode: 'project' });
+
+  ok('engineers mode has one row per engineer',
+     eng.labels.length === book.engineers.length && eng.mode === 'engineer');
+  ok('projects mode has one row per project on the schedule',
+     prj.mode === 'project' && prj.labels.length > book.engineers.length,
+     `${prj.labels.length} rows`);
+  ok('deadline markers belong to projects mode only',
+     prj.markers.length > 0 && eng.markers.length === 0,
+     `project ${prj.markers.length}, engineer ${eng.markers.length}`);
+  ok('and every marker points at a row and column that exist',
+     prj.markers.every(m => prj.cells[m.row] !== undefined && prj.weeks[m.col] !== undefined));
+
+  // Projects mode reads diagonally only if rows are ordered by when work STARTS.
+  const firstWeekOf = name => Math.min(...A.activeRows(book.bookings)
+    .filter(b => b.project === name).map(b => A.widx(b.start_date)));
+  const starts = prj.labels.map(firstWeekOf);
+  ok('projects are ordered by when their work starts',
+     starts.every((w, i) => i === 0 || starts[i - 1] <= w), starts.slice(0, 8).join(','));
+
+  // The same week must read the same in both views — an overlap is a property of the
+  // engineer's calendar, and switching orientation cannot change it.
+  const deepIn = d => {
+    const out = new Set();
+    d.cells.forEach((row, ri) => row.forEach((c, ci) => {
+      if (c && c.depth > 1) c.items.forEach(() => out.add(d.weeks[ci].week));
+    }));
+    return out;
+  };
+  const a = [...deepIn(eng)].sort(), b = [...deepIn(prj)].sort();
+  ok('both orientations agree on which weeks are overlapped',
+     a.join(',') === b.join(','), `engineer [${a}] vs project [${b}]`);
+
+  // ---- the range
+  ok('every quarter in the book is offered', prj.quarters.length > 1, prj.quarters.join(','));
+
+  // A LATE quarter on purpose. Clipping to an early one keeps an unbroken prefix of
+  // rows, so the row remap is accidentally the identity and a broken remap passes.
+  // Rows are ordered by when work starts, so a late quarter drops rows from the front.
+  const q = prj.quarters.filter(x => {
+    const c = api.schedule(book, { mode: 'project', from: x, to: x });
+    return c.labels.length > 0 && c.labels.length < prj.labels.length &&
+           prj.labels.indexOf(c.labels[0]) > 0;
+  })[0];
+  ok('the fixture has a quarter that drops rows from the front, or this proves nothing',
+     !!q, prj.quarters.join(','));
+  const clipped = api.schedule(book, { mode: 'project', from: q, to: q });
+  ok('clipping to one quarter narrows the weeks',
+     clipped.weeks.length > 0 && clipped.weeks.length < prj.weeks.length,
+     `${clipped.weeks.length} of ${prj.weeks.length}`);
+  ok('and every week left is in that quarter',
+     clipped.weeks.every(w => w.quarter === q));
+  ok('a project with no work in range is dropped from the rows',
+     clipped.labels.length < prj.labels.length,
+     `${clipped.labels.length} of ${prj.labels.length}`);
+  // Not "the index is in range" — that passes by luck when rows are dropped, since a
+  // stale index usually still points at SOME row. The marker must land on the row of
+  // the project whose deadline it is, in the column of that deadline's week.
+  const deadlineOf = {};
+  book.projects.forEach(p => { if (p.deadline) deadlineOf[p.project_title] = p.deadline; });
+  const misplaced = clipped.markers.filter(m => {
+    const title = clipped.labels[m.row];
+    const week = clipped.weeks[m.col];
+    return !title || !week || A.widx(deadlineOf[title]) !== week.week;
+  });
+  ok('each marker sits on its own project row, in its deadline week',
+     misplaced.length === 0,
+     misplaced.slice(0, 3).map(m => `${clipped.labels[m.row]} @ ${clipped.weeks[m.col] &&
+       clipped.weeks[m.col].start}`).join(' | '));
+
+  // Engineers mode keeps everyone: an empty row means "free all quarter", which is
+  // information, whereas an absent project is just noise.
+  const engClipped = api.schedule(book, { mode: 'engineer', from: q, to: q });
+  ok('engineers mode keeps every engineer when clipped',
+     engClipped.labels.length === book.engineers.length,
+     `${engClipped.labels.length} of ${book.engineers.length}`);
+
+  const none = api.schedule(book, { mode: 'project', from: '2099-Q1', to: '2099-Q1' });
+  ok('a range with nothing in it says so rather than rendering an empty grid',
+     none.clipped === true && none.weeks.length === 0);
 }
 
 section('Dragging a week to another engineer');

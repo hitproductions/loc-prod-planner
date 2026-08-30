@@ -82,5 +82,4 @@ showing the previous plan three times over.
   with access to the sheet. Everything else is built to sit behind it unchanged.
 - Applying a re-plan (preview works; apply needs the stash).
 - Analysis view.
-- The Projects/Engineers grid toggle and the quarter range picker.
 - Auth. Right now anyone who can reach the port can read and change the book.

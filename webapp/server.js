@@ -48,7 +48,7 @@ function send(res, code, body, type) {
 // Read models are pure functions of the book, so a route is: get the book, call one.
 const ROUTES = {
   '/api/bootstrap': b => api.bootstrap(b),
-  '/api/schedule':  b => api.schedule(b),
+  '/api/schedule':  (b, q) => api.schedule(b, { mode: q.get('mode'), from: q.get('from'), to: q.get('to') }),
   '/api/analysis':  b => api.analysis(b),
 };
 
@@ -90,7 +90,7 @@ const server = http.createServer(async (req, res) => {
     const route = ROUTES[url.pathname];
     if (route) {
       const book = await store.get(url.searchParams.get('fresh') === '1');
-      const payload = route(book);
+      const payload = route(book, url.searchParams);
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
       return send(res, 200, JSON.stringify(payload));
@@ -108,7 +108,7 @@ const server = http.createServer(async (req, res) => {
         await store.write(result.change);
         const next = await store.get(true);
         result.boot = api.bootstrap(next);
-        result.schedule = api.schedule(next);
+        result.schedule = api.schedule(next, { mode: body.mode, from: body.from, to: body.to });
       }
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
