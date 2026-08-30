@@ -11,8 +11,11 @@
 // the Apps Script version's date handling depend on a cell's number format.
 const { createAuth } = require('./google-auth.js');
 
-const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers',
-               events: 'History' };
+// The three tabs the book is read from. The log tab is deliberately NOT in here: it
+// is created on first write, so requiring it made read() ask Google for a range that
+// does not exist yet and the whole read failed with "Unable to parse range".
+const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers' };
+const EVENTS_TAB = 'History';
 const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
 const HEADER_ROW = { Projects: 2, Bookings: 1, Engineers: 1 };
@@ -269,14 +272,14 @@ function createSheetsSource(opts) {
   async function ensureEventsTab() {
     if (eventsTabReady) return;
     const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties.title`);
-    const has = (meta.sheets || []).some(x => x.properties.title === TABS.events);
+    const has = (meta.sheets || []).some(x => x.properties.title === EVENTS_TAB);
     if (!has) {
       await auth.api(`spreadsheets/${id}:batchUpdate`, {
         method: 'POST',
-        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: TABS.events } } }] }),
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: EVENTS_TAB } } }] }),
       });
       await auth.api(`spreadsheets/${id}/values/` +
-        encodeURIComponent(`${TABS.events}!A1`) + '?valueInputOption=RAW', {
+        encodeURIComponent(`${EVENTS_TAB}!A1`) + '?valueInputOption=RAW', {
         method: 'PUT', body: JSON.stringify({ values: [EVENT_HEADERS] }),
       });
     }
@@ -285,9 +288,9 @@ function createSheetsSource(opts) {
 
   async function readEvents() {
     const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties.title`);
-    if (!(meta.sheets || []).some(x => x.properties.title === TABS.events)) return [];
+    if (!(meta.sheets || []).some(x => x.properties.title === EVENTS_TAB)) return [];
     const res = await auth.api(`spreadsheets/${id}/values/` +
-      encodeURIComponent(`${TABS.events}!A:E`));
+      encodeURIComponent(`${EVENTS_TAB}!A:E`));
     const vals = res.values || [];
     const head = (vals[0] || []).map(norm);
     return vals.slice(1).filter(r => r.length).map((r, i) => {
@@ -299,7 +302,7 @@ function createSheetsSource(opts) {
 
   async function appendEvent(e) {
     await ensureEventsTab();
-    await auth.api(`spreadsheets/${id}/values/` + encodeURIComponent(`${TABS.events}!A:A`) +
+    await auth.api(`spreadsheets/${id}/values/` + encodeURIComponent(`${EVENTS_TAB}!A:A`) +
       ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', {
       method: 'POST',
       body: JSON.stringify({ values: [EVENT_HEADERS.map(h => e[h] == null ? '' : String(e[h]))] }),
@@ -310,4 +313,4 @@ function createSheetsSource(opts) {
   return { read, write, readEvents, appendEvent, email: auth.email };
 }
 
-module.exports = { createSheetsSource, isoFrom, mapper };
+module.exports = { createSheetsSource, isoFrom, mapper, TABS, EVENTS_TAB };

@@ -754,7 +754,20 @@ section('A saved project reaches the Projects list, not just the schedule');
 
 section('Reading a real spreadsheet layout');
 {
-  const { isoFrom, mapper } = require('../webapp/sources/sheets.js');
+  const sheets = require('../webapp/sources/sheets.js');
+  const { isoFrom, mapper } = sheets;
+
+  // The log tab is created on FIRST WRITE, so a sheet that predates it — or a brand
+  // new copy — does not have one. It must never be part of the required read: adding
+  // it to TABS made read() ask Google for "History!A:Z", which does not parse, and
+  // every read of the whole book failed. Caught against the real sheet, not here.
+  ok('the log tab is not one of the tabs the book is read from',
+     !Object.values(sheets.TABS || {}).includes('History'),
+     JSON.stringify(sheets.TABS));
+  ok('and the three that are required are exactly the book',
+     JSON.stringify(Object.values(sheets.TABS || {}).sort()) ===
+       JSON.stringify(['Bookings', 'Engineers', 'Projects']),
+     JSON.stringify(sheets.TABS));
 
   // Dates arrive as Sheets serial numbers so the cell's display format cannot change
   // what the engine sees. 2026-08-24 is serial 46258.
