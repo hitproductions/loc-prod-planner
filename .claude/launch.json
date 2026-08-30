@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "planner-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["webapp/server.js"],
+      "port": 8127
+    }
+  ]
+}

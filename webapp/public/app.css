@@ -1,0 +1,54 @@
+/* Hit Productions: radius 0, flat, 60/30/10 white/black/red. Carried over verbatim
+   from the Apps Script app so the two look like the same tool while both exist. */
+:root{
+  --black:#000; --red:#EF4123; --white:#fff; --gray:#646667; --cool:#D0D0CE;
+  --fg1:var(--black); --fg2:var(--gray); --fg3:#8A8C8D;
+  --bg1:var(--white); --bg2:#F5F5F4; --surface:#FCFCFB; --line:var(--cool);
+  --dub:#FFC000; --edit:#BDD7EE; --mix:#EA9999; --warn:#2E75B6;
+  --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box; border-radius:0 !important}
+html,body{margin:0; padding:0; background:var(--bg1); color:var(--fg1);
+  font-family:var(--font); font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased}
+button{font-family:var(--font); cursor:pointer}
+.top{position:sticky; top:0; z-index:20; background:var(--bg1); border-bottom:2px solid var(--black);
+  display:flex; align-items:center; gap:24px; padding:12px 22px}
+.brand{font-size:17px; font-weight:700; letter-spacing:-0.02em}
+.nav{display:flex; gap:2px}
+.nav button{background:none; border:1px solid transparent; color:var(--fg2); font-size:12px;
+  font-weight:700; text-transform:uppercase; letter-spacing:0.07em; padding:7px 12px}
+.nav button.on{background:var(--black); color:#fff; border-color:var(--black)}
+.top .right{margin-left:auto; display:flex; gap:12px; font-size:12px; color:var(--fg2)}
+.pill{border:1px solid var(--line); padding:3px 8px; font-size:11px}
+.pill.warn{border-color:var(--warn); color:var(--warn); font-weight:700}
+.pill.bad{border-color:var(--red); color:var(--red); font-weight:700}
+main{padding:20px 22px 64px}
+.loading{color:var(--fg2); padding:30px 0}
+.gridwrap{overflow:auto; border:1px solid var(--line); max-height:78vh}
+table.sched{border-collapse:separate; border-spacing:0; font-size:11px; width:auto}
+table.sched th,table.sched td{padding:0; border:none; white-space:nowrap}
+table.sched thead th{position:sticky; top:0; z-index:3; background:var(--black); color:#fff;
+  font-size:11px; padding:7px 4px; text-align:center; border-right:1px solid #333; font-weight:700}
+table.sched thead th.corner{left:0; z-index:6; text-align:left; padding-left:12px; min-width:128px}
+table.sched tbody th{position:sticky; left:0; z-index:2; background:var(--bg2); text-align:left;
+  padding:6px 12px; font-size:12px; font-weight:400; border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line); min-width:128px; font-variant-numeric:tabular-nums}
+table.sched tbody td{width:104px; min-width:104px; height:34px; text-align:center; font-size:11px;
+  border-right:1px solid var(--bg1); border-bottom:1px solid var(--bg1); overflow:hidden}
+td.over2{outline:2px solid var(--warn); outline-offset:-2px; font-weight:700; color:#1B4F80}
+td.over3{outline:2px solid var(--red); outline-offset:-2px; font-weight:700; color:#7F0000}
+td.dbl2{background:var(--warn); color:#fff; font-weight:700}
+td.dbl3{background:var(--red); color:#fff; font-weight:700}
+tr.qstart th, tr.qstart td{border-top:2px solid var(--fg1)}
+.legend{display:flex; gap:16px; font-size:11px; color:var(--fg2); margin-top:10px; flex-wrap:wrap}
+.sw{display:inline-block; width:12px; height:12px; vertical-align:-2px; margin-right:5px;
+  border:1px solid rgba(0,0,0,.15)}
+table.projects{border-collapse:collapse; width:100%; font-size:13px}
+table.projects th,table.projects td{text-align:left; padding:7px 10px 7px 0;
+  border-bottom:1px solid var(--line)}
+table.projects th{font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--fg2)}
+.chip{display:inline-block; font-size:9px; padding:2px 6px; border:1px solid var(--line);
+  color:var(--fg2); margin-right:4px}
+.chip.warn{border-color:var(--warn); color:var(--warn); font-weight:700}
+.chip.red{border-color:var(--red); color:var(--red); font-weight:700}
+.timing{font-variant-numeric:tabular-nums}
