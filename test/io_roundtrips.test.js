@@ -156,9 +156,9 @@ function loadWithSheet(tabs) {
   const fn = new Function(...names, `${src}\n;return { apiBootstrap, apiSaveProject, plotBatch,
     readBookings, readProjectRows, readEngineers, supersedeBookingRowNumbers, ioInvalidate,
     normalizeProject, activeRows, getAnalysisData, apiSupersedeOrphans, readBookings,
-    clearGhostProjects, apiSchedule, duplicateLiveRows_, checkBookings,
+    apiSchedule, duplicateLiveRows_,
     apiSetProjectLock, apiReplanPreview, readProjectRows, rosterProblems, canonMixLevel_,
-    resetSchedule, plotAllUnplotted, relinkProjectBookings, orphanProjects_, getAnalysisData,
+    plotAllUnplotted, relinkProjectBookings, orphanProjects_, getAnalysisData,
     refreshForcedNotes_,
     apiReassignWeek, apiUndoWeekMove, refreshProjectOutputsFromBook_,
     apiReplanApply, apiAnalysis, widx,
@@ -271,87 +271,11 @@ console.log('Sheets round trips per operation');
   // the same repair must be reachable from the SHEET, because the web app is
   // pinned to a published version and app-side fixes are invisible until it is
   // bumped — which is exactly the hole this fell through (2026-08-13)
-  {
-    const t2 = buildTabs();
-    const v2 = t2.Projects[2][0];
-    t2.Projects.splice(2, 1);
-    const m = loadWithSheet(t2);
-    const liveOf = () => m.api.activeRows(m.api.readBookings()).filter(b => b.project === v2).length;
-    const liveBefore = liveOf();
-
-    // declining must change nothing at all
-    m.stats.uiAnswer = 0;                        // anything that is not Button.YES
-    m.api.clearGhostProjects();
-    ok('declining the confirmation leaves every row live',
-       liveBefore > 0 && liveOf() === liveBefore, `${liveBefore} -> ${liveOf()}`);
-
-    m.stats.uiAnswer = 1;                        // Button.YES
-    m.api.clearGhostProjects();
-    ok('confirming clears ghosts without the web app', liveOf() === 0,
-       `${liveBefore} live rows before, ${liveOf()} after`);
-  }
-
   const again = api.apiSupersedeOrphans([victim]);
   ok('re-running it is a no-op, not a second sweep', again.ok && again.superseded === 0,
      JSON.stringify(again));
   ok('an unknown title is skipped, never guessed at',
      api.apiSupersedeOrphans(['No Such Show']).skipped.length === 1);
-}
-
-// ---- the build-time wipe -----------------------------------------------------
-// Delete this block when resetSchedule() is removed. It exists because the wipe is
-// the one place in the tool that really deletes, and because a wipe that leaves the
-// Plotted stamps behind is worse than useless: plotAllUnplotted would then find
-// nothing to do and the rebuild would silently no-op (2026-08-13).
-{
-  const tabs = buildTabs();
-  const { api, stats } = loadWithSheet(tabs);
-  const bookingsBefore = api.readBookings().length;
-  const projectsBefore = api.readProjectRows().filter(p => p.project_title).length;
-  const nRows = tabs.Projects.length - 2;   // the wipe formats 300 rows, so compare only these
-  const inputsBefore = tabs.Projects.slice(2, 2 + nRows).map(r => r.slice(0, 10).join('|'));
-
-  // lock a couple of projects first — Locked is column 20, deliberately outside the
-  // engine's 11..19 block, so the wipe's sweep used to stop one column short of it
-  const lockable = api.readProjectRows().filter(p => p.project_title).slice(0, 2);
-  lockable.forEach(p => api.apiSetProjectLock(p.project_title, true));
-  ok('projects can be locked before the wipe',
-     api.readProjectRows().filter(p => p.locked === true).length === 2,
-     `${api.readProjectRows().filter(p => p.locked === true).length} locked`);
-
-  stats.uiAnswer = 0;                                   // "No"
-  api.resetSchedule();
-  ok('declining the wipe deletes nothing',
-     api.readBookings().length === bookingsBefore, `${api.readBookings().length} rows left`);
-
-  stats.uiAnswer = 1;                                   // "Yes"
-  api.resetSchedule();
-  ok('the wipe empties the Bookings tab', api.readBookings().length === 0,
-     `${api.readBookings().length} rows left`);
-  // Sheets will not allow every non-frozen row to be deleted, so one blank row
-  // remains by design. It must read as no bookings at all.
-  ok('the header survives and at most one blank row is left behind',
-     tabs.Bookings[0][0] === 'project' && tabs.Bookings.length <= 2 &&
-     (tabs.Bookings.length === 1 || !String(tabs.Bookings[1][0] || '').trim()),
-     JSON.stringify(tabs.Bookings));
-  ok('every project row is kept', api.readProjectRows().filter(p => p.project_title).length === projectsBefore);
-  ok('no Plotted stamp survives, so a rebuild has work to do',
-     api.readProjectRows().every(p => !p.plotted));
-  // A lock means "these dates are promised". The wipe destroys the dates, so the
-  // promise cannot outlive them — otherwise you re-plot, get bookings nobody has
-  // reviewed, and find them already frozen against the next re-plan.
-  ok('no lock survives the wipe either',
-     api.readProjectRows().every(p => p.locked !== true),
-     JSON.stringify(api.readProjectRows().filter(p => p.locked === true).map(p => p.project_title)));
-  ok('the user\'s own columns are untouched',
-     tabs.Projects.slice(2, 2 + nRows).map(r => r.slice(0, 10).join('|')).join('#') === inputsBefore.join('#'),
-     'inputs changed');
-
-  // and the rebuild actually rebuilds
-  stats.uiAnswer = 1;
-  api.plotAllUnplotted();
-  ok('plotAllUnplotted refills the book after a wipe', api.readBookings().length > 0,
-     `${api.readBookings().length} rows`);
 }
 
 // ---- a mis-cased mix_level must not silently disqualify a mixer -------------

@@ -9,18 +9,29 @@
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
+  // Trimmed 2026-08-31. What went, and why:
+  //
+  //   Check bookings for problems  the app shows the same validateBook result as a
+  //                                banner on every load, so this was a second, worse
+  //                                surface for something already in front of you
+  //   Clear ghost projects         the app both detects orphans AND offers the fix,
+  //                                with an explanation this dialog never had
+  //   Fix the overlap notes        it repaired a note that five surfaces used to read.
+  //                                They all count the weeks now, so nothing in either
+  //                                app displays it
+  //   Why this mixer?              an explainer nobody reached for
+  //   Wipe the schedule            a build-time tool, two clicks from Set up sheets,
+  //                                that deletes the whole schedule (HANDOFF §11)
+  //
+  // What is left is what has no equivalent anywhere else: setup, the dropdown refresh
+  // that fixes validation WITHOUT wiping Projects, plotting rows typed straight into
+  // the sheet, and repairing a project renamed in the sheet by hand.
   ui.createMenu('Engineer Assignment')
-    .addItem('Check bookings for problems', 'checkBookings')
     .addItem('Relink a renamed project', 'relinkRenamedProject')
-    .addItem('Fix the overlap notes', 'fixForcedNotes')
-    .addItem('Clear ghost projects', 'clearGhostProjects')
-    .addItem('Why this mixer?', 'whyThisMixer')
     .addSubMenu(ui.createMenu('Admin')
       .addItem('Set up sheets', 'setupSheets')
       .addItem('Plot all unplotted rows', 'plotAllUnplotted')
-      .addItem('Refresh engineer dropdowns', 'refreshEngineerDropdowns')
-      .addSeparator()
-      .addItem('Wipe the schedule (build only)', 'resetSchedule'))
+      .addItem('Refresh engineer dropdowns', 'refreshEngineerDropdowns'))
     .addToUi();
 }
 
@@ -46,61 +57,6 @@ function duplicateLiveRows_(live) {
   return dupes;
 }
 
-// Surfaces exactly what assertValidBook would refuse to schedule from, plus the
-// two conditions that make a clean plan look broken: ghosts and duplicates.
-function checkBookings() {
-  var ui = SpreadsheetApp.getUi();
-  var problems, live, ghosts, dupes, roster;
-  try {
-    var bookings = readBookings();
-    live = activeRows(bookings);
-    problems = validateBook(bookings, readEngineers());
-    ghosts = orphanProjects_(live, readProjectRows());
-    dupes = duplicateLiveRows_(live);
-    roster = rosterProblems(readEngineers());
-  } catch (e) {
-    ui.alert('Could not read the sheet: ' + e.message);
-    return;
-  }
-
-  var report = [];
-  if (roster.length) {
-    report.push('ROSTER: ' + roster.length + ' problem(s). These change WHO is eligible,');
-    report.push('so the schedule looks wrong while the engine is behaving correctly.');
-    roster.forEach(function (r) { report.push('  \u2022 ' + r); });
-    report.push('');
-  }
-  if (dupes.length) {
-    report.push('DUPLICATE LIVE ROWS: ' + dupes.length + '.');
-    report.push('The same booking exists twice, so every one of those weeks counts as');
-    report.push('an overlap even though the schedule itself is fine. Cause: a project was');
-    report.push('plotted twice and the first pass was never superseded.');
-    dupes.slice(0, 8).forEach(function (d) {
-      report.push('  \u2022 ' + d.project + ' \u2014 ' + d.phase + ' \u2014 ' + d.engineer +
-        ' \u2014 rows ' + d.rows.join(' and '));
-    });
-    if (dupes.length > 8) report.push('  \u2026and ' + (dupes.length - 8) + ' more.');
-    report.push('');
-  }
-  if (ghosts.length) {
-    report.push('GHOST PROJECTS: ' + ghosts.length + ' (' +
-      ghosts.reduce(function (n, o) { return n + o.rows; }, 0) + ' rows).');
-    report.push('On the schedule with no row in the Projects tab. They inflate overlap too.');
-    report.push('Fix with Engineer Assignment > Clear ghost projects.');
-    report.push('');
-  }
-  if (problems.length) {
-    report.push('DATA PROBLEMS: ' + problems.length + '. Scheduling refuses to run with these.');
-    problems.slice(0, 20).forEach(function (p) { report.push('  \u2022 ' + p); });
-    if (problems.length > 20) report.push('  \u2026and ' + (problems.length - 20) + ' more.');
-  }
-
-  if (!report.length) {
-    ss().toast(live.length + ' live rows, no duplicates, no ghosts.', 'Bookings look clean', 6);
-    return;
-  }
-  ui.alert('Bookings: ' + live.length + ' live rows', report.join('\n'), ui.ButtonSet.OK);
-}
 
 // Projects still on the schedule with no row in the Projects tab.
 //
@@ -213,120 +169,5 @@ function promptForChoice_(ui, title, intro, options) {
   return i - 1;
 }
 
-// The FORCED note on a live booking row records a decision, not a fact, so it drifts
-// as soon as anything else moves. Every read path now counts weeks instead — but the
-// Bookings tab still holds whatever was written last, and it is the record people
-// open. This brings it into line without waiting for the next apply.
-function fixForcedNotes() {
-  var ui = SpreadsheetApp.getUi();
-  var n;
-  try { n = refreshForcedNotes_(); }
-  catch (e) { ui.alert('Could not read the sheet: ' + e.message); return; }
-  if (!n) {
-    ss().toast('Every live booking row already says the right thing.', 'Nothing to fix', 5);
-    return;
-  }
-  ui.alert('Fixed ' + n + ' note(s)',
-    'Rows that are not actually double-booked no longer claim to be, and rows that ARE ' +
-    'now say so.\n\nOnly live rows changed. Superseded rows are history and were left ' +
-    'alone.', ui.ButtonSet.OK);
-}
 
-function clearGhostProjects() {
-  var ui = SpreadsheetApp.getUi();
-  var orphans;
-  try {
-    orphans = orphanProjects_(activeRows(readBookings()), readProjectRows());
-  } catch (e) {
-    ui.alert('Could not read the sheet: ' + e.message);
-    return;
-  }
-  if (!orphans.length) {
-    ss().toast('Every project on the schedule has a row in the Projects tab.',
-      'Nothing to clear', 5);
-    return;
-  }
-  var rows = orphans.reduce(function (n, o) { return n + o.rows; }, 0);
-  var list = orphans.slice(0, 25).map(function (o) {
-    return '  \u2022 ' + o.project + ' \u2014 ' + o.rows + ' row(s)';
-  }).join('\n') + (orphans.length > 25 ? '\n  \u2026and ' + (orphans.length - 25) + ' more.' : '');
 
-  var answer = ui.alert('Clear ' + orphans.length + ' ghost project(s)?',
-    'These are on the schedule but have no row in the Projects tab:\n\n' + list +
-    '\n\n' + rows + ' booking row(s) will be marked "superseded" so they stop showing.\n' +
-    'NOTHING IS DELETED \u2014 the rows stay in the Bookings tab as history, and clearing ' +
-    'the status cell puts one back.',
-    ui.ButtonSet.YES_NO);
-  if (answer !== ui.Button.YES) { ss().toast('Left alone.', 'Cancelled', 4); return; }
-
-  var n = supersedeProjectBookings(orphans.map(function (o) { return o.project; }));
-  ui.alert('Cleared', n + ' booking row(s) marked superseded across ' + orphans.length +
-    ' project(s). Reload the app to see the schedule without them.', ui.ButtonSet.OK);
-}
-
-// Why a given project's mixer is who it is. Answers the question directly instead
-// of leaving it to be inferred from the grid: who was eligible, who was free, and
-// what the tie-break was.
-//
-// pick() ranks on TOTAL load across all phases, not mix load — so a heavy
-// record/edit week makes someone LESS likely to be handed a mix, which is easy to
-// misread as the engine ignoring an idle mixer.
-function whyThisMixer() {
-  var ui = SpreadsheetApp.getUi();
-  var resp = ui.prompt('Which project?', 'Type the project title exactly as it appears in the Projects tab.',
-    ui.ButtonSet.OK_CANCEL);
-  if (resp.getSelectedButton() !== ui.Button.OK) return;
-  var title = String(resp.getResponseText() || '').trim();
-  if (!title) return;
-
-  var engineers = readEngineers();
-  var rows = readProjectRows().filter(function (p) { return p.project_title === title; });
-  if (!rows.length) { ui.alert('No project called "' + title + '".'); return; }
-  var proj = normalizeProject(rows[0]).project;
-
-  var live = activeRows(readBookings());
-  var mine = live.filter(function (b) { return b.project === title && b.phase === 'Mix'; });
-  if (!mine.length) { ui.alert(title + ' has no live Mix booking.'); return; }
-
-  var a = widx(mine[0].start_date), z = widx(mine[mine.length - 1].end_date);
-  var needAdv = String(proj.mix_level_required).trim() === 'Advanced';
-  var yes = function (v) { return String(v).trim().toLowerCase() === 'yes'; };
-
-  // occupancy over the mix block, EXCLUDING this project's own rows
-  var busy = {};
-  live.forEach(function (b) {
-    if (b.project === title && b.phase === 'Mix') return;
-    for (var w = widx(b.start_date); w <= widx(b.end_date); w++) busy[b.engineer + '|' + w] = b;
-  });
-  var loadOf = {};
-  live.forEach(function (b) {
-    var n = widx(b.end_date) - widx(b.start_date) + 1;
-    loadOf[b.engineer] = (loadOf[b.engineer] || 0) + n;
-  });
-
-  var lines = [title + ' \u2014 Mix, ' + mine[0].start_date + ' to ' + mine[mine.length - 1].end_date +
-    ' (' + (z - a + 1) + 'wk)', 'Needs: ' + (needAdv ? 'Advanced' : 'Developing') + ' level',
-    'Currently: ' + mine.map(function (b) { return b.engineer; }).join(', '), ''];
-
-  engineers.forEach(function (e) {
-    var why = [];
-    if (!yes(e.can_mix)) why.push('can_mix is not Yes');
-    else {
-      if (needAdv && e.mix_level !== 'Advanced')
-        why.push('level is "' + (e.mix_level || 'blank') + '", not Advanced');
-      if (yes(e.overflow_only)) why.push('overflow reserve \u2014 only used when everyone else is busy');
-    }
-    var clash = [];
-    for (var w = a; w <= z; w++) if (busy[e.name + '|' + w]) clash.push(busy[e.name + '|' + w].project);
-    if (clash.length) why.push('busy ' + clash.length + 'wk (' + clash.filter(function (v, i, s2) {
-      return s2.indexOf(v) === i; }).join(', ') + ')');
-    lines.push((why.length ? '  \u2717 ' : '  \u2713 ') + e.name +
-      '  [load ' + (loadOf[e.name] || 0) + 'wk]' + (why.length ? ' \u2014 ' + why.join('; ') : ' \u2014 ELIGIBLE AND FREE'));
-  });
-
-  lines.push('');
-  lines.push('Among eligible-and-free, the pick is: lowest TOTAL load across all phases,');
-  lines.push('then longest gap since their last booking, then alphabetical. Total load is');
-  lines.push('why a busy recordist is passed over for a mix.');
-  ui.alert('Why this mixer', lines.join('\n'), ui.ButtonSet.OK);
-}

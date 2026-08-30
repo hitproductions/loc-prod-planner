@@ -2,7 +2,6 @@
 //
 //   checkProject()      — runs the engine and writes NOTHING. Answers "can we
 //                         take this job" before committing to it.
-//   saveProject()       — writes the row and plots it.
 //   getProjectForEdit() — loads a project back so a mistake can be corrected.
 //   removeProject()     — cancels one: bookings superseded, row kept and marked.
 
@@ -144,48 +143,6 @@ function checkProject(p) {
     return b.project === norm.project.project_title;
   }).length;
   return res;
-}
-
-// Writes: appends (or updates) the Projects row and plots it.
-function saveProject(p) {
-  var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(30000)) return { ok: false, errors: ['Another change is in progress. Try again in a moment.'] };
-  try {
-    var engineers = readEngineers();
-    var bookings = readBookings();
-    assertValidBook(bookings, engineers);
-
-    var raw = formPayloadToRaw_(p);
-    var norm = normalizeProject(raw);
-    if (norm.errors.length) return { ok: false, errors: norm.errors };
-    var project = norm.project;
-
-    // re-plotting an existing title supersedes its rows rather than overwriting
-    var superseded = supersedeProjectBookings([project.project_title]);
-
-    var book = activeRows(readBookings());
-    var out = runAssign(project, book, engineers);
-    appendBookings(out.booking_rows);
-
-    var row = upsertProjectRow_(project);
-    var notes = [out.record_note, out.mix_note].filter(String).join(' | ');
-    clearProjectOutputs(row);
-    writeProjectOutputs(row, {
-      dub_weeks: project.dub_weeks, edit_weeks: project.edit_weeks, mix_weeks: project.mix_weeks,
-      recordist: out.dubber || out.recordist, editor: out.editor || out.recordist, mixer: out.mixer,
-      warnings: out.warnings, notes: notes,
-      plotted: todayISO(), forced: out.forced,
-    });
-
-    var res = describeResult_(project, out);
-    res.dry_run = false;
-    res.row = row;
-    res.superseded = superseded;
-    res.booking_rows = out.booking_rows.length;
-    return res;
-  } finally {
-    lock.releaseLock();
-  }
 }
 
 // The first row with no project title. Deliberately not getLastRow() + 1 —

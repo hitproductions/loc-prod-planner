@@ -609,15 +609,18 @@ way the labels can be sized once and be right.
 
 ## 11. Before go-live
 
-1. Delete `resetSchedule()` from `23_Entry.gs` and its Admin menu item, and
-   `saveProject()` from `27_Form.gs` — nothing calls it. It is a leftover from the
-   sidebar form the web app replaced, and it is a *second* supersede-and-re-plot
-   path. A live but unreachable write path is what someone wires back up later
-   without knowing the rules moved.
+1. ~~Delete `resetSchedule()` and the dead `saveProject()`~~ — **done 2026-08-31,
+   v77.** Both gone. The menu was trimmed at the same time: `Check bookings for
+   problems` and `Clear ghost projects` were second, worse surfaces for things the
+   web app already shows and fixes; `Fix the overlap notes` repaired a note no
+   surface reads any more; `Why this mixer?` went unused. `refreshForcedNotes_`
+   itself STAYS — three write paths call it.
 2. Bump the deployment version so the app serves current code — `create-version`
    then `redeploy`, per §1, so the bookmark survives.
-3. Run `Check bookings for problems` on the real roster — it will name any
-   mis-cased `mix_level`, which silently disqualifies a mixer.
+3. Open the web app on the real roster and read the red banner at the top of
+   Projects — it runs the same check and will name any mis-cased `mix_level`, which
+   silently disqualifies a mixer. (The menu item that used to do this is gone; the
+   banner was always the better surface, since it appears without being asked.)
 4. Build the initial book as a **seed batch plus small batches**, not one project at
    a time — a batch of four or five together beats four separate saves. The full
    24-at-once solve is a test-fixture scenario, not how this is worked; see §4.
