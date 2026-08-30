@@ -302,6 +302,7 @@ function createSheetsSource(opts) {
       '?valueInputOption=RAW', {
       method: 'PUT', body: JSON.stringify({ values: [missing] }),
     });
+    await formatProjectColumns(at, missing);
     // The header changed, so the cached map of it is wrong. Re-read straight away
     // rather than just invalidating: the caller writes on the very next line, and
     // clearing the map without refilling it left it reading rowOf off null.
@@ -309,6 +310,75 @@ function createSheetsSource(opts) {
     bookingsMeta = null;
     await read();
     return missing;
+  }
+
+  // A column written as bare text sits outside everything the setup formatted — no
+  // header band, no banding, no width — and reads as bolted on, because it is. These
+  // match what setupProjectsTab does, so a created column is indistinguishable from
+  // one that was always there.
+  const BANNER_ROW = 1, DATA_ROW = HEADER_ROW.Projects;   // header row 2, data from 3
+  const HEADER_BG = { red: 0x1F / 255, green: 0x2A / 255, blue: 0x37 / 255 };
+  const WHITE = { red: 1, green: 1, blue: 1 };
+  const OUTPUT_BG = { red: 0xF7 / 255, green: 0xF7 / 255, blue: 0xF5 / 255 };
+  const P_ROWS = 300;
+
+  async function formatProjectColumns(startIndex, names) {
+    const count = names.length;
+    const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties`);
+    const sheet = (meta.sheets || []).find(x => x.properties.title === TABS.projects);
+    if (!sheet) return;
+    const sheetId = sheet.properties.sheetId;
+    const span = { sheetId, startColumnIndex: startIndex, endColumnIndex: startIndex + count };
+
+    await auth.api(`spreadsheets/${id}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({ requests: [
+        // the banner strip, so row 1 does not stop short of the new columns
+        { repeatCell: {
+          range: { ...span, startRowIndex: 0, endRowIndex: BANNER_ROW },
+          cell: { userEnteredFormat: { backgroundColor: HEADER_BG } },
+          fields: 'userEnteredFormat.backgroundColor' } },
+        // the dark header band
+        { repeatCell: {
+          range: { ...span, startRowIndex: DATA_ROW - 1, endRowIndex: DATA_ROW },
+          cell: { userEnteredFormat: {
+            backgroundColor: HEADER_BG,
+            textFormat: { foregroundColor: WHITE, bold: true, fontSize: 9 },
+            wrapStrategy: 'WRAP', verticalAlignment: 'MIDDLE' } },
+          fields: 'userEnteredFormat(backgroundColor,textFormat,wrapStrategy,verticalAlignment)' } },
+        // Set by the app, not typed — so they read like the engine's own columns.
+        { repeatCell: {
+          range: { ...span, startRowIndex: DATA_ROW, endRowIndex: DATA_ROW + P_ROWS },
+          cell: { userEnteredFormat: {
+            backgroundColor: OUTPUT_BG, verticalAlignment: 'MIDDLE' } },
+          fields: 'userEnteredFormat(backgroundColor,verticalAlignment)' } },
+        { updateDimensionProperties: {
+          range: { sheetId, dimension: 'COLUMNS',
+                   startIndex, endIndex: startIndex + count },
+          properties: { pixelSize: 96 }, fields: 'pixelSize' } },
+      ].concat(
+        // Every other choice column on this tab has a dropdown; a free-text Status
+        // would accept "complete", "done", "COMPLETE" and mean none of them to the
+        // code, which matches on the exact word.
+        names.indexOf('Status') === -1 ? [] : [{ setDataValidation: {
+          range: { sheetId, startColumnIndex: startIndex + names.indexOf('Status'),
+                   endColumnIndex: startIndex + names.indexOf('Status') + 1,
+                   startRowIndex: DATA_ROW, endRowIndex: DATA_ROW + P_ROWS },
+          rule: { condition: { type: 'ONE_OF_LIST',
+                    values: [{ userEnteredValue: 'Complete' },
+                             { userEnteredValue: 'Cancelled' }] },
+                  showCustomUi: true, strict: false } } }],
+      ).concat(
+        // Dates as dates, so sorting and the report do not depend on how they look.
+        names.indexOf('Completed') === -1 ? [] : [{ repeatCell: {
+          range: { sheetId, startColumnIndex: startIndex + names.indexOf('Completed'),
+                   endColumnIndex: startIndex + names.indexOf('Completed') + 1,
+                   startRowIndex: DATA_ROW, endRowIndex: DATA_ROW + P_ROWS },
+          cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' },
+                                       horizontalAlignment: 'CENTER' } },
+          fields: 'userEnteredFormat(numberFormat,horizontalAlignment)' } }],
+      ) }),
+    });
   }
 
   // The log lives in its own tab, created the first time something is written. Not
