@@ -400,6 +400,36 @@ section('Analysis');
   ok('every engineer has a load, including the idle ones',
      a.score.loads.length === book.engineers.length,
      `${a.score.loads.length} of ${book.engineers.length}`);
+
+  // The client mix needs the PROJECTS passed into computeCapacity. Without them every
+  // project lands under "(unknown)", which is what the first version of this did.
+  const clients = (a.pipeline.by_client || []).map(c => c.client);
+  ok('the pipeline names real clients, not (unknown)',
+     clients.length > 0 && !clients.includes('(unknown)'), clients.join(', '));
+  ok('and its week total matches the book',
+     a.pipeline.by_client.reduce((n, c) => n + c.weeks, 0) ===
+       A.activeRows(book.bookings).reduce((n, b) =>
+         n + (A.widx(b.end_date) - A.widx(b.start_date) + 1), 0));
+
+  // The quarter heatmap must reconcile with the per-engineer totals, or the page is
+  // telling you two different things about the same person.
+  const drift = Object.keys(a.per_engineer).filter(n => {
+    const summed = a.quarters.reduce((t, q) => t + ((a.by_quarter[q] || {})[n] || 0), 0);
+    return summed !== a.per_engineer[n];
+  });
+  ok('each engineer\'s quarters add up to their total', drift.length === 0,
+     drift.map(n => `${n}: quarters ${a.quarters.reduce((t, q) =>
+       t + ((a.by_quarter[q] || {})[n] || 0), 0)} vs total ${a.per_engineer[n]}`).join(' | '));
+
+  // One row per overloaded engineer-week, naming what collides. A list of booking rows
+  // reports "4" where a person sees one problem.
+  const c = a.overlaps.collisions;
+  ok('collisions are one row per engineer-week, not per booking',
+     c.length === a.overlaps.pair_weeks + a.overlaps.deep_weeks,
+     `${c.length} rows vs ${a.overlaps.pair_weeks + a.overlaps.deep_weeks} weeks`);
+  ok('and each names everything colliding in it',
+     c.every(x => x.work.length === x.depth && x.depth >= 2),
+     JSON.stringify(c.slice(0, 2)));
 }
 
 section('Re-plan: preview, then apply against the same book');

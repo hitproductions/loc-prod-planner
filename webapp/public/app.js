@@ -263,97 +263,182 @@ async function loadAnalysis() {
 function renderAnalysis() {
   if (!ANALYSIS) return '<div class="loading">Counting\u2026</div>';
   const a = ANALYSIS;
-  let h = '<div class="bar-row"><button class="btn small" id="anRefresh">Refresh</button>' +
-    `<span class="hint" style="margin:0 0 0 12px">From ${esc(a.today)} \u00b7 ` +
-    `${a.weeks.length} weeks ahead</span></div>`;
-
-  // ---- 1. what needs a decision
   const o = a.overlaps;
+
+  let h = '<div class="bar-row"><button class="btn small" id="anRefresh">Refresh</button>' +
+    `<span class="hint" style="margin:0 0 0 12px">Week of ${esc(a.today)} \u00b7 horizon ` +
+    `${esc(a.horizon.from)} \u2192 ${esc(a.horizon.to)} \u00b7 ${a.horizon.weeks} weeks</span></div>`;
+
+  // ---------------------------------------------------- can we take work?
+  h += section('Can we take work?');
+
   h += '<div class="card"><div class="t">Overlaps</div>' +
     `<div class="s">${wk(o.pair_weeks)} with two at once, ${wk(o.deep_weeks)} with three or more` +
     (o.by_engineer.length ? ' \u00b7 carried by ' +
       o.by_engineer.map(e => `${esc(e.engineer)} (${e.forced_rows})`).join(', ') : '') + '</div>';
-  if (!o.deep.length && !o.pair.length) {
+  if (!o.collisions.length) {
     h += '<div class="hint">None \u2014 nobody holds two projects in the same week.</div>';
-  }
-  if (o.deep.length) {
-    h += '<div class="s" style="margin-top:10px"><b>Three at once \u2014 reassign</b></div>' +
-      overlapTable(o.deep, true);
-  }
-  if (o.pair.length) {
-    h += '<div class="s" style="margin-top:10px">Two at once \u2014 ordinary, a series still ' +
-      'recording while its edit starts</div>' + overlapTable(o.pair, false);
+  } else {
+    h += '<table class="projects"><thead><tr><th>Engineer</th><th>Week of</th>' +
+      '<th>Colliding work</th></tr></thead><tbody>' +
+      o.collisions.map(c => `<tr${c.depth > 2 ? ' class="rowbad"' : ''}>` +
+        `<td><b>${esc(c.engineer)}</b>${c.depth > 2 ? ` <span class="chip red">${c.depth} at once</span>` : ''}</td>` +
+        `<td>${esc(c.start)}</td><td>${esc(c.work.join('  +  '))}</td></tr>`).join('') +
+      '</tbody></table>';
   }
   h += '</div>';
 
-  // ---- 2. can we take more work
   h += '<div class="grid2">' +
-    demandCard(a, 'recedit', 'Dub or edit', a.pools.recedit) +
-    demandCard(a, 'adv_mix', 'Advanced mix', a.pools.adv_mix) + '</div>';
+    demandCard(a, 'recedit', 'Dub or edit \u2014 projects per week', a.pools.recedit,
+               a.pools.recedit.length) +
+    demandCard(a, 'adv_mix', 'Advanced mix \u2014 projects per week', a.pools.adv_mix,
+               a.pools.adv_mix.length,
+               a.pools.adv_mix_incl_overflow.length - a.pools.adv_mix.length) + '</div>';
 
-  // ---- 3. who is carrying it
-  const loads = a.score.loads.slice().sort((x, y) => y.weeks - x.weeks);
-  const peak = Math.max(...loads.map(l => l.weeks), 1);
-  h += '<div class="card"><div class="t">Weeks per engineer</div>' +
-    `<div class="s">Booked weeks across the whole horizon \u00b7 spread ${a.score.regular_spread}, ` +
-    `peak ${a.score.regular_peak}</div><table class="bars">` +
-    loads.map(l => `<tr><td class="n">${esc(l.engineer)}</td>` +
-      `<td><span class="bar" style="width:${Math.round(l.weeks / peak * 100)}%"></span></td>` +
-      `<td class="v">${l.weeks}${l.double_booked ? ` <span class="chip warn">${l.double_booked} doubled</span>` : ''}</td></tr>`).join('') +
-    '</table></div>';
+  h += freeCard(a);
+  h += clientCard(a);
 
+  // ---------------------------------------------------- who is overloaded?
+  h += section('Who is overloaded?');
+  h += heatmapCard(a);
+
+  h += '<div class="banner">Every figure here counts booking-row weeks, so it reconciles ' +
+    'with the schedule grid. If the heatmap says an engineer has 16 weeks, counting their ' +
+    'cells in the grid gives 16. Superseded rows are never included.</div>';
   return h;
 }
 
 const wk = n => n + (n === 1 ? ' week' : ' weeks');
+const section = t => `<div class="head"><span class="bar"></span><h2>${esc(t)}</h2></div>`;
 
-function overlapTable(list, bad) {
-  return '<table class="projects"><thead><tr><th>Week of</th><th>Engineer</th>' +
-    '<th>Project</th><th>Phase</th></tr></thead><tbody>' +
-    list.map(f => `<tr${bad ? ' class="rowbad"' : ''}><td>${esc(f.start)}</td>` +
-      `<td>${esc(f.engineer)}</td><td>${esc(f.project)}</td><td>${esc(f.phase)}</td></tr>`).join('') +
-    '</tbody></table>';
-}
-
-// Demand against the people who can actually do it. Never a total across roles: a
-// dub week and an Advanced-mix week are different currencies and summing them would
-// say the studio has capacity it does not have.
-function demandCard(a, role, title, pool) {
+// Demand against the people who can actually do it. Never a total across roles: a dub
+// week and an Advanced-mix week are different currencies, and summing them would claim
+// capacity the studio does not have.
+function demandCard(a, role, title, pool, supply, reserve) {
   const dKey = role === 'recedit' ? 'recedit_demand_projects' : 'mix_demand_projects';
-  const sKey = role === 'recedit' ? 'recedit_supply' : 'adv_mix_supply';
   const oKey = role === 'recedit' ? 'recedit_over' : 'adv_mix_over';
   const fKey = role === 'recedit' ? 'recedit_free_names' : 'adv_mix_free_names';
-  const supply = a.weeks.length ? a.weeks[0][sKey] : 0;
-  const max = Math.max(supply, ...a.weeks.map(w => w[dKey]), 1);
-  const over = a.weeks.filter(w => w[oKey] > 0);
-  const full = a.weeks.filter(w => w[oKey] === 0 && (w[fKey] || []).length === 0);
+  const weeks = a.weeks;
+  const max = Math.max(supply + 1, ...weeks.map(w => w[dKey]), 1);
 
-  const W = 560, H = 120, PB = 18;
-  const bw = Math.max(2, W / a.weeks.length - 1.5);
-  const bars = a.weeks.map((w, i) => {
-    const v = w[dKey];
-    if (v <= 0) return '';
-    const hgt = (v / max) * (H - PB);
-    return `<rect x="${(i * W / a.weeks.length).toFixed(1)}" y="${(H - PB - hgt).toFixed(1)}" ` +
-      `width="${bw.toFixed(1)}" height="${hgt.toFixed(1)}" ` +
-      `fill="${w[oKey] > 0 ? 'var(--red)' : 'var(--fg2)'}" ` +
-      `fill-opacity="${w[oKey] > 0 ? 1 : 0.5}"><title>${esc(w.label)}: ${v} needed, ` +
-      `${w[sKey]} can do it${w[oKey] > 0 ? ` — over by ${w[oKey]}` : ''}</title></rect>`;
-  }).join('');
-  const sy = (H - PB - (supply / max) * (H - PB)).toFixed(1);
+  const W = 620, H = 200, PL = 26, PR = 8, PT = 14, PB = 30;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const slot = iw / weeks.length;
+  const bw = Math.max(2, slot - 2);
+  const x = i => PL + i * slot;
+  const y = v => PT + ih - (v / max) * ih;
+
+  let g = '';
+  // horizontal rules and their labels, so a bar can be read as a number
+  for (let t = 0; t <= max; t++) {
+    if (max > 6 && t % 2) continue;
+    g += `<line x1="${PL}" x2="${W - PR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" ` +
+      'stroke-width="1" opacity=".5"></line>' +
+      `<text x="${PL - 6}" y="${(y(t) + 4).toFixed(1)}" font-size="11" text-anchor="end" ` +
+      `fill="var(--fg2)">${t}</text>`;
+  }
+  // month ticks along the bottom — 47 week labels will not fit, and the month is what
+  // you actually navigate by
+  let lastMonth = null;
+  weeks.forEach((w, i) => {
+    const m = (w.label || '').split(' ')[0];
+    if (m === lastMonth) return;
+    lastMonth = m;
+    g += `<text x="${x(i).toFixed(1)}" y="${H - 10}" font-size="11" fill="var(--fg2)">` +
+      `${esc(m)}</text>`;
+  });
+  weeks.forEach((w, i) => {
+    const v = w[dKey], over = w[oKey] > 0;
+    if (v <= 0) return;
+    g += `<rect x="${x(i).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" ` +
+      `height="${Math.max(1, ih - (y(v) - PT)).toFixed(1)}" ` +
+      `fill="${over ? 'var(--red)' : 'var(--fg2)'}" fill-opacity="${over ? 1 : 0.55}">` +
+      `<title>${esc(w.label)}: ${v} needed, ${supply} can do it` +
+      `${over ? ` — over by ${w[oKey]}` : ''}\nfree: ${(w[fKey] || []).join(', ') || 'nobody'}` +
+      '</title></rect>';
+    // over-capacity weeks are labelled, because that is the one thing on the chart
+    // with a decision attached
+    if (over) {
+      g += `<text x="${(x(i) + bw / 2).toFixed(1)}" y="${(y(v) - 5).toFixed(1)}" font-size="11" ` +
+        `font-weight="700" text-anchor="middle" fill="var(--red)">+${w[oKey]}</text>`;
+    }
+  });
+  // the supply threshold, labelled at the right so it never sits on top of the bars
+  g += `<line x1="${PL}" x2="${W - PR}" y1="${y(supply)}" y2="${y(supply)}" ` +
+    'stroke="var(--fg1)" stroke-width="2" stroke-dasharray="4 3"></line>' +
+    `<text x="${W - PR}" y="${(y(supply) - 6).toFixed(1)}" font-size="11" text-anchor="end" ` +
+    `font-weight="700" fill="var(--fg1)">eligible supply ${supply}</text>`;
+
+  const over = weeks.filter(w => w[oKey] > 0);
+  const full = weeks.filter(w => w[oKey] === 0 && (w[fKey] || []).length === 0);
 
   return '<div class="card"><div class="t">' + esc(title) + '</div>' +
-    `<div class="s">${pool.length} can do it: ${pool.map(esc).join(', ')}</div>` +
-    `<svg viewBox="0 0 ${W} ${H}" width="100%">` + bars +
-    `<line x1="0" x2="${W}" y1="${sy}" y2="${sy}" stroke="var(--fg1)" stroke-width="2" ` +
-    'stroke-dasharray="4 3"></line>' +
-    `<text x="4" y="${Math.max(10, sy - 4)}" font-size="10" fill="var(--fg2)">` +
-    `${supply} eligible</text></svg>` +
-    `<div class="sub">${over.length ? `<b>${wk(over.length)} short-handed</b> — more projects ` +
-      'need this role than there are people who can do it. No arrangement fixes that; only ' +
-      'hiring or a later deadline.' : 'Never short-handed in this horizon.'}` +
-    (full.length ? ` ${wk(full.length)} with everyone busy — a re-plan may still help there.` : '') +
-    '</div></div>';
+    `<div class="s">Can do it: ${pool.map(esc).join(', ')}` +
+    (reserve ? ` \u00b7 plus ${reserve} in reserve` : '') + '</div>' +
+    `<svg viewBox="0 0 ${W} ${H}" width="100%">${g}</svg>` +
+    `<div class="sub">${over.length
+      ? `<b>${wk(over.length)} short-handed</b> \u2014 more projects need this role than there ` +
+        'are people who can do it. No arrangement fixes that; only hiring or a later deadline.'
+      : 'Never short-handed in this horizon.'}` +
+    (full.length ? ` ${wk(full.length)} with everyone busy \u2014 a re-plan may still help there.`
+                 : '') + '</div></div>';
+}
+
+// The question a producer actually asks: can we start something next week, and who on.
+function freeCard(a) {
+  const rows = a.weeks.slice(0, 10).map(w => {
+    const rec = w.recedit_free_names || [], mix = w.adv_mix_free_names || [];
+    const cell = list => list.length
+      ? esc(list.join(', ')) : '<b style="color:var(--red)">nobody free</b>';
+    return `<tr><td>${esc(w.label)}</td><td>${cell(rec)}</td><td>${cell(mix)}</td></tr>`;
+  }).join('');
+  return '<div class="card"><div class="t">Who is free, week by week</div>' +
+    '<div class="s">Next 10 weeks</div>' +
+    '<table class="projects"><thead><tr><th>Week</th><th>Free for dub or edit</th>' +
+    `<th>Free for Advanced mix</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function clientCard(a) {
+  const by = (a.pipeline && a.pipeline.by_client) || [];
+  return '<div class="card"><div class="t">Where the work comes from</div>' +
+    '<table class="projects"><thead><tr><th>Client</th><th class="n">Weeks</th>' +
+    '<th class="n">Projects</th></tr></thead><tbody>' +
+    by.map(c => `<tr><td>${esc(c.client)}</td><td class="n">${c.weeks}</td>` +
+      `<td class="n">${c.projects}</td></tr>`).join('') + '</tbody></table></div>';
+}
+
+// Booked weeks per engineer per quarter. A year of per-week bars for eight people is
+// unreadable; per quarter it is a shape you can take in at once.
+function heatmapCard(a) {
+  const qs = a.quarters;
+  const names = Object.keys(a.per_engineer)
+    .sort((x, y) => a.per_engineer[y] - a.per_engineer[x]);
+  let peak = 1;
+  qs.forEach(q => names.forEach(n => {
+    const v = (a.by_quarter[q] || {})[n] || 0;
+    if (v > peak) peak = v;
+  }));
+  const shade = v => v === 0 ? 'var(--bg2)'
+    : `var(--r${Math.min(5, Math.max(0, Math.round((v / peak) * 5)))})`;
+
+  return '<div class="card"><div class="t">Weeks booked per engineer, per quarter</div>' +
+    `<div class="s">Darker = busier \u00b7 spread ${a.score.regular_spread}, ` +
+    `peak ${a.score.regular_peak}</div>` +
+    '<table class="hm"><thead><tr><th></th>' +
+    qs.map(q => `<th>${esc(q.replace('20', "'"))}</th>`).join('') +
+    '<th class="n">Total</th></tr></thead><tbody>' +
+    names.map(n => {
+      const load = a.score.loads.find(l => l.engineer === n) || {};
+      return `<tr><th>${esc(n)}</th>` +
+        qs.map(q => {
+          const v = (a.by_quarter[q] || {})[n] || 0;
+          return `<td class="cell" style="background:${shade(v)}` +
+            `${v / peak > 0.6 ? ';color:#fff' : ''}">${v || ''}</td>`;
+        }).join('') +
+        `<td class="n"><b>${a.per_engineer[n]}</b>` +
+        (load.double_booked ? ` <span class="chip warn">${load.double_booked} doubled</span>` : '') +
+        '</td></tr>';
+    }).join('') + '</tbody></table></div>';
 }
 
 // ---------------------------------------------------------------- re-plan

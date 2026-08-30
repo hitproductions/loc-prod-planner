@@ -198,15 +198,18 @@ function schedule(book, opts) {
 
 function analysis(book, opts) {
   const rows = live(book);
-  const cap = A.computeCapacity(rows, book.engineers);
   const from = (opts && opts.from) || todayLocal();
+  // Projects are passed so the pipeline can name the client. Without them every
+  // project lands under "(unknown)", which is what the first version of this did.
+  const cap = A.computeCapacity(rows, book.engineers, book.projects, from);
+  const st = A.stats(rows, book.engineers, from);
 
-  // Everything here starts at THIS WEEK. Past weeks cannot be acted on — you cannot
-  // hire retroactively — and including them makes the series grow without limit as
-  // history accumulates.
+  // Everything starts at THIS WEEK. Past weeks cannot be acted on — you cannot hire
+  // retroactively — and including them makes the series grow without limit as history
+  // accumulates.
   const weeks = cap.weeks.filter(w => w.week_start >= from);
+  const ahead = weeks.length ? weeks : cap.weeks;
 
-  // Overlaps carry their depth so the page can lead with the ones that need a decision.
   const overlaps = A.actualOverlaps_(rows);
   const weeksOf = list => {
     const seen = {};
@@ -216,16 +219,32 @@ function analysis(book, opts) {
   const deep = overlaps.filter(o => (o.depth || 2) > 2);
   const pair = overlaps.filter(o => (o.depth || 2) <= 2);
 
+  // One row per overloaded engineer-week, naming what actually collides. A list of
+  // booking rows says "4" where a person sees one problem.
+  const byWeek = {};
+  overlaps.forEach(o => {
+    const k = o.engineer + '|' + o.start;
+    (byWeek[k] = byWeek[k] || { engineer: o.engineer, start: o.start, work: [] })
+      .work.push(`${o.project} (${o.phase})`);
+  });
+  const collisions = Object.values(byWeek)
+    .map(c => ({ ...c, depth: c.work.length }))
+    .sort((a, b) => a.start.localeCompare(b.start) || a.engineer.localeCompare(b.engineer));
+
   return {
     today: from,
     horizon: cap.horizon,
     pools: cap.pools,
-    weeks: weeks.length ? weeks : cap.weeks,
+    weeks: ahead,
     score: A.scorePlan(rows, book.engineers),
+    by_quarter: st.by_quarter,
+    quarters: [...new Set(cap.weeks.map(w => w.quarter))].sort(),
     per_engineer: cap.weeks_per_engineer,
+    pipeline: cap.pipeline,
     overlaps: {
       deep, pair,
       deep_weeks: weeksOf(deep), pair_weeks: weeksOf(pair),
+      collisions,
       by_engineer: cap.bottleneck.forced_by_engineer,
     },
   };

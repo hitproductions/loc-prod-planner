@@ -5,6 +5,9 @@
   --fg1:var(--black); --fg2:var(--gray); --fg3:#8A8C8D;
   --bg1:var(--white); --bg2:#F5F5F4; --surface:#FCFCFB; --line:var(--cool);
   --dub:#FFC000; --edit:#BDD7EE; --mix:#EA9999; --warn:#2E75B6;
+  /* Sequential ramp for the heatmap: one hue, lightness stepping down evenly, so
+     "darker = busier" is readable without telling two colours apart. */
+  --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
   --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
 }
 *{box-sizing:border-box; border-radius:0 !important}
@@ -209,6 +212,23 @@ table.sched:not(.byeng) .bk{padding:1px 4px; justify-content:center}
 table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:9px}
 
 /* ---- analysis -------------------------------------------------------- */
+.head{display:flex; align-items:baseline; gap:10px; margin:26px 0 10px}
+.head .bar{width:18px; height:3px; background:var(--red); flex:none}
+.head h2{font-size:14px; text-transform:uppercase; letter-spacing:0.08em; margin:0}
+.banner{border-left:3px solid var(--red); background:var(--bg2); padding:10px 14px;
+  font-size:12px; color:var(--fg2); margin-top:16px}
+/* One hue, lightness stepping down monotonically, so "darker = busier" is true at a
+   glance and does not depend on telling two colours apart. */
+table.hm{border-collapse:collapse; width:auto; font-size:12px}
+table.hm th{font-size:10px; text-transform:uppercase; letter-spacing:0.06em;
+  color:var(--fg2); padding:4px 8px; text-align:left; border:none; white-space:nowrap}
+table.hm td{border:1px solid var(--bg1); padding:0}
+table.hm td.cell{width:56px; height:30px; text-align:center;
+  font-variant-numeric:tabular-nums}
+table.hm td.n{padding:0 10px; text-align:right; font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+table.projects th.n, table.projects td.n{text-align:right;
+  font-variant-numeric:tabular-nums}
 .card{border:1px solid var(--line); background:var(--surface); padding:14px; margin-bottom:14px}
 .card .t{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em}
 .card .s{font-size:11px; color:var(--fg2); margin-bottom:10px}
