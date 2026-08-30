@@ -56,12 +56,31 @@ function createStore(sourceName, opts) {
     },
     // Writes go to the source first and only then invalidate, so a failed write can
     // never leave the app showing a change the spreadsheet does not have.
-    async write(change) {
+    //
+    // The event is recorded AFTER the write succeeds and never blocks it: a log that
+    // could fail a real change would be worse than no log. If the log write throws, the
+    // schedule is still correct and one entry is missing, which is the right way round.
+    async write(change, meta) {
       const result = await source.write(change);
       book = null;
       version++;
+      if (meta && source.appendEvent) {
+        try {
+          await source.appendEvent({
+            at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+              .toISOString().slice(0, 19).replace('T', ' '),
+            action: meta.action || 'change',
+            summary: meta.summary || '',
+            superseded: (change.supersede || []).join(','),
+            appended: (result.appended_rows || []).join(','),
+          });
+        } catch (e) {
+          console.error('change applied, log entry failed: ' + (e && e.message));
+        }
+      }
       return result;
     },
+    async events() { return source.readEvents ? source.readEvents() : []; },
     version() { return version; },
     stats() {
       return { source: sourceName, version, loaded_at: loadedAt || null,

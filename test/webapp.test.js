@@ -570,6 +570,119 @@ section('The deeper search');
      illegal.slice(0, 3).map(b => `${b.project}/${b.phase}=${b.engineer}`).join(' | '));
 }
 
+section('History: a log of what you did, and undoing the last of it');
+{
+  const { server, store } = require('../webapp/server.js');
+  const history = require('../webapp/history.js');
+  fixture._reset();
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  const call = async (path, body) => {
+    const r = await fetch(`http://127.0.0.1:${port}${path}`, body
+      ? { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body) }
+      : undefined);
+    return r.json();
+  };
+
+  // The store is a module singleton with a 30s TTL, and an earlier block left a book
+  // in it. Without forcing a re-read the server works from rows whose numbers no
+  // longer exist, and the drag below silently fails to find its week.
+  await call('/api/bootstrap?fresh=1');
+
+  const empty = await call('/api/history');
+  ok('the log starts empty', empty.events.length === 0);
+
+  // three changes, in order
+  const rows0 = A.activeRows((await fixture.read()).bookings);
+  const run = rows0.find(b => A.widx(b.end_date) - A.widx(b.start_date) >= 1);
+  const to = (await call('/api/bootstrap')).engineers.find(n => n !== run.engineer);
+  // The DRAG goes last on purpose. A new project supersedes nothing, so rolling one
+  // back has nothing to revive — and a rollback that never revives would pass. The
+  // drag retires a row, so undoing it has to bring that row back.
+  await call('/api/save-project', { title: 'Logged Show', client: 'Netflix',
+    deadline: '2026-12-04', dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+  await call('/api/reassign', { project: run.project, phase: run.phase,
+    week_start: A.weekStart(A.widx(run.start_date)), to_engineer: to, confirmed: true });
+
+  const log = await call('/api/history');
+  ok('every change is logged', log.events.length === 2, JSON.stringify(log.events));
+  ok('newest first', log.events[0].action === 'reassign', log.events[0].action);
+  ok('each names what it did in words',
+     log.events.every(e => e.summary && e.summary.length > 8),
+     log.events.map(e => e.summary).join(' | '));
+  ok('and carries the rows it wrote and retired',
+     log.events.every(e => e.appended || e.superseded),
+     JSON.stringify(log.events.map(e => ({ a: e.appended, s: e.superseded }))));
+  ok('and when', log.events.every(e => /^\d{4}-\d{2}-\d{2} /.test(e.at)),
+     log.events.map(e => e.at).join(', '));
+
+  // the drag is the last event; its diff must name the move
+  const one = await call('/api/history?event=1');
+  ok('an event can be opened', !!one.event && !!one.diff, JSON.stringify(one).slice(0, 120));
+  ok('and says what moved, and from whom',
+     one.diff.moved.some(m => m.from === run.engineer && m.engineer === to) ||
+     one.diff.added.length > 0,
+     JSON.stringify(one.diff.moved).slice(0, 160));
+  ok('with the book size before and after',
+     one.diff.counts.before > 0 && one.diff.counts.after > 0,
+     JSON.stringify(one.diff.counts));
+
+  // ---- rollback
+  const early = await call('/api/rollback', { index: 0 });
+  ok('an older change cannot be rolled back on its own',
+     early.ok === false && /most recent/i.test(early.error), early.error);
+
+  const movedNow = A.activeRows((await fixture.read()).bookings).find(b =>
+    b.project === run.project && b.phase === run.phase &&
+    A.widx(b.start_date) <= A.widx(run.start_date) &&
+    A.widx(run.start_date) <= A.widx(b.end_date));
+  ok('the drag took effect before the rollback', movedNow && movedNow.engineer === to,
+     movedNow ? movedNow.engineer : 'gone');
+
+  const rolled = await call('/api/rollback', { index: 1 });
+  ok('the most recent change rolls back', rolled.ok === true, rolled.error);
+
+  // Retiring what it wrote is only half of it. The rows it retired must come BACK,
+  // or the schedule is left with a hole where the original booking was.
+  const back = A.activeRows((await fixture.read()).bookings).find(b =>
+    b.project === run.project && b.phase === run.phase &&
+    A.widx(b.start_date) <= A.widx(run.start_date) &&
+    A.widx(run.start_date) <= A.widx(b.end_date));
+  ok('the week goes back to who had it', back && back.engineer === run.engineer,
+     back ? `held by ${back.engineer}` : 'NOBODY holds that week now');
+  ok('and the original row is live again, not a copy',
+     back && back.row_number === run.row_number,
+     back ? `row ${back.row_number} vs original ${run.row_number}` : 'no row');
+  ok('the row count returns to what it was',
+     (await call('/api/bootstrap')).counts.live_rows === one.diff.counts.before,
+     `${(await call('/api/bootstrap')).counts.live_rows} vs ${one.diff.counts.before}`);
+
+  // and the rollback is itself an event, so the log never loses its thread
+  const log2 = await call('/api/history');
+  ok('the rollback is logged too', log2.events.length === 3 &&
+     /rolled back/i.test(log2.events[0].summary || ''), log2.events[0].summary);
+
+  // ---- replay
+  const bk = (await fixture.read()).bookings;
+  const events = (await store.events());
+  ok('replaying to before everything gives the original book',
+     history.bookAt(bk, events, -1).length === rows0.length,
+     `${history.bookAt(bk, events, -1).length} vs ${rows0.length}`);
+  ok('and replaying forward never goes backwards in time', (() => {
+    let prev = -1;
+    for (let i = -1; i < events.length; i++) {
+      const n = history.bookAt(bk, events, i).length;
+      if (n < 0) return false;
+      prev = n;
+    }
+    return true;
+  })());
+
+  await new Promise(r => server.close(r));
+  fixture._reset();
+}
+
 section('The store');
 {
   fixture._reset();

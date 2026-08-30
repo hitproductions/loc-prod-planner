@@ -71,8 +71,20 @@ without HTTP or Google (`test/webapp.test.js`).
     POST /api/save-project  add or edit; `dry_run` for availability only
     POST /api/replan        preview a re-solve; returns a token, never the plan
     POST /api/replan-apply  apply the previewed plan, by token
+    POST /api/rollback      undo the most recent change
+    GET  /api/history       the log; ?event=N for what one change did
 
 Nothing is deleted. A row that stops being true is superseded and stays as history.
+
+Every change writes an entry to a `History` tab — when, what, and the row numbers it
+wrote and retired. The superseded rows alone say WHAT changed but not when, and 44
+rows retired by one re-plan are indistinguishable from 44 unrelated edits; the event
+ties them together. The tab is created on first write, so a sheet that predates this
+keeps working and simply has an empty log.
+
+Rollback undoes the MOST RECENT entry only: it retires what that change wrote and
+revives what it retired. Undoing an earlier one would bring back rows that later
+changes have moved past, producing a schedule that never existed.
 
 A write returns fresh `boot` and `schedule` in the SAME response. Re-asking after a
 write is what made the old app feel slow, and a separate re-read is also how it kept

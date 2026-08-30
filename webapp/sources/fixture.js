@@ -18,6 +18,7 @@ function build() {
 }
 
 let held = null;
+let events = [];
 
 module.exports = {
   async read() {
@@ -31,8 +32,16 @@ module.exports = {
       const gone = new Set(change.supersede);
       held.bookings.forEach(b => { if (gone.has(b.row_number)) b.status = 'superseded'; });
     }
+    // Rolling back puts rows BACK, which is the only thing that ever clears a status.
+    if (change.revive && change.revive.length) {
+      const back = new Set(change.revive);
+      held.bookings.forEach(b => { if (back.has(b.row_number)) b.status = ''; });
+    }
+    const appended = [];
     (change.append || []).forEach(r => {
-      held.bookings.push({ ...r, status: '', row_number: held.bookings.length + 2 });
+      const row_number = held.bookings.length + 2;
+      held.bookings.push({ ...r, status: '', row_number });
+      appended.push(row_number);
     });
     // The project row, not just its bookings. Without this a saved project has a
     // schedule and no entry in the list — the orphan state.
@@ -42,9 +51,13 @@ module.exports = {
       if (i >= 0) held.projects[i] = { ...held.projects[i], ...change.project };
       else held.projects.push({ ...change.project });
     }
-    return { superseded: (change.supersede || []).length, appended: (change.append || []).length,
+    return { superseded: (change.supersede || []).length, appended: appended.length,
+             appended_rows: appended,
              project: change.project ? change.project.project_title : null };
   },
+  async readEvents() { return events.slice(); },
+  async appendEvent(e) { events.push({ ...e, id: events.length + 1 }); return e; },
+
   // tests reset between cases
-  _reset() { held = null; },
+  _reset() { held = null; events = []; },
 };

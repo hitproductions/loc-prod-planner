@@ -11,7 +11,9 @@
 // the Apps Script version's date handling depend on a cell's number format.
 const { createAuth } = require('./google-auth.js');
 
-const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers' };
+const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers',
+               events: 'History' };
+const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
 const HEADER_ROW = { Projects: 2, Bookings: 1, Engineers: 1 };
 
@@ -165,8 +167,12 @@ function createSheetsSource(opts) {
       for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) out = String.fromCharCode(65 + (n - 1) % 26) + out;
       return out;
     };
+    // Retiring and reviving are the same write with a different value, so they go in
+    // one batch — a rollback that retired its new rows but failed to revive the old
+    // ones would leave the schedule with a hole in it.
     const supersede = change.supersede || [];
-    if (supersede.length) {
+    const revive = change.revive || [];
+    if (supersede.length || revive.length) {
       await auth.api(`spreadsheets/${id}/values:batchUpdate`, {
         method: 'POST',
         body: JSON.stringify({
@@ -174,11 +180,15 @@ function createSheetsSource(opts) {
           data: supersede.map(rowNumber => ({
             range: `${TABS.bookings}!${colLetter(statusCol)}${rowNumber}`,
             values: [['superseded']],
-          })),
+          })).concat(revive.map(rowNumber => ({
+            range: `${TABS.bookings}!${colLetter(statusCol)}${rowNumber}`,
+            values: [['']],
+          }))),
         }),
       });
     }
 
+    const appendedRows = [];
     const append = change.append || [];
     if (append.length) {
       // Built against the header, so a tab with columns in a different order still
@@ -192,11 +202,18 @@ function createSheetsSource(opts) {
         order.forEach((h, i) => { if (h in src) out[i] = src[h]; });
         return out;
       });
-      await auth.api(`spreadsheets/${id}/values/${encodeURIComponent(TABS.bookings + '!A:A')}` +
+      const res = await auth.api(`spreadsheets/${id}/values/${encodeURIComponent(TABS.bookings + '!A:A')}` +
         ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', {
         method: 'POST',
         body: JSON.stringify({ values: rows }),
       });
+      // Google reports where it put them; the log needs those row numbers to be able
+      // to undo the write later.
+      const m = /![A-Z]+(\d+):/.exec((res.updates && res.updates.updatedRange) || '');
+      if (m) {
+        const first = Number(m[1]);
+        for (let i = 0; i < rows.length; i++) appendedRows.push(first + i);
+      }
     }
 
     // The Projects row, not just the bookings. A project whose bookings exist but whose
@@ -241,10 +258,56 @@ function createSheetsSource(opts) {
     bookingsMeta = null;   // row numbers have moved
     projectsMeta = null;
     return { superseded: supersede.length, appended: append.length,
+             appended_rows: appendedRows,
              project: change.project ? change.project.project_title : null };
   }
 
-  return { read, write, email: auth.email };
+  // The log lives in its own tab, created the first time something is written. Not
+  // part of setup: a sheet that predates this must keep working, and an empty log is
+  // the correct state for one.
+  let eventsTabReady = false;
+  async function ensureEventsTab() {
+    if (eventsTabReady) return;
+    const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties.title`);
+    const has = (meta.sheets || []).some(x => x.properties.title === TABS.events);
+    if (!has) {
+      await auth.api(`spreadsheets/${id}:batchUpdate`, {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: TABS.events } } }] }),
+      });
+      await auth.api(`spreadsheets/${id}/values/` +
+        encodeURIComponent(`${TABS.events}!A1`) + '?valueInputOption=RAW', {
+        method: 'PUT', body: JSON.stringify({ values: [EVENT_HEADERS] }),
+      });
+    }
+    eventsTabReady = true;
+  }
+
+  async function readEvents() {
+    const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties.title`);
+    if (!(meta.sheets || []).some(x => x.properties.title === TABS.events)) return [];
+    const res = await auth.api(`spreadsheets/${id}/values/` +
+      encodeURIComponent(`${TABS.events}!A:E`));
+    const vals = res.values || [];
+    const head = (vals[0] || []).map(norm);
+    return vals.slice(1).filter(r => r.length).map((r, i) => {
+      const o = { id: i + 1 };
+      EVENT_HEADERS.forEach(h => { o[h] = String(r[head.indexOf(h)] || ''); });
+      return o;
+    });
+  }
+
+  async function appendEvent(e) {
+    await ensureEventsTab();
+    await auth.api(`spreadsheets/${id}/values/` + encodeURIComponent(`${TABS.events}!A:A`) +
+      ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', {
+      method: 'POST',
+      body: JSON.stringify({ values: [EVENT_HEADERS.map(h => e[h] == null ? '' : String(e[h]))] }),
+    });
+    return e;
+  }
+
+  return { read, write, readEvents, appendEvent, email: auth.email };
 }
 
 module.exports = { createSheetsSource, isoFrom, mapper };

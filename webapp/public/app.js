@@ -250,6 +250,92 @@ function wireProjects() {
     tr.addEventListener('click', () => openForm(tr.dataset.title)));
 }
 
+// ---------------------------------------------------------------- history
+// Nothing is ever deleted — a row that stops being true is marked superseded and stays
+// — but the rows alone say WHAT changed, not when or as part of what. The log ties
+// them into events: one entry per thing you did.
+async function loadHistory(index) {
+  $('view').innerHTML = '<div class="loading">Reading the log\u2026</div>';
+  HISTORY = await get('/api/history');
+  OPENED = null;
+  if (index != null) OPENED = await get('/api/history?event=' + index);
+  paint();
+}
+
+function renderHistory() {
+  if (!HISTORY) return '<div class="loading">Reading the log\u2026</div>';
+  const evs = HISTORY.events || [];
+  if (!evs.length) {
+    return '<div class="card"><div class="t">History</div><div class="s">Nothing yet.</div>' +
+      '<div class="hint">The log starts from the first change made through this app. ' +
+      'Rows superseded before it existed are still in the Bookings tab \u2014 nothing has ' +
+      'been lost \u2014 but they carry no date, so they cannot be placed on a timeline.</div></div>';
+  }
+
+  let h = '<div class="card"><div class="t">What has changed</div>' +
+    `<div class="s">${evs.length} entr${evs.length === 1 ? 'y' : 'ies'} \u00b7 newest first ` +
+    '\u00b7 click one to see what it did</div>' +
+    '<table class="projects"><thead><tr><th>When</th><th>What</th><th></th>' +
+    '</tr></thead><tbody>' +
+    evs.map(e => `<tr data-ev="${e.index}"${OPENED && OPENED.event &&
+        OPENED.event.index === e.index ? ' class="on"' : ''}>` +
+      `<td class="mono">${esc(e.at)}</td><td>${esc(e.summary || e.action)}</td>` +
+      `<td>${e.index === HISTORY.latest
+        ? '<span class="chip">most recent</span>' : ''}</td></tr>`).join('') +
+    '</tbody></table></div>';
+
+  if (OPENED && OPENED.diff) {
+    const d = OPENED.diff;
+    h += '<div class="card"><div class="t">' + esc(OPENED.event.summary || OPENED.event.action) +
+      `</div><div class="s">${esc(OPENED.event.at)} \u00b7 ` +
+      `${d.counts.before} bookings \u2192 ${d.counts.after} \u00b7 ` +
+      `overlapped weeks ${d.overlaps.before} \u2192 ${d.overlaps.after}</div>`;
+
+    const rows = [];
+    d.moved.forEach(m => rows.push([m.project, m.phase, m.start_date,
+      `${m.from} \u2192 <b>${esc(m.engineer)}</b>`]));
+    d.added.forEach(a => rows.push([a.project, a.phase, a.start_date,
+      `<span class="chip">added</span> ${esc(a.engineer)}`]));
+    d.removed.forEach(r => rows.push([r.project, r.phase, r.start_date,
+      `<span class="chip">removed</span> ${esc(r.engineer)}`]));
+
+    h += rows.length
+      ? '<table class="projects"><thead><tr><th>Project</th><th>Phase</th><th>Week of</th>' +
+        '<th>Change</th></tr></thead><tbody>' +
+        rows.map(r => `<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td>` +
+          `<td>${esc(r[2])}</td><td>${r[3]}</td></tr>`).join('') + '</tbody></table>'
+      : '<div class="hint">No booking changed \u2014 this touched the project row only.</div>';
+
+    // Only the latest, and the button says why rather than being mysteriously absent.
+    h += OPENED.event.index === HISTORY.latest
+      ? '<div class="formactions"><button class="btn danger" id="hRoll">Roll this back</button>' +
+        '<span class="hint" style="margin:0">Puts the rows back the way they were. ' +
+        'Reversible \u2014 it is logged as a change of its own.</span></div>'
+      : '<div class="hint" style="margin-top:14px">Only the most recent change can be ' +
+        'rolled back. Undoing an earlier one would revive rows that later changes have ' +
+        'moved past, giving you a schedule that never existed.</div>';
+    h += '</div>';
+  }
+  return h;
+}
+
+function wireHistory() {
+  document.querySelectorAll('[data-ev]').forEach(tr =>
+    tr.addEventListener('click', () => loadHistory(tr.dataset.ev)));
+  const b = $('hRoll');
+  if (b) b.addEventListener('click', async () => {
+    if (!confirm('Roll this back?\n\n' + (OPENED.event.summary || OPENED.event.action) +
+                 '\n\nThe rows it wrote are retired and the ones it replaced come back. ' +
+                 'Nothing is deleted.')) return;
+    b.disabled = true;
+    const r = await post('/api/rollback', { index: OPENED.event.index });
+    if (!r.ok) { alert(r.error); b.disabled = false; return; }
+    absorb(r);
+    HISTORY = null; OPENED = null;
+    loadHistory();
+  });
+}
+
 // ---------------------------------------------------------------- analysis
 // Ordered by the decision each figure answers, not by what is easy to compute.
 // Overlaps first because they are the only thing here with an action attached; then
@@ -671,8 +757,8 @@ async function submitForm(p, dryRun) {
 }
 
 const VIEWS = { schedule: renderSchedule, projects: renderProjects,
-                analysis: renderAnalysis, replan: renderReplan };
-let ANALYSIS = null;
+                analysis: renderAnalysis, replan: renderReplan, history: renderHistory };
+let ANALYSIS = null, HISTORY = null, OPENED = null;
 
 function paint() {
   $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
@@ -683,6 +769,7 @@ function paint() {
       () => { ANALYSIS = null; loadAnalysis(); });
     return;
   }
+  if (VIEW === 'history') { if (!HISTORY) loadHistory(); else wireHistory(); return; }
   if (VIEW === 'replan') { wireReplan(); return; }
   if (VIEW === 'schedule') {
     wireScheduleBar();

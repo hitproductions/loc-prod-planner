@@ -10,6 +10,7 @@ const { register, createStore } = require('./store.js');
 const api = require('./api.js');
 const actions = require('./actions.js');
 const { solveReplan, DEFAULT_RESTARTS } = require('./solver.js');
+const history = require('./history.js');
 
 register('fixture', require('./sources/fixture.js'));
 
@@ -48,6 +49,19 @@ function send(res, code, body, type) {
 
 // Read models are pure functions of the book, so a route is: get the book, call one.
 const ROUTES = {
+  '/api/history':   async (b, q) => {
+    const events = await store.events();
+    const at = q.get('event');
+    if (at === null || at === '') {
+      return { events: events.map((e, i) => ({ ...e, index: i })).reverse(),
+               latest: events.length - 1 };
+    }
+    const i = Number(at);
+    if (!Number.isInteger(i) || i < 0 || i >= events.length) return { error: 'No such event.' };
+    return { event: { ...events[i], index: i },
+             latest: events.length - 1,
+             diff: history.diffEvent(b.bookings, events, i) };
+  },
   '/api/bootstrap': b => api.bootstrap(b),
   '/api/schedule':  (b, q) => api.schedule(b, { mode: q.get('mode'), from: q.get('from'), to: q.get('to') }),
   '/api/analysis':  (b, q) => api.analysis(b, { from: q.get('from') }),
@@ -64,7 +78,50 @@ const ACTIONS = {
   '/api/save-project':  (b, p) => actions.saveProject(b, p),
   '/api/replan':        (b, p) => previewReplan(b, p),      // async
   '/api/replan-apply':  (b, p) => applyReplan(b, p),
+  '/api/rollback':      (b, p) => rollback(b, p),
 };
+
+// Undo one event by putting its rows back the way they were: retire what it wrote,
+// revive what it retired.
+//
+// The MOST RECENT event only. Rolling back an earlier one would revive rows that later
+// changes have since moved on from, producing a book that never existed — and no
+// warning could make that safe. Roll back in order or not at all.
+async function rollback(book, p) {
+  const events = await store.events();
+  if (!events.length) return { ok: false, error: 'Nothing in the log yet.' };
+  const i = Number(p.index);
+  if (i !== events.length - 1) {
+    return { ok: false, error: 'Only the most recent change can be rolled back. ' +
+      'Undoing an earlier one would revive rows that later changes have moved past.' };
+  }
+  const e = events[i];
+  const undoAppended = history.nums(e.appended);
+  const revive = history.nums(e.superseded);
+  if (!undoAppended.length && !revive.length) {
+    return { ok: false, error: 'That change wrote nothing to undo.' };
+  }
+  return { ok: true, rolled_back: true, index: i,
+           summary: `Rolled back: ${e.summary || e.action}`,
+           change: { supersede: undoAppended, revive } };
+}
+
+// One line naming what happened, written into the log. Composed here rather than in
+// the client so the record says what the server actually did, not what a screen said.
+function describe(path, r) {
+  if (path === '/api/reassign') {
+    return `${r.project} · ${r.phase}, week of ${r.week_start}: ${r.from} → ${r.to}`;
+  }
+  if (path === '/api/undo') {
+    return `${r.project} · ${r.phase}, week of ${r.week_start}: back to ${r.to}, automatic again`;
+  }
+  if (path === '/api/save-project') return `Saved ${r.title}`;
+  if (path === '/api/replan-apply') {
+    return `Re-plan applied: ${r.appended} row(s) added, ${r.superseded} superseded`;
+  }
+  if (path === '/api/rollback') return r.summary || 'Rolled back';
+  return 'Change';
+}
 
 // A re-plan is agreed to in two steps, and the book can move between them — someone
 // else drags a week, or a project is saved. The preview is held server-side with the
@@ -131,7 +188,9 @@ const server = http.createServer(async (req, res) => {
     const route = ROUTES[url.pathname];
     if (route) {
       const book = await store.get(url.searchParams.get('fresh') === '1');
-      const payload = route(book, url.searchParams);
+      // await, because a read route may be async too — /api/history reads the log.
+      // Without this the handler's Promise was JSON.stringify'd, which is "{}".
+      const payload = await route(book, url.searchParams);
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
       return send(res, 200, JSON.stringify(payload));
@@ -146,7 +205,8 @@ const server = http.createServer(async (req, res) => {
       // A change is written to the source before anything is reported as done, so a
       // failed write can never leave the app showing a state the sheet does not have.
       if (result.ok && result.change) {
-        await store.write(result.change);
+        await store.write(result.change, { action: url.pathname.replace('/api/', ''),
+                                           summary: describe(url.pathname, result) });
         const next = await store.get(true);
         result.boot = api.bootstrap(next);
         result.schedule = api.schedule(next, { mode: body.mode, from: body.from, to: body.to });
