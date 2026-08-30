@@ -47,6 +47,25 @@ function numLabel(w) {
 
 const PHASE_BG = { Dub:'var(--dub)', Edit:'var(--edit)', Mix:'var(--mix)' };
 
+// A cell holding two bookings is one square on screen but two different things. It
+// used to be filled solid blue with both names crammed into it and truncated, so the
+// colour told you THAT something was doubled and hid WHAT — which is the part you need
+// in order to fix it. Now each booking is its own band in its own phase colour, and
+// the outline carries the depth. It also makes the drag honest: you grab the band you
+// meant rather than a blob that happened to pick one.
+//
+// `label` differs by orientation: the Engineers grid shows project names, the Projects
+// grid shows engineer names.
+function cellBands(c, label, dragAttrs) {
+  return '<div class="stack">' + c.items.map((it, i) => {
+    const text = label(it, i);
+    return `<span class="bk" style="background:${PHASE_BG[it.ph] || 'transparent'}"` +
+      (dragAttrs ? dragAttrs(it) : '') +
+      (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"' : '') +
+      `>${esc(text)}</span>`;
+  }).join('') + '</div>';
+}
+
 function scheduleBar() {
   const d = SCHED;
   const qs = d.quarters || [];
@@ -95,30 +114,19 @@ function renderEngineerGrid() {
     h += `<tr${cls ? ` class="${cls}"` : ''}><th>${numLabel(w)}</th>`;
     d.labels.forEach((n, ri) => {
       const c = d.cells[ri][ci];
-      let cls = '', style = '', text = '';
-      if (c) {
-        const deep = c.depth || c.count || 1;
-        text = c.text;
-        if (c.count > 1) cls = deep > 2 ? 'dbl3' : 'dbl2';
-        else style = ` style="background:${PHASE_BG[c.phase] || 'transparent'}"`;
-        if (deep > 1) cls += (cls ? ' ' : '') + (deep > 2 ? 'over3' : 'over2');
-        if (c.items.some(i => i.hand)) cls += (cls ? ' ' : '') + 'pinned';
-      }
-      // Each booking in the cell is separately draggable: a cell holding two is one
-      // square on screen but two different things you might mean, and dragging "the
-      // cell" would silently pick one of them.
+      const cls = [];
       let body = '';
       if (c) {
-        body = c.items.map(it => {
-          const label = c.items.length > 1 ? it.p : text;
-          return `<span class="bk" draggable="true" data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
-                 ` data-from="${esc(n)}" data-wk="${w.start}"` +
-                 (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"' : '') +
-                 `>${esc(label)}</span>`;
-        }).join('<span class="bksep"> / </span>');
+        const deep = c.depth || c.count || 1;
+        cls.push('cell');
+        if (deep > 1) cls.push(deep > 2 ? 'over3' : 'over2');
+        if (c.items.some(i => i.hand)) cls.push('pinned');
+        body = cellBands(c, it => it.p, it =>
+          ` draggable="true" data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
+          ` data-from="${esc(n)}" data-wk="${w.start}"`);
       }
-      h += `<td class="${cls}"${style} data-c="${ri}" data-eng="${esc(n)}"` +
-           ` data-wk="${w.start}" title="${esc(text)}">${body}</td>`;
+      h += `<td class="${cls.join(' ')}" data-c="${ri}" data-eng="${esc(n)}"` +
+           ` data-wk="${w.start}" title="${esc(c ? c.text : '')}">${body}</td>`;
     });
     h += '</tr>';
   });
@@ -153,21 +161,21 @@ function renderProjectGrid() {
     d.weeks.forEach((w, ci) => {
       const c = d.cells[ri][ci];
       const cls = [];
-      let style = '', text = '';
+      let body = '', text = '';
       if (c) {
         const deep = c.depth || c.count || 1;
         text = c.text;
         cls.push('cell');
-        if (c.count > 1) cls.push(deep > 2 ? 'dbl3' : 'dbl2');
-        else style = ` style="background:${PHASE_BG[c.phase] || 'transparent'}"`;
         if (deep > 1) cls.push(deep > 2 ? 'over3' : 'over2');
         if (c.items.some(i => i.hand)) cls.push('pinned');
+        // Not draggable here: a Projects row has no engineer column to drop into.
+        body = cellBands(c, (it, i) => c.text.split(' / ')[i] || it.ph, null);
       } else if (mark[ri + '|' + ci]) {
-        cls.push('marker'); text = '\u25B2';
+        cls.push('marker'); body = '\u25B2';
       }
-      h += `<td data-c="${ci}" class="${cls.join(' ')}"${style}` +
+      h += `<td data-c="${ci}" class="${cls.join(' ')}"` +
            ` title="${esc(text ? text + ' \u00b7 ' + w.label : w.label + ' \u00b7 deadline')}">` +
-           `${esc(text)}</td>`;
+           `${body}</td>`;
     });
     h += '</tr>';
   });
@@ -185,8 +193,7 @@ function renderSchedule() {
     '<span><span class="sw" style="background:var(--dub)"></span>Dub</span>' +
     '<span><span class="sw" style="background:var(--edit)"></span>Edit</span>' +
     '<span><span class="sw" style="background:var(--mix)"></span>Mix</span>' +
-    '<span><span class="sw" style="background:var(--warn)"></span>2 at once</span>' +
-    '<span><span class="sw" style="background:var(--red)"></span>3 at once</span>' +
+    '<span><span class="sw split"></span>two bookings, one week</span>' +
     '<span><span class="sw" style="border:2px solid var(--warn);background:transparent"></span>2 overlaps this week</span>' +
     '<span><span class="sw" style="border:2px solid var(--red);background:transparent"></span>3 overlaps — reassign</span>' +
     '<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand — click to undo</span>' +

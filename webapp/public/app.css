@@ -48,8 +48,26 @@ table.sched tbody td{width:62px; min-width:62px; height:34px; text-align:center;
   overflow:hidden}
 td.over2{outline:2px solid var(--warn); outline-offset:-2px; font-weight:700; color:#1B4F80}
 td.over3{outline:2px solid var(--red); outline-offset:-2px; font-weight:700; color:#7F0000}
-td.dbl2{background:var(--warn); color:#fff; font-weight:700}
-td.dbl3{background:var(--red); color:#fff; font-weight:700}
+/* One band per booking, stacked. A doubled cell shows BOTH phase colours and BOTH
+   names rather than a solid block that hid what was in it. The bands divide the cell's
+   existing height, so a two-up week is no taller than any other and the row does not
+   jump. The outline still carries the depth. */
+/* The stack is absolutely positioned inside the cell rather than sized by it: a
+   percentage height on a child of a table cell is not reliably resolved, so the bands
+   left a white gap under them. Absolute also means a two-band cell adds no height of
+   its own, so a week where somebody doubles up is the same height as every other and
+   the row does not jump. */
+table.sched td.cell{padding:0; position:relative}
+.stack{position:absolute; inset:0; display:flex; flex-direction:column}
+.bk{flex:1 1 0; min-height:0; display:flex; align-items:center; padding:1px 10px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:grab}
+/* Two bands in 34px leaves ~16px each: a point smaller, and a hairline between them
+   so two same-phase bookings do not read as one block. */
+.stack .bk + .bk{border-top:1px solid rgba(255,255,255,.55)}
+.stack .bk:not(:only-child){font-size:10px}
+.bk:active{cursor:grabbing}
+.bk.dragging{opacity:.4}
+.sw.split{background:linear-gradient(to bottom, var(--dub) 50%, var(--mix) 50%)}
 /* A week placed by hand. Dotted so it never reads as an overlap, which owns solid. */
 td.pinned{outline:2px dotted var(--fg1); outline-offset:-2px}
 tr.qstart th, tr.qstart td{border-top:2px solid var(--fg1)}
@@ -68,7 +86,11 @@ table.sched.byeng tbody th{min-width:128px; max-width:128px; font-size:12px;
 /* Capped so eight columns always fit the window; the full title is in the tooltip.
    Uncapped, one long name ("Blue Box Season 2 (Eps 1-2)") stretches its column and
    pushes the table past the viewport, which is the problem this axis solves. */
-table.sched.byeng td{min-width:120px; max-width:150px; padding:4px 10px; text-align:left;
+/* Fixed 150, not 120-150. The bands are absolutely positioned so the cell has no
+   content of its own to push the column wider, and it collapsed to the minimum —
+   truncating names that used to fit. 150 is the width the Apps Script grid caps at,
+   so every column is now that, uniformly. */
+table.sched.byeng td{min-width:150px; max-width:150px; padding:4px 10px; text-align:left;
   overflow:hidden; text-overflow:ellipsis}
 /* This week is marked by bolding its label only. An outline round the whole row
    competed with the quarter rules and the overlap outlines for no gain. */
@@ -87,11 +109,8 @@ table.projects th{font-size:10px; text-transform:uppercase; letter-spacing:0.06e
 .timing{font-variant-numeric:tabular-nums}
 
 /* ---- drag to reassign ------------------------------------------------ */
-.bk{display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis;
-  vertical-align:middle; cursor:grab}
-.bk:active{cursor:grabbing}
-.bk.dragging{opacity:.4}
-.bksep{opacity:.5; padding:0 1px}
+/* .bk is defined with the stack above. A second definition here would silently win on
+   whichever properties it repeated — the .warn collision, again. */
 /* Lit only while a drag is in flight, so the grid is unchanged at rest. Inset shadow
    rather than outline: outline is already spoken for by the overlap markers, and two
    rings on one cell is unreadable. */
@@ -175,4 +194,6 @@ table.sched thead tr:nth-child(2) th{top:30px}
 table.sched:not(.byeng) tbody th{min-width:240px; max-width:240px; text-align:left;
   padding:6px 12px; font-size:13px; font-weight:400; text-transform:uppercase;
   overflow:hidden; text-overflow:ellipsis}
-td.marker{background:var(--red); color:#fff; font-weight:700}
+td.marker{background:var(--red); color:#fff; font-weight:700; text-align:center}
+table.sched:not(.byeng) .bk{padding:1px 4px; justify-content:center}
+table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:9px}
