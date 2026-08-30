@@ -11,9 +11,28 @@ const api = require('./api.js');
 const actions = require('./actions.js');
 
 register('fixture', require('./sources/fixture.js'));
-// register('sheets', require('./sources/sheets.js'));   // once credentials exist
 
+// Registered only when asked for, so the app still starts with no credentials on the
+// machine — which is what keeps the fixture path usable for development and tests.
 const SOURCE = process.env.PLANNER_SOURCE || 'fixture';
+if (SOURCE === 'sheets') {
+  try {
+    const { createSheetsSource } = require('./sources/sheets.js');
+    const src = createSheetsSource();
+    register('sheets', src);
+    console.log(`Sheets source : ${process.env.PLANNER_SHEET_ID}`);
+    console.log(`  acting as   : ${src.email}`);
+  } catch (e) {
+    // A missing env var is a setup mistake, not a crash. A stack trace here buries the
+    // one line that says what to do.
+    console.error('\nCannot use the spreadsheet:\n  ' + e.message +
+      '\n\nCheck it first with:\n' +
+      '  GOOGLE_APPLICATION_CREDENTIALS=<key.json> PLANNER_SHEET_ID=<id> \\\n' +
+      '    node tools/check_sheets_access.js\n');
+    process.exit(1);
+  }
+}
+
 const PORT = Number(process.env.PORT || 8127);
 const store = createStore(SOURCE, { ttlMs: Number(process.env.PLANNER_TTL_MS || 30000) });
 

@@ -245,6 +245,39 @@ section('The store');
   })());
 }
 
+section('Reading a real spreadsheet layout');
+{
+  const { isoFrom, mapper } = require('../webapp/sources/sheets.js');
+
+  // Dates arrive as Sheets serial numbers so the cell's display format cannot change
+  // what the engine sees. 2026-08-24 is serial 46258.
+  ok('a serial number becomes an ISO date', isoFrom(46258) === '2026-08-24', isoFrom(46258));
+  ok('an ISO string is left alone', isoFrom('2026-08-24') === '2026-08-24');
+  ok('a blank stays blank', isoFrom('') === '' && isoFrom(null) === '');
+
+  // Columns are mapped by NAME. A sheet with an extra column inserted by hand, or one
+  // that predates Atmos, must still read correctly — position mapping silently
+  // re-points every field after the insertion.
+  const head = ['Project', 'Client', 'Notes By Hand', 'Deadline', 'Phases D/E/M'];
+  const m = mapper(head);
+  const row = ['Animals', 'Netflix', 'ignore me', 46258, '2/1/2'];
+  ok('a hand-inserted column does not shift the ones after it',
+     m(row, 'Deadline') === 46258 && m(row, 'Phases D/E/M') === '2/1/2');
+  ok('headers match regardless of case and padding',
+     mapper(['  PROJECT '])(['x'], 'Project') === 'x');
+  ok('a missing column reads as undefined, not as the wrong one',
+     m(row, 'Atmos') === undefined && m.has('Atmos') === false);
+
+  // The roster flag was renamed on 2026-08-30; a sheet set up before that still says
+  // specials_only, and both must work.
+  const oldRoster = mapper(['name', 'specials_only']);
+  const newRoster = mapper(['name', 'does_specials']);
+  ok('an un-migrated roster still reads the specials flag',
+     oldRoster.either(['Kyle', 'Yes'], 'does_specials', 'specials_only') === 'Yes');
+  ok('and a migrated one reads it too',
+     newRoster.either(['Kyle', 'Yes'], 'does_specials', 'specials_only') === 'Yes');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (require.main === module) process.exit(fail ? 1 : 0);
 })();

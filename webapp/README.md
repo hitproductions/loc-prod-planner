@@ -40,9 +40,24 @@ project came from a second copy of something.
 
     node webapp/server.js            # http://localhost:8127, fixture data
 
+Against the real spreadsheet:
+
+    GOOGLE_APPLICATION_CREDENTIALS=~/.config/loc-prod-planner/key.json \
+    PLANNER_SHEET_ID=<the long id in the sheet URL> \
     PLANNER_SOURCE=sheets \
-    PLANNER_TTL_MS=15000 \
-    node webapp/server.js            # once sources/sheets.js exists
+    node webapp/server.js
+
+Check the credentials first — this reads only, so it is safe on a live sheet:
+
+    GOOGLE_APPLICATION_CREDENTIALS=... PLANNER_SHEET_ID=... \
+    node tools/check_sheets_access.js
+
+The service account needs Editor on the spreadsheet to write. Point it at a COPY
+while the Apps Script app is still in use: two apps writing one sheet will fight.
+
+Columns are mapped by HEADER NAME, not position, so a sheet that predates the Atmos
+and Recordist-pick-2 columns still reads, and a column inserted by hand does not
+silently re-point every field after it.
 
 ## Actions
 
