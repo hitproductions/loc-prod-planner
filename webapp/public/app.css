@@ -86,11 +86,21 @@ table.sched.byeng tbody th{min-width:128px; max-width:128px; font-size:12px;
 /* Capped so eight columns always fit the window; the full title is in the tooltip.
    Uncapped, one long name ("Blue Box Season 2 (Eps 1-2)") stretches its column and
    pushes the table past the viewport, which is the problem this axis solves. */
-/* Fixed 150, not 120-150. The bands are absolutely positioned so the cell has no
-   content of its own to push the column wider, and it collapsed to the minimum —
-   truncating names that used to fit. 150 is the width the Apps Script grid caps at,
-   so every column is now that, uniformly. */
-table.sched.byeng td{min-width:150px; max-width:150px; padding:4px 10px; text-align:left;
+/* Eight columns and a whole screen: the table stretches to fill it rather than
+   stopping at a fixed width with the right third empty. 150 is the FLOOR, not the cap
+   — below that the wrapper scrolls, above it the columns share the slack equally.
+   They come out equal because the bands are absolutely positioned, so no cell has
+   content of its own to pull its column wider than its neighbours.
+   Projects mode is deliberately excluded: 58 columns must scroll, never stretch. */
+/* table-layout:fixed, because auto layout gave the slack to the WEEK column instead
+   of the engineers: the bands are absolutely positioned, so an engineer cell has no
+   content of its own and the algorithm reads it as not wanting the space. Fixed layout
+   takes the widths we declare — 128 for the week, the rest split equally — and the
+   min-width set inline from the engineer count keeps a floor so the wrapper scrolls on
+   a narrow window rather than squashing the columns. */
+table.sched.byeng{width:100%; table-layout:fixed}
+table.sched.byeng thead th.corner, table.sched.byeng tbody th{width:128px}
+table.sched.byeng td{width:auto; padding:4px 10px; text-align:left;
   overflow:hidden; text-overflow:ellipsis}
 /* This week is marked by bolding its label only. An outline round the whole row
    competed with the quarter rules and the overlap outlines for no gain. */

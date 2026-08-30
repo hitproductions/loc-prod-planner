@@ -103,7 +103,11 @@ function wireScheduleBar() {
 // name — which is what the cells hold, and the whole reason this axis exists.
 function renderEngineerGrid() {
   const d = SCHED;
-  let h = '<div class="gridwrap"><table class="sched byeng"><thead><tr><th class="corner">Week</th>';
+  // A floor of 150 per engineer plus the week column. Above it the columns stretch to
+  // fill the window; below it the wrapper scrolls instead of squashing them.
+  const floor = 128 + d.labels.length * 150;
+  let h = `<div class="gridwrap"><table class="sched byeng" style="min-width:${floor}px">` +
+    '<thead><tr><th class="corner">Week</th>';
   d.labels.forEach((n, i) => { h += `<th data-c="${i}">${esc(n)}</th>`; });
   h += '</tr></thead><tbody>';
   let lastQ = null;
