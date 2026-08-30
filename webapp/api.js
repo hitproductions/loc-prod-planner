@@ -196,12 +196,38 @@ function schedule(book, opts) {
            weeks, labels, cells, markers, quarters, range: { from, to } };
 }
 
-function analysis(book) {
+function analysis(book, opts) {
   const rows = live(book);
+  const cap = A.computeCapacity(rows, book.engineers);
+  const from = (opts && opts.from) || todayLocal();
+
+  // Everything here starts at THIS WEEK. Past weeks cannot be acted on — you cannot
+  // hire retroactively — and including them makes the series grow without limit as
+  // history accumulates.
+  const weeks = cap.weeks.filter(w => w.week_start >= from);
+
+  // Overlaps carry their depth so the page can lead with the ones that need a decision.
+  const overlaps = A.actualOverlaps_(rows);
+  const weeksOf = list => {
+    const seen = {};
+    list.forEach(o => { seen[o.engineer + '|' + o.start] = 1; });
+    return Object.keys(seen).length;
+  };
+  const deep = overlaps.filter(o => (o.depth || 2) > 2);
+  const pair = overlaps.filter(o => (o.depth || 2) <= 2);
+
   return {
-    capacity: A.computeCapacity(rows, book.engineers),
+    today: from,
+    horizon: cap.horizon,
+    pools: cap.pools,
+    weeks: weeks.length ? weeks : cap.weeks,
     score: A.scorePlan(rows, book.engineers),
-    overlaps: A.actualOverlaps_(rows),
+    per_engineer: cap.weeks_per_engineer,
+    overlaps: {
+      deep, pair,
+      deep_weeks: weeksOf(deep), pair_weeks: weeksOf(pair),
+      by_engineer: cap.bottleneck.forced_by_engineer,
+    },
   };
 }
 

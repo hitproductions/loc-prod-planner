@@ -302,6 +302,70 @@ section('Re-plan');
   }
 }
 
+section('Analysis');
+{
+  const book = await freshBook();
+  const a = api.analysis(book, { from: '2026-01-01' });
+
+  ok('overlaps are split by depth, not lumped together',
+     typeof a.overlaps.pair_weeks === 'number' && typeof a.overlaps.deep_weeks === 'number',
+     JSON.stringify({ pair: a.overlaps.pair_weeks, deep: a.overlaps.deep_weeks }));
+
+  // The book has no three-way, so on it alone every split passes trivially — putting
+  // ALL overlaps in the pair bucket would look correct. One is stacked in on purpose.
+  const tripled = JSON.parse(JSON.stringify(book));
+  const victim = A.activeRows(tripled.bookings)[0];
+  let n = tripled.bookings.reduce((m, b) => Math.max(m, b.row_number), 1);
+  ['Triple A', 'Triple B'].forEach(p => tripled.bookings.push({
+    project: p, phase: 'Mix', engineer: victim.engineer,
+    start_date: victim.start_date, end_date: victim.start_date,
+    source: 'test', note: '', status: '', row_number: ++n }));
+  const t = api.analysis(tripled, { from: '2026-01-01' });
+
+  ok('the stacked week really is three deep', t.overlaps.deep.length >= 3,
+     `${t.overlaps.deep.length} rows at depth 3+`);
+  ok('a three-way lands in the overflow bucket, not among the pairs',
+     t.overlaps.deep_weeks >= 1 &&
+     t.overlaps.deep.every(o => o.depth > 2) &&
+     t.overlaps.pair.every(o => o.depth <= 2),
+     `deep ${t.overlaps.deep_weeks}, pair ${t.overlaps.pair_weeks}`);
+  ok('and it is not double-counted into both',
+     !t.overlaps.pair.some(o => t.overlaps.deep.some(d =>
+       d.engineer === o.engineer && d.start === o.start)));
+
+  // Counted in WEEKS, not rows: actualOverlaps_ emits one row per colliding booking,
+  // so a single week of four reads as "4" and sounds like four separate problems.
+  const distinct = new Set(a.overlaps.pair.map(o => o.engineer + '|' + o.start)).size;
+  ok('the pair count is weeks, not booking rows', a.overlaps.pair_weeks === distinct,
+     `${a.overlaps.pair_weeks} vs ${distinct} distinct engineer-weeks`);
+
+  ok('the two role pools are kept apart',
+     Array.isArray(a.pools.recedit) && Array.isArray(a.pools.adv_mix) &&
+     a.pools.adv_mix.length <= a.pools.recedit.length + 1,
+     JSON.stringify(a.pools));
+
+  // Criterion 12: a dub week and an Advanced-mix week are different currencies and
+  // nothing may total them. If a field ever appears that sums the two, this fails.
+  const w = a.weeks[0];
+  ok('no week carries a figure that adds the two roles together',
+     !Object.keys(w).some(k => /total|combined|all_/.test(k)), Object.keys(w).join(','));
+  ok('supply is the count of people who can actually do it',
+     w.recedit_supply === a.pools.recedit.length &&
+     w.adv_mix_supply === a.pools.adv_mix.length,
+     `${w.recedit_supply}/${a.pools.recedit.length}, ${w.adv_mix_supply}/${a.pools.adv_mix.length}`);
+
+  // The series starts at the week asked for — past weeks cannot be acted on, and
+  // including them makes it grow without limit as history accumulates.
+  const late = api.analysis(book, { from: '2026-09-01' });
+  ok('the series starts where asked', late.weeks.every(x => x.week_start >= '2026-09-01'));
+  ok('and asking later gives fewer weeks', late.weeks.length < a.weeks.length,
+     `${late.weeks.length} vs ${a.weeks.length}`);
+
+  ok('every engineer has a load, including the idle ones',
+     a.score.loads.length === book.engineers.length,
+     `${a.score.loads.length} of ${book.engineers.length}`);
+}
+
 section('Re-plan: preview, then apply against the same book');
 {
   // Over HTTP, because the guard lives in the server: the preview is held there with

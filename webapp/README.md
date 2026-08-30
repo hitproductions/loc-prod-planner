@@ -81,5 +81,4 @@ showing the previous plan three times over.
 
 - `sources/sheets.js` — read and write the real spreadsheet. Needs a service account
   with access to the sheet. Everything else is built to sit behind it unchanged.
-- Analysis view.
 - Auth. Right now anyone who can reach the port can read and change the book.

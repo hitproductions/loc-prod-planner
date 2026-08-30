@@ -49,7 +49,7 @@ function send(res, code, body, type) {
 const ROUTES = {
   '/api/bootstrap': b => api.bootstrap(b),
   '/api/schedule':  (b, q) => api.schedule(b, { mode: q.get('mode'), from: q.get('from'), to: q.get('to') }),
-  '/api/analysis':  b => api.analysis(b),
+  '/api/analysis':  (b, q) => api.analysis(b, { from: q.get('from') }),
 };
 
 // Actions are pure too: book + payload -> a change set. The route applies it and hands

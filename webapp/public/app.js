@@ -250,6 +250,112 @@ function wireProjects() {
     tr.addEventListener('click', () => openForm(tr.dataset.title)));
 }
 
+// ---------------------------------------------------------------- analysis
+// Ordered by the decision each figure answers, not by what is easy to compute.
+// Overlaps first because they are the only thing here with an action attached; then
+// whether there is room to take more work; then who is carrying it.
+async function loadAnalysis() {
+  $('view').innerHTML = '<div class="loading">Counting\u2026</div>';
+  ANALYSIS = await get('/api/analysis');
+  paint();
+}
+
+function renderAnalysis() {
+  if (!ANALYSIS) return '<div class="loading">Counting\u2026</div>';
+  const a = ANALYSIS;
+  let h = '<div class="bar-row"><button class="btn small" id="anRefresh">Refresh</button>' +
+    `<span class="hint" style="margin:0 0 0 12px">From ${esc(a.today)} \u00b7 ` +
+    `${a.weeks.length} weeks ahead</span></div>`;
+
+  // ---- 1. what needs a decision
+  const o = a.overlaps;
+  h += '<div class="card"><div class="t">Overlaps</div>' +
+    `<div class="s">${wk(o.pair_weeks)} with two at once, ${wk(o.deep_weeks)} with three or more` +
+    (o.by_engineer.length ? ' \u00b7 carried by ' +
+      o.by_engineer.map(e => `${esc(e.engineer)} (${e.forced_rows})`).join(', ') : '') + '</div>';
+  if (!o.deep.length && !o.pair.length) {
+    h += '<div class="hint">None \u2014 nobody holds two projects in the same week.</div>';
+  }
+  if (o.deep.length) {
+    h += '<div class="s" style="margin-top:10px"><b>Three at once \u2014 reassign</b></div>' +
+      overlapTable(o.deep, true);
+  }
+  if (o.pair.length) {
+    h += '<div class="s" style="margin-top:10px">Two at once \u2014 ordinary, a series still ' +
+      'recording while its edit starts</div>' + overlapTable(o.pair, false);
+  }
+  h += '</div>';
+
+  // ---- 2. can we take more work
+  h += '<div class="grid2">' +
+    demandCard(a, 'recedit', 'Dub or edit', a.pools.recedit) +
+    demandCard(a, 'adv_mix', 'Advanced mix', a.pools.adv_mix) + '</div>';
+
+  // ---- 3. who is carrying it
+  const loads = a.score.loads.slice().sort((x, y) => y.weeks - x.weeks);
+  const peak = Math.max(...loads.map(l => l.weeks), 1);
+  h += '<div class="card"><div class="t">Weeks per engineer</div>' +
+    `<div class="s">Booked weeks across the whole horizon \u00b7 spread ${a.score.regular_spread}, ` +
+    `peak ${a.score.regular_peak}</div><table class="bars">` +
+    loads.map(l => `<tr><td class="n">${esc(l.engineer)}</td>` +
+      `<td><span class="bar" style="width:${Math.round(l.weeks / peak * 100)}%"></span></td>` +
+      `<td class="v">${l.weeks}${l.double_booked ? ` <span class="chip warn">${l.double_booked} doubled</span>` : ''}</td></tr>`).join('') +
+    '</table></div>';
+
+  return h;
+}
+
+const wk = n => n + (n === 1 ? ' week' : ' weeks');
+
+function overlapTable(list, bad) {
+  return '<table class="projects"><thead><tr><th>Week of</th><th>Engineer</th>' +
+    '<th>Project</th><th>Phase</th></tr></thead><tbody>' +
+    list.map(f => `<tr${bad ? ' class="rowbad"' : ''}><td>${esc(f.start)}</td>` +
+      `<td>${esc(f.engineer)}</td><td>${esc(f.project)}</td><td>${esc(f.phase)}</td></tr>`).join('') +
+    '</tbody></table>';
+}
+
+// Demand against the people who can actually do it. Never a total across roles: a
+// dub week and an Advanced-mix week are different currencies and summing them would
+// say the studio has capacity it does not have.
+function demandCard(a, role, title, pool) {
+  const dKey = role === 'recedit' ? 'recedit_demand_projects' : 'mix_demand_projects';
+  const sKey = role === 'recedit' ? 'recedit_supply' : 'adv_mix_supply';
+  const oKey = role === 'recedit' ? 'recedit_over' : 'adv_mix_over';
+  const fKey = role === 'recedit' ? 'recedit_free_names' : 'adv_mix_free_names';
+  const supply = a.weeks.length ? a.weeks[0][sKey] : 0;
+  const max = Math.max(supply, ...a.weeks.map(w => w[dKey]), 1);
+  const over = a.weeks.filter(w => w[oKey] > 0);
+  const full = a.weeks.filter(w => w[oKey] === 0 && (w[fKey] || []).length === 0);
+
+  const W = 560, H = 120, PB = 18;
+  const bw = Math.max(2, W / a.weeks.length - 1.5);
+  const bars = a.weeks.map((w, i) => {
+    const v = w[dKey];
+    if (v <= 0) return '';
+    const hgt = (v / max) * (H - PB);
+    return `<rect x="${(i * W / a.weeks.length).toFixed(1)}" y="${(H - PB - hgt).toFixed(1)}" ` +
+      `width="${bw.toFixed(1)}" height="${hgt.toFixed(1)}" ` +
+      `fill="${w[oKey] > 0 ? 'var(--red)' : 'var(--fg2)'}" ` +
+      `fill-opacity="${w[oKey] > 0 ? 1 : 0.5}"><title>${esc(w.label)}: ${v} needed, ` +
+      `${w[sKey]} can do it${w[oKey] > 0 ? ` — over by ${w[oKey]}` : ''}</title></rect>`;
+  }).join('');
+  const sy = (H - PB - (supply / max) * (H - PB)).toFixed(1);
+
+  return '<div class="card"><div class="t">' + esc(title) + '</div>' +
+    `<div class="s">${pool.length} can do it: ${pool.map(esc).join(', ')}</div>` +
+    `<svg viewBox="0 0 ${W} ${H}" width="100%">` + bars +
+    `<line x1="0" x2="${W}" y1="${sy}" y2="${sy}" stroke="var(--fg1)" stroke-width="2" ` +
+    'stroke-dasharray="4 3"></line>' +
+    `<text x="4" y="${Math.max(10, sy - 4)}" font-size="10" fill="var(--fg2)">` +
+    `${supply} eligible</text></svg>` +
+    `<div class="sub">${over.length ? `<b>${wk(over.length)} short-handed</b> — more projects ` +
+      'need this role than there are people who can do it. No arrangement fixes that; only ' +
+      'hiring or a later deadline.' : 'Never short-handed in this horizon.'}` +
+    (full.length ? ` ${wk(full.length)} with everyone busy — a re-plan may still help there.` : '') +
+    '</div></div>';
+}
+
 // ---------------------------------------------------------------- re-plan
 // Two steps on purpose. The preview writes nothing and is held server-side with the
 // version of the book it was computed against; apply sends back only a token. If
@@ -479,11 +585,19 @@ async function submitForm(p, dryRun) {
   $('f_out').innerHTML = h;
 }
 
-const VIEWS = { schedule: renderSchedule, projects: renderProjects, replan: renderReplan };
+const VIEWS = { schedule: renderSchedule, projects: renderProjects,
+                analysis: renderAnalysis, replan: renderReplan };
+let ANALYSIS = null;
 
 function paint() {
   $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
   topRight();
+  if (VIEW === 'analysis') {
+    if (!ANALYSIS) loadAnalysis();
+    else if ($('anRefresh')) $('anRefresh').addEventListener('click',
+      () => { ANALYSIS = null; loadAnalysis(); });
+    return;
+  }
   if (VIEW === 'replan') { wireReplan(); return; }
   if (VIEW === 'schedule') {
     wireScheduleBar();
