@@ -18,7 +18,7 @@ const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers
 const EVENTS_TAB = 'History';
 const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended'];
 // Columns this app writes that an older sheet may not have. Created on demand.
-const MANAGED_COLUMNS = ['Status', 'Completed', 'Invoiced'];
+const MANAGED_COLUMNS = ['Status', 'Completed'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
 const HEADER_ROW = { Projects: 2, Bookings: 1, Engineers: 1 };
 
