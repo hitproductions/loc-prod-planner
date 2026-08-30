@@ -266,6 +266,8 @@ function setupProjectsTab_() {
     300,  // Notes
      92,  // Plotted
      70,  // Locked
+     92,  // Status      — set by the web app
+    100,  // Completed   — set by the web app
   ];
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
 

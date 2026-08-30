@@ -31,7 +31,8 @@ async function get(path) {
 function topRight() {
   const c = BOOT.counts;
   const wk = n => n + (n === 1 ? ' week' : ' weeks');
-  const bits = [`<span class="pill">${c.projects} projects · ${c.live_rows} bookings</span>`];
+  const bits = [`<span class="pill">${c.projects} projects` +
+    (c.done ? ` · ${c.done} done` : '') + ` · ${c.live_rows} bookings</span>`];
   if (c.over2) bits.push(`<span class="pill warn">${wk(c.over2)} with 2 overlaps</span>`);
   if (c.over3) bits.push(`<span class="pill bad">${wk(c.over3)} with 3+ overlaps</span>`);
   if (LAST_MS != null) bits.push(`<span class="pill timing">${LAST_MS.toFixed(0)} ms</span>`);
@@ -207,15 +208,23 @@ function renderSchedule() {
   return h;
 }
 
-let SORT = 'deadline';
+let SORT = 'deadline', SHOW_DONE = false;
 
 function renderProjects() {
   const byTitle = (a, b) =>
     String(a.title).localeCompare(String(b.title), undefined, { numeric: true });
-  const ps = BOOT.projects.slice().sort(SORT === 'title' ? byTitle : (a, b) =>
+  const all = BOOT.projects.slice().sort(SORT === 'title' ? byTitle : (a, b) =>
     String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')) || byTitle(a, b));
+  // Finished work is hidden, not deleted. The point of marking a project complete is
+  // that it stops asking for your attention; the record stays one click away.
+  const done = all.filter(p => p.status === 'Complete');
+  const ps = SHOW_DONE ? all : all.filter(p => p.status !== 'Complete');
 
   let h = '<div class="bar-row"><button class="btn primary" id="addBtn">+ Add project</button>' +
+    (done.length
+      ? `<button class="btn small${SHOW_DONE ? ' primary' : ''}" id="toggleDone">` +
+        `${SHOW_DONE ? 'Hide' : 'Show'} ${done.length} completed</button>`
+      : '') +
     '<div class="spacer"></div>' +
     `<button class="btn small${SORT === 'deadline' ? ' primary' : ''}" data-sort="deadline">Deadline</button>` +
     `<button class="btn small${SORT === 'title' ? ' primary' : ''}" data-sort="title">A\u2013Z</button>` +
@@ -233,7 +242,11 @@ function renderProjects() {
     if (p.atmos) flags += '<span class="chip">atmos</span>';
     const who = ph => [...new Set(p.rows.filter(r => r.phase === ph).map(r => r.engineer))]
       .join(' + ') || '\u2014';
-    h += `<tr data-title="${esc(p.title)}"><td>${esc(p.deadline)}</td>` +
+    if (p.status === 'Complete') {
+      flags += `<span class="chip">completed ${esc(p.completed || '')}</span>`;
+    }
+    h += `<tr data-title="${esc(p.title)}"${p.status === 'Complete' ? ' class="dim"' : ''}>` +
+      `<td>${esc(p.deadline)}</td>` +
       `<td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
       `<td>${p.dub}/${p.edit}/${p.mix}</td><td>${esc(who('Dub'))}</td><td>${esc(who('Mix'))}</td>` +
       `<td>${flags}</td></tr>`;
@@ -244,6 +257,8 @@ function renderProjects() {
 function wireProjects() {
   const add = $('addBtn');
   if (add) add.addEventListener('click', () => openForm(null));
+  const td = $('toggleDone');
+  if (td) td.addEventListener('click', () => { SHOW_DONE = !SHOW_DONE; paint(); });
   document.querySelectorAll('[data-sort]').forEach(b =>
     b.addEventListener('click', () => { SORT = b.dataset.sort; paint(); }));
   document.querySelectorAll('table.projects tbody tr').forEach(tr =>
@@ -683,6 +698,8 @@ function openForm(title) {
     <div class="formactions">
       <button class="btn" id="f_check">Check availability</button>
       <button class="btn primary" id="f_save">${p ? 'Save &amp; re-plot' : 'Plot &amp; save'}</button>
+      ${p ? `<button class="btn" id="f_done">${p.status === 'Complete'
+        ? 'Reopen' : 'Mark complete'}</button>` : ''}
       <button class="btn" id="f_close">Close</button>
     </div>
     <div id="f_out"></div></div>`;
@@ -691,6 +708,17 @@ function openForm(title) {
   $('f_check').addEventListener('click', () => submitForm(p, true));
   $('f_save').addEventListener('click', () => submitForm(p, false));
   $('f_close').addEventListener('click', () => { $('formHost').innerHTML = ''; });
+  if ($('f_done')) $('f_done').addEventListener('click', async () => {
+    const to = p.status === 'Complete' ? '' : 'Complete';
+    if (!confirm(to
+      ? `Mark ${p.title} complete?\n\nIt drops out of the list and re-plan leaves it ` +
+        'alone. Its bookings stay on the schedule \u2014 the work happened.'
+      : `Reopen ${p.title}?\n\nIt goes back in the list and re-plan can move it again.`)) return;
+    const r = await post('/api/set-status', { title: p.title, status: to });
+    if (!r.ok) return alert(r.error);
+    absorb(r);
+    $('formHost').innerHTML = '';
+  });
 }
 
 function formValues(p, dryRun) {

@@ -69,6 +69,7 @@ without HTTP or Google (`test/webapp.test.js`).
     POST /api/reassign      drag a week; omit `confirmed` for a preview + warnings
     POST /api/undo          give a hand-placed week back to the tool
     POST /api/save-project  add or edit; `dry_run` for availability only
+    POST /api/set-status    mark a project Complete, or reopen it
     POST /api/replan        preview a re-solve; returns a token, never the plan
     POST /api/replan-apply  apply the previewed plan, by token
     POST /api/rollback      undo the most recent change
@@ -105,6 +106,17 @@ incrementally built book:
 A thousand is worth having; five thousand is the same plan for five times the wait. So
 the default is 1000, set by `PLANNER_SEARCH`, and it runs on a worker thread — a grid
 request measured 0.9ms while a 3.5s search was in flight.
+
+## Complete
+
+Marking a project complete is a LABEL, not a deletion and not a supersede. Its bookings
+stay live — the work happened and occupied those weeks, and the schedule should keep
+saying so. What changes is that it drops out of the Projects list, is counted apart in
+the header, and re-plan leaves it alone via the `locked` mechanism that already exists.
+
+Two columns on the Projects tab, `Status` and `Completed`, appended AFTER `Locked` so
+the Apps Script app's positional columns are undisturbed. That app creates them and
+ignores them; only the web app reads them.
 
 ## Not done yet
 

@@ -76,6 +76,7 @@ const ACTIONS = {
   '/api/reassign':      (b, p) => actions.reassignWeek(b, p),
   '/api/undo':          (b, p) => actions.undoWeekMove(b, p),
   '/api/save-project':  (b, p) => actions.saveProject(b, p),
+  '/api/set-status':    (b, p) => actions.setStatus(b, p),
   '/api/replan':        (b, p) => previewReplan(b, p),      // async
   '/api/replan-apply':  (b, p) => applyReplan(b, p),
   '/api/rollback':      (b, p) => rollback(b, p),
@@ -116,6 +117,10 @@ function describe(path, r) {
     return `${r.project} · ${r.phase}, week of ${r.week_start}: back to ${r.to}, automatic again`;
   }
   if (path === '/api/save-project') return `Saved ${r.title}`;
+  if (path === '/api/set-status') {
+    return r.status ? `${r.title} marked ${r.status.toLowerCase()}`
+                    : `${r.title} reopened`;
+  }
   if (path === '/api/replan-apply') {
     return `Re-plan applied: ${r.appended} row(s) added, ${r.superseded} superseded`;
   }

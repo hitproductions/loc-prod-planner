@@ -62,6 +62,7 @@ function bootstrap(book) {
       dub: p.dub_weeks, edit: p.edit_weeks, mix: p.mix_weeks,
       mix_level: p.mix_level_required,
       music: yes(p.music_songs), special: yes(p.special_project), atmos: yes(p.atmos_required),
+      status: p.status || '', completed: p.completed || '',
       overlap: deep[p.project_title] || 0,
       rows: rows.filter(b => b.project === p.project_title).map(b => ({
         phase: b.phase, engineer: b.engineer, start: b.start_date, end: b.end_date, note: b.note || '',
@@ -73,7 +74,9 @@ function bootstrap(book) {
     // for the whole of every early morning. The Apps Script app reads the
     // spreadsheet's own timezone for the same reason.
     today_week: A.weekStart(A.widx(todayLocal())),
-    counts: { projects: book.projects.length, live_rows: rows.length,
+    counts: { projects: book.projects.filter(p => !p.status).length,
+              done: book.projects.filter(p => p.status === 'Complete').length,
+              live_rows: rows.length,
               over2: d.two, over3: d.three },
   };
 }

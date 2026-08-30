@@ -11,7 +11,8 @@ const rawProjects = require('../../validation/projects.json');
 
 function build() {
   const A = loadAppsScript();
-  const projects = rawProjects.map(p => A.normalizeProject(p).project);
+  const projects = rawProjects.map(p => ({ ...A.normalizeProject(p).project,
+                                           status: '', completed: '' }));
   const bookings = A.plotBatch(rawProjects, [], engineers).new_rows
     .map((b, i) => ({ ...b, status: '', row_number: i + 2 }));
   return { engineers, projects, bookings };

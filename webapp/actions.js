@@ -180,6 +180,42 @@ function saveProject(book, payload) {
   };
 }
 
+// ------------------------------------------------------- mark a project complete
+// A label, not a deletion and not a supersede. Its bookings stay live: the work
+// happened, it occupied those weeks, and the schedule should keep saying so. What
+// changes is that the project stops appearing among the things that need a decision,
+// and re-plan stops moving it — for the same reason a locked project is left alone.
+function setStatus(book, payload) {
+  const p = payload || {};
+  const title = String(p.title || '').trim();
+  const status = String(p.status || '').trim();
+  if (!title) return { ok: false, error: 'No project named.' };
+  if (!['', 'Complete', 'Cancelled'].includes(status)) {
+    return { ok: false, error: `Unknown status "${status}".` };
+  }
+  const project = book.projects.find(x => x.project_title === title);
+  if (!project) return { ok: false, error: `No project called "${title}".` };
+  if ((project.status || '') === status) {
+    return { ok: false, error: `${title} is already ${status || 'active'}.` };
+  }
+
+  // Dated when it is marked, not when the last booking ended: the report is about
+  // when you called it done, and a project can be finished before or after its
+  // schedule says. Clearing the status clears the date with it.
+  const completed = status === 'Complete'
+    ? (p.completed || new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 10))
+    : '';
+
+  return {
+    ok: true, title, status, completed,
+    was: project.status || '',
+    change: { supersede: [], append: [],
+              project: { ...project, status, completed },
+              original_title: title },
+  };
+}
+
 // ---------------------------------------------------------------- re-plan
 
 // Plain-English names for the objective terms, so the preview can say WHY a re-plan is
@@ -237,8 +273,18 @@ function shapeReplan(book, rows, r) {
 
 function replanPreview(book, todayISO) {
   const rows = live(book);
-  return shapeReplan(book, rows, A.replanBook(book.projects, rows, book.engineers, todayISO));
+  return shapeReplan(book, rows,
+    A.replanBook(forReplan(book.projects), rows, book.engineers, todayISO));
 }
 
-module.exports = { reassignWeek, undoWeekMove, saveProject, replanPreview,
-                   shapeReplan, reassignWarnings, whyBetter, live };
+// A completed or cancelled project is frozen to the engine. It already has the
+// mechanism — `locked` — so this reuses it rather than teaching replanBook a second
+// idea of "do not touch". Re-planning finished work would move names on a job that
+// has already been delivered.
+function forReplan(projects) {
+  return (projects || []).map(p => (p.status === 'Complete' || p.status === 'Cancelled')
+    ? { ...p, locked: true } : p);
+}
+
+module.exports = { reassignWeek, undoWeekMove, saveProject, setStatus, replanPreview,
+                   shapeReplan, reassignWarnings, whyBetter, live, forReplan };

@@ -122,6 +122,11 @@ function createSheetsSource(opts) {
           editor_override: p(r, 'Editor pick') || 'Auto',
           mixer_override: p(r, 'Mixer pick') || 'Auto',
           notes: String(p(r, 'Notes') || '').trim(),
+          // Complete is a LABEL, not a supersede. The bookings stay live, because the
+          // work genuinely happened and still occupies those weeks — what changes is
+          // that the project stops asking for attention and stops being re-planned.
+          status: String(p(r, 'Status') || '').trim(),
+          completed: isoFrom(p(r, 'Completed')),
           locked: /^(yes|true)$/i.test(String(p(r, 'Locked') || '').trim()) || p(r, 'Locked') === true,
           _row: HEADER_ROW.Projects + 1 + i,
         };
@@ -237,6 +242,7 @@ function createSheetsSource(opts) {
         'dub wks': p.dub_weeks, 'edit wks': p.edit_weeks, 'mix wks': p.mix_weeks,
         'recordist': o.recordist, 'editor': o.editor, 'mixer': o.mixer,
         'warnings': o.warnings, 'notes': o.notes,
+        'status': p.status, 'completed': p.completed,
         'plotted': new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
           .toISOString().slice(0, 10),
       };

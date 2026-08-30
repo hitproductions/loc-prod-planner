@@ -53,11 +53,15 @@ var P_COL = {
   DUB_W: 13, EDIT_W: 14, MIX_W: 15,
   RECORDIST: 16, EDITOR: 17, MIXER: 18, WARNINGS: 19, NOTES: 20, PLOTTED: 21,
   LOCKED: 22,
+  // Appended, deliberately AFTER Locked. The web app marks a project complete and
+  // reads these; this app only needs to create them, so that Set up sheets does not
+  // wipe a column it has never heard of. Nothing here reads STATUS or COMPLETED.
+  STATUS: 23, COMPLETED: 24,
 };
 var P_INPUT_LAST  = P_COL.MIX_PICK;      // columns 1..12 are the user's
 var P_OUTPUT_FIRST = P_COL.DUB_W;        // 13..21 belong to the engine
 var P_OUTPUT_LAST  = P_COL.PLOTTED;
-var P_LAST = P_COL.LOCKED;
+var P_LAST = P_COL.COMPLETED;
 var P_HEADER_ROW = 2;                    // row 1 is the banner
 var P_FIRST_DATA_ROW = 3;
 var P_ROWS = 300;                        // validated/formatted depth
@@ -68,6 +72,7 @@ var P_HEADERS = [
   'Recordist pick', 'Recordist pick 2', 'Editor pick', 'Mixer pick',
   'Dub wks', 'Edit wks', 'Mix wks',
   'Recordist', 'Editor', 'Mixer', 'Warnings', 'Notes', 'Plotted', 'Locked',
+  'Status', 'Completed',
 ];
 
 // ---- Bookings tab -----------------------------------------------------------

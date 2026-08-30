@@ -319,6 +319,62 @@ section('Saving a project');
      A.activeRows(renamedBook.bookings).some(b => b.project === 'New Name'));
 }
 
+section('Marking a project complete');
+{
+  const book = await freshBook();
+  const title = book.projects[0].project_title;
+  const bookingsBefore = A.activeRows(book.bookings)
+    .filter(b => b.project === title).length;
+  ok('the project has bookings to begin with', bookingsBefore > 0);
+
+  const r = actions.setStatus(book, { title, status: 'Complete' });
+  ok('it can be marked complete', r.ok, r.error);
+  ok('and is dated', /^\d{4}-\d{2}-\d{2}$/.test(r.completed), r.completed);
+  ok('the change carries the project row, not booking edits',
+     !!r.change.project && r.change.supersede.length === 0 && r.change.append.length === 0);
+
+  await fixture.write(r.change);
+  const after = await fixture.read();
+  const p = after.projects.find(x => x.project_title === title);
+  ok('the status persists', p.status === 'Complete' && !!p.completed,
+     JSON.stringify({ status: p.status, completed: p.completed }));
+
+  // Complete is a LABEL. The work happened and occupied those weeks; superseding its
+  // bookings would erase that and change what the schedule says about the past.
+  ok('its bookings are untouched',
+     A.activeRows(after.bookings).filter(b => b.project === title).length === bookingsBefore,
+     `${A.activeRows(after.bookings).filter(b => b.project === title).length} vs ${bookingsBefore}`);
+
+  // Frozen to the engine, by the mechanism that already exists for locked projects.
+  const frozen = actions.forReplan(after.projects).find(x => x.project_title === title);
+  ok('re-plan is told to leave it alone', frozen.locked === true);
+  ok('and other projects are not', actions.forReplan(after.projects)
+     .filter(x => x.project_title !== title).every(x => x.locked !== true));
+
+  ok('marking it complete twice is refused',
+     !actions.setStatus(after, { title, status: 'Complete' }).ok);
+  ok('an unknown status is refused',
+     !actions.setStatus(after, { title, status: 'Finished' }).ok);
+  ok('a project that does not exist is refused',
+     !actions.setStatus(after, { title: 'No Such Show', status: 'Complete' }).ok);
+
+  const reopened = actions.setStatus(after, { title, status: '' });
+  ok('it can be reopened', reopened.ok && reopened.status === '');
+  ok('and reopening clears the date', reopened.completed === '');
+  await fixture.write(reopened.change);
+  const back = await fixture.read();
+  ok('after reopening the engine can move it again',
+     actions.forReplan(back.projects).find(x => x.project_title === title).locked !== true);
+
+  // the header counts what still needs attention, separately from what is done
+  await fixture.write(actions.setStatus(back, { title, status: 'Complete' }).change);
+  const boot = api.bootstrap(await fixture.read());
+  ok('completed work is counted apart from active work',
+     boot.counts.done === 1 && boot.counts.projects === book.projects.length - 1,
+     JSON.stringify(boot.counts));
+  fixture._reset();
+}
+
 section('Re-plan');
 {
   const book = await freshBook();
