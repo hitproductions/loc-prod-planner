@@ -7,3 +7,9 @@ preview/
 
 node_modules/
 .DS_Store
+
+# Service-account keys. Never commit these — anyone with the file can act as the
+# account, and the account has write access to the spreadsheet.
+*service-account*.json
+*credentials*.json
+*.key.json
