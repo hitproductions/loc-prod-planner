@@ -1021,6 +1021,64 @@ section('Music specialists — ranked, and never routed outside the pool (Tara, 
                                recordist_override_2: a }).warnings || ''));
 }
 
+section('forced_projects counts overlapped weeks, not FORCED notes');
+{
+  // The term is ranked fourth in SOLVE_OBJECTIVE and is reported to the user in the
+  // re-plan preview as "projects the engine had to compromise on". It used to count
+  // the FORCED note, which records what the engine decided AT THE MOMENT IT DECIDED
+  // IT -- so it missed every project that became overlapped because of somebody
+  // else's later placement. On the live book it read 1 against a true 4.
+  const eng = [
+    { name: 'A', can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced' },
+    { name: 'B', can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced' },
+  ];
+  const bk = (project, engineer, start, end, note) =>
+    ({ project, engineer, phase: 'Dub', start_date: start, end_date: end, note: note || '' });
+
+  const clean = [bk('P1', 'A', '2026-01-05', '2026-01-11'),
+                 bk('P2', 'B', '2026-01-05', '2026-01-11')];
+  ok('no overlap, nothing compromised',
+     A.scorePlan(clean, eng).forced_projects === 0,
+     A.scorePlan(clean, eng).forced_projects + '');
+
+  // THE BUG: P1 was placed cleanly and carries no note. P2 lands on top of it later.
+  // Both are compromised; the note-based count saw at most the one that was flagged.
+  const collided = [bk('P1', 'A', '2026-01-05', '2026-01-11'),
+                    bk('P2', 'A', '2026-01-05', '2026-01-11')];
+  ok('a project overlapped by a LATER placement counts, note or no note',
+     A.scorePlan(collided, eng).forced_projects === 2,
+     A.scorePlan(collided, eng).forced_projects + ' (expected both)');
+
+  // and the note on its own proves nothing
+  const notedButFine = [bk('P1', 'A', '2026-01-05', '2026-01-11', 'FORCED onto A'),
+                        bk('P2', 'B', '2026-01-05', '2026-01-11')];
+  ok('a stale FORCED note with no actual overlap does NOT count',
+     A.scorePlan(notedButFine, eng).forced_projects === 0,
+     A.scorePlan(notedButFine, eng).forced_projects + '');
+
+  // distinct PROJECTS, not rows: three colliding rows of one project is one project
+  const manyRows = [bk('P1', 'A', '2026-01-05', '2026-01-11'),
+                    bk('P1', 'A', '2026-01-05', '2026-01-11'),
+                    bk('P1', 'A', '2026-01-05', '2026-01-11')];
+  ok('it counts projects, not booking rows',
+     A.scorePlan(manyRows, eng).forced_projects === 1,
+     A.scorePlan(manyRows, eng).forced_projects + '');
+
+  // a project overlapped in only ONE of its weeks still counts once
+  const partial = [bk('P1', 'A', '2026-01-05', '2026-01-25'),
+                   bk('P2', 'A', '2026-01-19', '2026-01-25')];
+  ok('an overlap in one week of a long run counts the project once',
+     A.scorePlan(partial, eng).forced_projects === 2,
+     A.scorePlan(partial, eng).forced_projects + '');
+
+  // it must not outrun the honest overlap count in the other direction either:
+  // two overlapped weeks can involve more projects than weeks, and that is correct
+  const s = A.scorePlan(collided, eng);
+  ok('the term can exceed total_double_booked, because a week holds two projects',
+     s.forced_projects >= s.total_double_booked,
+     `${s.forced_projects} vs ${s.total_double_booked}`);
+}
+
 // ---------------------------------------------------------------------------
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

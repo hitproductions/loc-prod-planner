@@ -186,6 +186,26 @@ function scorePlan(book, engineerRows) {
   const load = n => Object.keys(weeks[n] || {}).length;
   const dbl  = n => Object.keys(weeks[n] || {}).filter(w => weeks[n][w] > 1).length;
 
+  // Projects with at least one booking sitting in an overlapped engineer-week.
+  //
+  // This used to count the FORCED note instead, and the note records what the engine
+  // decided AT THE MOMENT IT DECIDED IT. A project placed cleanly and then overlapped
+  // by somebody else's later placement never gets a note, so the term under-reported
+  // badly: on the live book it read 1 when four projects were genuinely compromised.
+  // A term that wrong is not a tiebreaker, it is noise.
+  //
+  // Counted from the weeks, like every other overlap figure in both apps. The intent
+  // is unchanged and worth keeping: four messy projects are worse than one messy
+  // project, which is a preference neither total_double_booked nor max_double_booked
+  // can express.
+  const compromised = {};
+  for (const b of book) {
+    if (!b || !b.engineer || !b.project || !b.start_date || !b.end_date) continue;
+    for (const w of weeksOf(b)) {
+      if ((weeks[b.engineer] || {})[w] > 1) { compromised[b.project] = 1; break; }
+    }
+  }
+
   const regLoads = regular.map(load);
   const mean = regLoads.length ? regLoads.reduce((a, b) => a + b, 0) / regLoads.length : 0;
   const sd = regLoads.length
@@ -205,8 +225,7 @@ function scorePlan(book, engineerRows) {
 
   return {
     reserve_double_booked: reserve.reduce((a, n) => a + dbl(n), 0),
-    forced_projects: Object.keys(book.filter(isForced)
-      .reduce((m, b) => { m[b.project] = 1; return m; }, {})).length,
+    forced_projects: Object.keys(compromised).length,
 
     // How unevenly the overlap burden lands. Without this the search happily
     // halves total double-booking by piling all of it onto one person.

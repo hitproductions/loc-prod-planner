@@ -249,6 +249,38 @@ solve gives 2.
 
 ## 4. The objective — this is the whole policy
 
+**`forced_projects` was fixed on 2026-08-31 and the fix barely changes the schedule.**
+Worth recording, because the number looked alarming and the consequence did not.
+
+It counted the FORCED note, which records what the engine decided at the moment it
+decided it. A project placed cleanly and then overlapped by somebody else's later
+placement never gets a note, so on the live book the term read **1** against a true
+**4**. It now counts from the weeks, like every other overlap figure in both apps.
+
+Judged on incremental use — 3-4 projects at a time, plotted on top of what is already
+booked, which is how this tool is actually worked — across batch sizes 2 to 6:
+
+| batch | before | after |
+|---|---|---|
+| 2 | 6 overlapped weeks, 5 projects, spread 5 | identical |
+| 3 | 6 weeks, **6 projects**, spread **3** | 6 weeks, **5 projects**, spread **4** |
+| 4 | 5 weeks, 8 projects, spread 5 | identical |
+| 5 | 3 weeks, 6 projects, spread 2 | identical |
+| 6 | 4 weeks, 3 projects, spread 1 | identical |
+
+Four of five batch sizes produce the same plan. At batch 3 it trades one compromised
+project for one week of spread — which is exactly what the ranked objective says to do,
+since `forced_projects` sits above `regular_spread`.
+
+**So this is a truth fix, not a quality fix, and the truth mattered somewhere specific:**
+the re-plan preview reports this term to the user as "projects the engine had to
+compromise on" (`TERM_NAMES` in `webapp/actions.js`). That sentence was under-reporting
+by four times in the one place a person reads it to decide whether to accept a re-plan.
+
+`scorePlan` lives in `11_Wrapper.gs`, which is NOT in the drift-compared set (only
+`00`/`01`/`02` are), so this needed no `REWRITTEN` declaration. The term had no test
+coverage at all before this.
+
 ```js
 var SOLVE_OBJECTIVE = [
   'reserve_double_booked',   // never double-book the reserve
@@ -376,11 +408,11 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 431, all passing
+## 6. Tests — 437, all passing
 
 | suite | count | what it protects |
 |---|---|---|
-| `wrapper.test.js` | 156 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
+| `wrapper.test.js` | 162 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
 | `webapp.test.js` | 197 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
