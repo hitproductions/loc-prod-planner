@@ -376,18 +376,55 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 263, all passing
+## 6. Tests — 514, all passing
 
 | suite | count | what it protects |
 |---|---|---|
-| `wrapper.test.js` | 115 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
-| `io_roundtrips.test.js` | 107 | Sheets round trips, wipe, ghosts, relink, drag reassignment, roster validation |
+| `wrapper.test.js` | 156 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
+| `io_roundtrips.test.js` | 154 | Sheets round trips, wipe, ghosts, relink, drag reassignment, roster validation |
+| `webapp.test.js` | 151 | the web app: actions, replan, history replay, report, rollback |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `views.test.js` | 13 | the `.html` files parse and their `api()` calls exist |
+| `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 
 ```bash
 for t in test/*.test.js; do node "$t"; done
 ```
+
+**`sheets_live.test.js` is the only suite that touches Google.** Everything else runs
+on a fixture that has no tabs, no headers and no cell formats — which is why it could
+not see any of the three Sheets bugs that hit in one day: dates arriving as serial
+numbers, the log tab added to `TABS` so *every* read asked for a range that did not
+exist, and a column missing from the sheet so writes to it vanished in silence. Each
+was found by hand, none by the 502 tests that existed at the time.
+
+It reads and never writes, so it is safe to point at the live book:
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=~/.config/loc-prod-planner/key.json \
+PLANNER_SHEET_ID=<id> node test/sheets_live.test.js
+```
+
+Without those two variables it skips and exits 0, so the suite still runs anywhere.
+
+Two of its checks exist to keep the other twelve honest. **`the whole check wrote
+nothing to the live sheet`** records the HTTP verb of every Google call and fails on
+anything but `GET` — so if someone later makes `read()` repair a missing column, this
+fails instead of quietly editing Tara's spreadsheet during a test run. **`the read
+path was actually observed`** asserts the interception saw at least three calls: the
+first version of that guard was installed after `sheets.js` had already destructured
+`createAuth`, so it watched one call out of four and passed for the wrong reason.
+
+**Every check was verified by sabotage** — the bug reintroduced, the check confirmed
+to fail, the code restored. Worth doing literally: the first two sabotage attempts
+silently failed to apply and the suite went green, which looks exactly like a test
+doing its job. The patch script now asserts its own replacement landed.
+
+One check is structural rather than behavioural. `reading the book does not ask for
+the log tab` asserts `TABS` excludes `EVENTS_TAB` instead of proving a read succeeds
+without one, because the `History` tab now exists on the live sheet — the failing
+condition cannot be reproduced against it without deleting her data. It pins the shape
+of the bug, not the symptom.
 
 **The round-trip suite has earned its keep by being made more like Sheets, not more
 convenient.** Three real bugs came from tightening its fakes:
@@ -496,9 +533,10 @@ preview is the thing that gets trusted, because it is the thing you can see.
 **No refresh in the app.** Views cache in `LOADED` and never refetch, so sheet-side
 changes are invisible until a browser reload. A header refresh button is a few lines.
 
-**Services required (Atmos)** is not modelled. The engine can express `mix_level`
-and nothing else, so it will assign someone who cannot do the job. Same shape as
-rule 7, fits cleanly. This is a correctness gap.
+**Services required (Atmos) is now modelled** — `atmos` is its own capability column
+on the Engineers tab and gates every mix path, so the engine no longer assigns a mixer
+who cannot do the job. Kyle is currently the only name carrying it, which makes Atmos
+a second single point of failure alongside specials.
 
 **A project's title is its primary key** (§2). Renaming one in the sheet orphans its
 whole schedule; renaming it in the app is safe. Declined a `project_id` column as too
@@ -510,6 +548,14 @@ churn across the year.
 
 **One specials engineer.** Kyle is a single point of failure and the source of one
 remaining overlap.
+
+**The Sheets write path has no automated coverage.** `sheets_live.test.js` (§6) now
+exercises the read path against the real book, which closes the gap that let three
+bugs through in a day — but it is deliberately read-only, so `ensureProjectColumns`,
+the managed-column writes and `appendEvent` are still only ever tested by hand
+against the live sheet. That is the riskiest remaining blind spot, because those are
+the paths that can damage data rather than merely misreport it. Covering them needs a
+scratch spreadsheet the service account owns, not the production book.
 
 **Two music specialists, and the roster must say so.** Music is confined to whoever
 carries a `music_specialist` rank, so the pool is exactly as deep as that column. If
