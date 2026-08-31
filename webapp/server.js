@@ -93,6 +93,7 @@ const ACTIONS = {
   '/api/save-project':  (b, p) => actions.saveProject(b, p),
   '/api/set-status':    (b, p) => actions.setStatus(b, p),
   '/api/set-lock':      (b, p) => actions.setLock(b, p),
+  '/api/clear-ghosts':  (b, p) => actions.clearOrphans(b, p),
   '/api/replan':        (b, p) => previewReplan(b, p),      // async
   '/api/replan-apply':  (b, p) => applyReplan(b, p),
   '/api/rollback':      (b, p) => rollback(b, p),
@@ -133,6 +134,9 @@ function describe(path, r) {
     return `${r.project} · ${r.phase}, week of ${r.week_start}: back to ${r.to}, automatic again`;
   }
   if (path === '/api/save-project') return `Saved ${r.title}`;
+  if (path === '/api/clear-ghosts') {
+    return `Cleared ${r.superseded} booking(s) from ${r.projects.join(', ')}`;
+  }
   if (path === '/api/set-lock') {
     return `${r.locked ? 'Locked' : 'Unlocked'} ${r.title}`;
   }

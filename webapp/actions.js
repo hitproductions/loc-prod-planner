@@ -260,6 +260,46 @@ function setLock(book, payload) {
   };
 }
 
+// Clear ghosts: supersede the bookings of projects that no longer have a row.
+//
+// This had no home anywhere. The Apps Script MENU item was removed in v77 on the
+// grounds that "the app both detects orphans AND offers the fix" -- and then that app
+// was deleted, so nothing could do it at all. Relink only covers the renamed case; a
+// project deleted from the sheet outright left its weeks occupied forever.
+//
+// Each title is re-checked against the CURRENT book before anything is superseded. The
+// list the browser is holding may be minutes old, and a title that has since been
+// relinked must not have its bookings thrown away on the strength of a stale screen.
+// Superseding is soft -- the rows are marked, not removed -- and it goes through the
+// log like every other change, so it can be rolled back.
+function clearOrphans(book, payload) {
+  const p = payload || {};
+  const asked = (Array.isArray(p.projects) ? p.projects : [p.projects])
+    .map(t => String(t || '').trim()).filter(Boolean);
+  if (!asked.length) return { ok: false, error: 'Nothing selected.' };
+
+  const known = new Set((book.projects || []).map(x => x.project_title).filter(Boolean));
+  const rows = live(book);
+  const stillGhost = new Set(rows.map(b => b.project).filter(t => t && !known.has(t)));
+
+  const doing = asked.filter(t => stillGhost.has(t));
+  const skipped = asked.filter(t => !stillGhost.has(t));
+  if (!doing.length) {
+    return { ok: false, skipped,
+             // Two ways to get here and the message must fit both: relinked since the
+             // screen was drawn, or a title that was never on the schedule at all.
+             error: skipped.length === 1
+               ? `"${skipped[0]}" is not a ghost on the current schedule. It may have ` +
+                 'been relinked already — reload and check.'
+               : 'None of those are ghosts on the current schedule. Reload and check.' };
+  }
+  const supersede = rows.filter(b => doing.includes(b.project)).map(b => b.row_number);
+  return {
+    ok: true, projects: doing, skipped, superseded: supersede.length,
+    change: { supersede, append: [] },
+  };
+}
+
 // ---------------------------------------------------------------- re-plan
 
 // Plain-English names for the objective terms, so the preview can say WHY a re-plan is
@@ -330,5 +370,6 @@ function forReplan(projects) {
     ? { ...p, locked: true } : p);
 }
 
-module.exports = { reassignWeek, undoWeekMove, saveProject, setStatus, setLock, replanPreview,
+module.exports = { reassignWeek, undoWeekMove, saveProject, setStatus, setLock,
+                   clearOrphans, replanPreview,
                    shapeReplan, reassignWarnings, whyBetter, live, forReplan };

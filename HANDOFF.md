@@ -376,13 +376,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 406, all passing
+## 6. Tests — 431, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 156 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 172 | the web app: actions, replan, history replay, report, rollback, the read-only gate, the project lock |
+| `webapp.test.js` | 197 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 
@@ -576,10 +576,29 @@ Locked — because a save built from a book up to a TTL old would otherwise over
 lock somebody had just set in the spreadsheet. Both halves are asserted, and both were
 verified by sabotage.
 
-**Worth checking the rest of that rewrite the same way.** The lock was found by
-accident. Nothing has systematically compared what the Apps Script app could do against
-what the new one can, and the old UI is now deleted — so the comparison has to be made
-from git history.
+**That comparison has now been made.** Diffing the deleted `api*` surface against the
+new app found two more gaps, both closed 2026-08-31:
+
+- **Cancel a project.** `setStatus` accepted `Cancelled` and no caller ever sent it.
+  Complete and Cancelled differ in exactly one way that matters — Complete keeps the
+  bookings, because the record of who did the work is the point and the report is built
+  from them; Cancelled supersedes them, so a dropped show stops occupying weeks nobody
+  is spending.
+- **Clear ghost projects.** The worst of the three, and self-inflicted. The Apps Script
+  menu item was removed in v77 on the grounds that "the app both detects orphans AND
+  offers the fix" — and then that app was deleted, so nothing anywhere could release the
+  bookings of a project deleted from the sheet. `Relink` only covers the renamed case.
+  Now a notice at the top of Projects, which explains both causes rather than offering
+  one button: renamed wants relinking in the sheet, deleted wants clearing here.
+
+`clearOrphans` re-checks every title against the CURRENT book before superseding
+anything. The browser's list can be minutes old, and a title relinked since must not
+have its bookings discarded on the strength of a stale screen. That guard is the first
+thing to sabotage if these tests are ever rewritten.
+
+**All three gaps were found by writing documentation, not by testing.** Saying out loud
+where a step happens is what exposed them. Worth remembering the next time a rewrite is
+declared at parity.
 
 **The Sheets write path has no automated coverage.** `sheets_live.test.js` (§6) now
 exercises the read path against the real book, which closes the gap that let three

@@ -938,6 +938,51 @@ section('Reading a real spreadsheet layout');
 }
 
 
+section('Ghost projects: detected, and clearable');
+{
+  // This had no home at all. The Apps Script menu item was removed in v77 because "the
+  // app both detects orphans AND offers the fix", and then that app was deleted -- so
+  // a project deleted from the sheet outright left its weeks occupied with nothing
+  // anywhere able to release them.
+  fixture._reset();
+  const book = await fixture.read();
+  const title = book.projects[0].project_title;
+  const mine = actions.live(book).filter(b => b.project === title).length;
+  ok('a healthy book has no ghosts', api.orphans(book).length === 0,
+     JSON.stringify(api.orphans(book)));
+
+  // A project row deleted by hand, bookings left behind — exactly what happens in the
+  // sheet.
+  const haunted = { ...book, projects: book.projects.filter(p => p.project_title !== title) };
+  const g = api.orphans(haunted);
+  ok('deleting the row makes it a ghost', g.length === 1 && g[0].project === title,
+     JSON.stringify(g));
+  ok('and counts its stranded bookings', g[0].rows === mine, `${g[0].rows} vs ${mine}`);
+  ok('bootstrap reports ghosts without being asked',
+     api.bootstrap(haunted).orphans.length === 1);
+
+  const r = actions.clearOrphans(haunted, { projects: [title] });
+  ok('clearing is accepted', r.ok === true, JSON.stringify(r).slice(0, 90));
+  ok('it supersedes exactly the stranded rows', r.change.supersede.length === mine,
+     `${r.change.supersede.length} vs ${mine}`);
+  ok('it appends nothing', (r.change.append || []).length === 0);
+  ok('and touches no project row — there is none to touch', !r.change.project);
+
+  // The guard. The browser's list can be minutes old; a title relinked since must not
+  // have its bookings thrown away on the strength of a stale screen.
+  const healed = actions.clearOrphans(book, { projects: [title] });
+  ok('a title that is no longer a ghost is refused, not superseded',
+     healed.ok === false, JSON.stringify(healed).slice(0, 120));
+  ok('and it says which one', (healed.skipped || []).includes(title));
+
+  const mixed = actions.clearOrphans(haunted, { projects: [title, 'Never Existed'] });
+  ok('a mixed list clears only the real ghost', mixed.ok === true &&
+     mixed.projects.length === 1 && mixed.projects[0] === title);
+  ok('and reports the one it skipped', mixed.skipped.includes('Never Existed'));
+
+  ok('an empty selection is refused', actions.clearOrphans(haunted, {}).ok === false);
+}
+
 section('Cancelling a project frees its weeks');
 {
   // Complete and Cancelled are not the same thing and the difference is the bookings.

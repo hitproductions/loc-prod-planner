@@ -230,7 +230,30 @@ function renderProjects() {
   // asking for anything. Both come back with the toggle.
   const ps = SHOW_DONE ? all : all.filter(p => !p.status);
 
-  let h = '<div class="bar-row"><button class="btn primary" id="addBtn">+ Add project</button>' +
+  // Ghosts have to be surfaced here without being asked: they are missing from the
+  // Projects list by definition, so nothing below would ever mention them. The two
+  // causes have opposite fixes, so this explains both rather than offering one button
+  // and hoping.
+  let h = '';
+  const ghosts = BOOT.orphans || [];
+  if (ghosts.length) {
+    h += '<div class="msg"><b>' + ghosts.length + ' ghost project' +
+      (ghosts.length === 1 ? '' : 's') + ' on the schedule.</b> ' +
+      'These have bookings but no row on the Projects tab, so they take up engineer ' +
+      'weeks and cannot be edited.<br>' +
+      'If the title was <b>renamed</b> in the spreadsheet, relink it there instead: ' +
+      '<b>Engineer Assignment \u2192 Relink a renamed project</b>. Clearing is for a ' +
+      'project that is really gone \u2014 it frees the weeks and can be undone from ' +
+      'History.' +
+      '<table class="projects" style="margin-top:10px"><tbody>' +
+      ghosts.map(g => `<tr><td><b>${esc(g.project)}</b></td>` +
+        `<td>${g.rows} booking${g.rows === 1 ? '' : 's'}</td>` +
+        `<td class="lockcell"><button class="btn small" data-ghost="${esc(g.project)}">` +
+        'Clear</button></td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+
+  h += '<div class="bar-row"><button class="btn primary" id="addBtn">+ Add project</button>' +
     (done.length
       ? `<button class="btn small${SHOW_DONE ? ' primary' : ''}" id="toggleDone">` +
         `${SHOW_DONE ? 'Hide' : 'Show'} ${done.length} closed</button>`
@@ -289,6 +312,19 @@ function wireProjects() {
 
   // Wired AFTER the row handler and stopping propagation, or locking a project would
   // also open its form.
+  document.querySelectorAll('[data-ghost]').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      const title = btn.dataset.ghost;
+      if (!confirm(`Clear ${title}?\n\nIts bookings come off the schedule and those ` +
+        'weeks go back to the engineers. Do this only if the project is really gone \u2014 ' +
+        'if it was renamed, relink it in the spreadsheet instead.')) return;
+      btn.disabled = true;
+      const r = await post('/api/clear-ghosts', { projects: [title] });
+      if (!r.ok) { btn.disabled = false; alert(r.error); return; }
+      BOOT = r.boot; SCHED = r.schedule || SCHED;
+      paint();
+    }));
+
   document.querySelectorAll('.lockbtn').forEach(btn =>
     btn.addEventListener('click', async ev => {
       ev.stopPropagation();

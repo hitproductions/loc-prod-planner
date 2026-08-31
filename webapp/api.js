@@ -46,6 +46,24 @@ function projectDepth(rows) {
   return out;
 }
 
+// Bookings whose project has no row on the Projects tab.
+//
+// Two causes with OPPOSITE fixes, which is why this reports rather than repairs: a
+// project renamed in the sheet wants relinking (the old title's bookings belong to the
+// new name), and a project deleted outright wants its bookings superseded. They look
+// identical from here, so the person decides.
+function orphans(book) {
+  const known = new Set((book.projects || [])
+    .map(p => p.project_title).filter(Boolean));
+  const counts = {};
+  live(book).forEach(b => {
+    if (b.project && !known.has(b.project)) {
+      counts[b.project] = (counts[b.project] || 0) + 1;
+    }
+  });
+  return Object.keys(counts).sort().map(t => ({ project: t, rows: counts[t] }));
+}
+
 function bootstrap(book) {
   const rows = live(book);
   const d = depths(rows);
@@ -74,6 +92,10 @@ function bootstrap(book) {
     // midnight and 8am it returns yesterday — which put the bold on last week's row
     // for the whole of every early morning. The Apps Script app reads the
     // spreadsheet's own timezone for the same reason.
+    // Ghosts: bookings on the schedule with no project row. Surfaced without being
+    // asked, because nothing else in the app can show them -- they are absent from the
+    // Projects list by definition.
+    orphans: orphans(book),
     today_week: A.weekStart(A.widx(todayLocal())),
     counts: { projects: book.projects.filter(p => !p.status).length,
               done: book.projects.filter(p => p.status === 'Complete').length,
@@ -344,4 +366,4 @@ function report(book, opts) {
 }
 
 module.exports = { bootstrap, schedule, analysis, report, depths, projectDepth,
-                   todayLocal, engine: A };
+                   orphans, todayLocal, engine: A };
