@@ -225,13 +225,15 @@ function renderProjects() {
     String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')) || byTitle(a, b));
   // Finished work is hidden, not deleted. The point of marking a project complete is
   // that it stops asking for your attention; the record stays one click away.
-  const done = all.filter(p => p.status === 'Complete');
-  const ps = SHOW_DONE ? all : all.filter(p => p.status !== 'Complete');
+  const done = all.filter(p => p.status === 'Complete' || p.status === 'Cancelled');
+  // Cancelled work leaves the list for the same reason completed work does: it is not
+  // asking for anything. Both come back with the toggle.
+  const ps = SHOW_DONE ? all : all.filter(p => !p.status);
 
   let h = '<div class="bar-row"><button class="btn primary" id="addBtn">+ Add project</button>' +
     (done.length
       ? `<button class="btn small${SHOW_DONE ? ' primary' : ''}" id="toggleDone">` +
-        `${SHOW_DONE ? 'Hide' : 'Show'} ${done.length} completed</button>`
+        `${SHOW_DONE ? 'Hide' : 'Show'} ${done.length} closed</button>`
       : '') +
     '<div class="spacer"></div>' +
     `<button class="btn small${SORT === 'deadline' ? ' primary' : ''}" data-sort="deadline">Deadline</button>` +
@@ -240,7 +242,7 @@ function renderProjects() {
     '<div id="formHost"></div>';
 
   h += '<table class="projects"><thead><tr><th>Deadline</th><th>Project</th><th>Client</th>' +
-    '<th>D/E/M</th><th>Recordist</th><th>Mixer</th><th>Flags</th></tr></thead><tbody>';
+    '<th>D/E/M</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th></tr></thead><tbody>';
   ps.forEach(p => {
     let flags = '';
     if (p.overlap > 2) flags += '<span class="chip red">3 overlaps</span>';
@@ -248,7 +250,8 @@ function renderProjects() {
     // Visible in the list, not only inside the form. A locked project is one re-plan
     // will refuse to move, and having to open each project in turn to find that out is
     // how the Locked column came to be ignored.
-    if (p.locked) flags += '<span class="chip">locked</span>';
+    if (p.status === 'Cancelled') flags += '<span class="chip red">cancelled</span>';
+
     if (p.music) flags += '<span class="chip">music</span>';
     if (p.special) flags += '<span class="chip">special</span>';
     if (p.atmos) flags += '<span class="chip">atmos</span>';
@@ -257,11 +260,19 @@ function renderProjects() {
     if (p.status === 'Complete') {
       flags += `<span class="chip">completed ${esc(p.completed || '')}</span>`;
     }
-    h += `<tr data-title="${esc(p.title)}"${p.status === 'Complete' ? ' class="dim"' : ''}>` +
+    const cls = [p.status ? 'dim' : '', p.locked ? 'locked' : ''].filter(Boolean).join(' ');
+    h += `<tr data-title="${esc(p.title)}"${cls ? ` class="${cls}"` : ''}>` +
       `<td>${esc(p.deadline)}</td>` +
       `<td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
       `<td>${p.dub}/${p.edit}/${p.mix}</td><td>${esc(who('Dub'))}</td><td>${esc(who('Mix'))}</td>` +
-      `<td>${flags}</td></tr>`;
+      `<td>${flags}</td>` +
+      // A frozen project has to be obvious while scanning a long list, which a chip
+      // among six other chips is not. Same shape as the Apps Script app's column.
+      `<td class="lockcell"><button class="lockbtn${p.locked ? ' on' : ''}" ` +
+        `data-lock="${esc(p.title)}" data-now="${p.locked ? '1' : '0'}" title="${p.locked
+          ? 'Frozen — a re-plan will not move this project. Click to unfreeze.'
+          : 'Click to freeze: a re-plan will leave this project alone.'}">` +
+        `${p.locked ? 'LOCKED' : 'Lock'}</button></td></tr>`;
   });
   return h + '</tbody></table>';
 }
@@ -275,6 +286,20 @@ function wireProjects() {
     b.addEventListener('click', () => { SORT = b.dataset.sort; paint(); }));
   document.querySelectorAll('table.projects tbody tr').forEach(tr =>
     tr.addEventListener('click', () => openForm(tr.dataset.title)));
+
+  // Wired AFTER the row handler and stopping propagation, or locking a project would
+  // also open its form.
+  document.querySelectorAll('.lockbtn').forEach(btn =>
+    btn.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      const title = btn.dataset.lock;
+      const to = btn.dataset.now !== '1';
+      btn.disabled = true;
+      const r = await post('/api/set-lock', { title, locked: to });
+      if (!r.ok) { btn.disabled = false; alert(r.error); return; }
+      BOOT = r.boot; SCHED = r.schedule || SCHED;
+      paint();
+    }));
 }
 
 // ---------------------------------------------------------------- the report
@@ -806,6 +831,8 @@ function openForm(title) {
         ? 'Reopen' : 'Mark complete'}</button>` : ''}
       ${p ? `<button class="btn" id="f_lock">${p.locked
         ? 'Unlock' : 'Lock'}</button>` : ''}
+      ${p && p.status !== 'Complete' ? `<button class="btn" id="f_cancel">${
+        p.status === 'Cancelled' ? 'Reinstate' : 'Cancel project'}</button>` : ''}
       <button class="btn" id="f_close">Close</button>
     </div>
     <div id="f_out"></div></div>`;
@@ -814,6 +841,22 @@ function openForm(title) {
   $('f_check').addEventListener('click', () => submitForm(p, true));
   $('f_save').addEventListener('click', () => submitForm(p, false));
   $('f_close').addEventListener('click', () => { $('formHost').innerHTML = ''; });
+  if ($('f_cancel')) $('f_cancel').addEventListener('click', async () => {
+    const to = p.status === 'Cancelled' ? '' : 'Cancelled';
+    // Cancelling frees the weeks, so it is the one status change that alters the
+    // schedule. Say so before doing it.
+    if (!confirm(to
+      ? `Cancel ${p.title}?\n\nIts weeks go back to the engineers holding them and it ` +
+        'drops out of the list. The project row stays.'
+      : `Reinstate ${p.title}?\n\nIt has no schedule any more — use Save & re-plot, or ` +
+        'a re-plan, to give it one.')) return;
+    const r = await post('/api/set-status', { title: p.title, status: to });
+    if (!r.ok) { $('f_out').innerHTML = `<div class="msg">${esc(r.error)}</div>`; return; }
+    BOOT = r.boot; SCHED = r.schedule || SCHED;
+    $('formHost').innerHTML = '';
+    paint();
+  });
+
   if ($('f_lock')) $('f_lock').addEventListener('click', async () => {
     const to = !p.locked;
     if (!confirm(to

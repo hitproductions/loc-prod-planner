@@ -289,3 +289,18 @@ td.muted-inline{color:var(--fg2); font-size:11px}
   tr { page-break-inside:avoid }
   a[href]:after { content:"" }
 }
+
+/* Lock toggle in the Projects list. Ported from the Apps Script app: a frozen project
+   has to be obvious at a glance in a long list, which a chip sitting among six other
+   chips is not. */
+.lockcell{white-space:nowrap; width:1%}
+.lockbtn{font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  padding:5px 10px; border:1px solid var(--line); background:var(--bg1); color:var(--fg2);
+  cursor:pointer}
+.lockbtn:hover{border-color:var(--fg1); color:var(--fg1)}
+.lockbtn.on{background:var(--fg1); border-color:var(--fg1); color:#fff}
+.lockbtn:disabled{opacity:.5; cursor:default}
+/* The left marker uses an inset shadow, matching tr.on above — this stylesheet has no
+   transparent left border for a border-colour swap to override. */
+table.projects tbody tr.locked{background:var(--surface);
+  box-shadow:inset 3px 0 0 var(--fg1)}

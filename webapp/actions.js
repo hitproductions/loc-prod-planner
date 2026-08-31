@@ -207,10 +207,26 @@ function setStatus(book, payload) {
         .toISOString().slice(0, 10))
     : '';
 
+  // Complete and Cancelled are NOT the same thing, and the difference is the bookings.
+  //
+  // Complete: the work happened. The bookings stay, because the record of who did what
+  // is the point, and the monthly report is built from them.
+  //
+  // Cancelled: the work did not happen. Its bookings are superseded so the weeks go
+  // back to the people who were holding them — otherwise a cancelled show keeps
+  // occupying engineer time nobody is spending on it, and every overlap count and
+  // spread figure stays wrong. This is what removeProject did in the Apps Script app,
+  // via a note in the Notes column; there is a Status column now, so it says so
+  // properly.
+  const rows = status === 'Cancelled'
+    ? live(book).filter(b => b.project === title).map(b => b.row_number)
+    : [];
+
   return {
     ok: true, title, status, completed,
     was: project.status || '',
-    change: { supersede: [], append: [],
+    superseded: rows.length,
+    change: { supersede: rows, append: [],
               project: { ...project, status, completed },
               original_title: title },
   };

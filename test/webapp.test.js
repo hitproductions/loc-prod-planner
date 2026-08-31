@@ -938,6 +938,44 @@ section('Reading a real spreadsheet layout');
 }
 
 
+section('Cancelling a project frees its weeks');
+{
+  // Complete and Cancelled are not the same thing and the difference is the bookings.
+  // The Apps Script app superseded them (removeProject); the rewrite had no cancel at
+  // all, and setStatus accepted 'Cancelled' from nothing.
+  fixture._reset();
+  const book = await fixture.read();
+  const title = book.projects.find(p => !p.status).project_title;
+  const mine = actions.live(book).filter(b => b.project === title);
+  ok('the project has bookings to begin with', mine.length > 0, mine.length + '');
+
+  const cx = actions.setStatus(book, { title, status: 'Cancelled' });
+  ok('cancelling is accepted', cx.ok === true, JSON.stringify(cx).slice(0, 90));
+  ok('it supersedes every one of its bookings',
+     cx.change.supersede.length === mine.length,
+     `${cx.change.supersede.length} of ${mine.length}`);
+  ok('and only its own', cx.change.supersede.every(rn =>
+     mine.some(b => b.row_number === rn)));
+  ok('it appends nothing', (cx.change.append || []).length === 0);
+  ok('and sets no completed date — it was never finished', cx.status === 'Cancelled'
+     && cx.completed === '');
+
+  const done = actions.setStatus(book, { title, status: 'Complete' });
+  ok('completing the same project supersedes NOTHING',
+     done.change.supersede.length === 0, done.change.supersede.length + '');
+  ok('and does date it', !!done.completed);
+
+  // Cancelled is locked for re-plan, so it cannot be silently re-plotted.
+  const fed = actions.forReplan(book.projects.map(x =>
+    x.project_title === title ? { ...x, status: 'Cancelled' } : x))
+    .find(x => x.project_title === title);
+  ok('a cancelled project reaches the engine locked', fed.locked === true);
+
+  ok('cancelling an already-cancelled project is refused',
+     actions.setStatus({ projects: [{ project_title: title, status: 'Cancelled' }],
+       bookings: [] }, { title, status: 'Cancelled' }).ok === false);
+}
+
 section('Locking a project from the app');
 {
   // The Apps Script app had this and the rewrite dropped it, which left "type Yes in
@@ -985,6 +1023,16 @@ section('Locking a project from the app');
      Object.keys(saveCells).length + '');
   ok('but NEVER writes Locked — a stale save must not clobber a lock set in the sheet',
      !('locked' in saveCells), Object.keys(saveCells).join(','));
+
+  // The Projects list renders a Lock column off this field, so it has to be in the
+  // payload. It was not, at first -- the button worked and every row read "Lock".
+  const boot = api.bootstrap({ ...book, projects: locked });
+  ok('bootstrap tells the client which projects are locked',
+     boot.projects.find(x => x.title === title).locked === true);
+  ok('and a Yes in the sheet column counts as locked, not just a boolean',
+     api.bootstrap({ ...book, projects: book.projects.map(x =>
+       x.project_title === title ? { ...x, locked: 'Yes' } : x) })
+       .projects.find(x => x.title === title).locked === true);
 
   const off = actions.setLock({ projects: locked }, { title, locked: false });
   ok('unlocking is accepted', off.ok === true);
