@@ -73,6 +73,18 @@ row. Narrowing it to one engineer needs an identity to narrow it BY, which means
 Cloudflare Access in front of the app (HANDOFF §9) — and an `email` column on the
 Engineers tab to match a signed-in address to a name. Neither exists yet.
 
+### Running the write-path tests
+
+These WRITE, so they use a throwaway spreadsheet of their own and refuse to run against
+the production one:
+
+    GOOGLE_APPLICATION_CREDENTIALS=~/.config/loc-prod-planner/key.json \
+    PLANNER_TEST_SHEET_ID=14Pl-qbFUPNKrlWjl9nTCF_0oFwPEgRuUu_5zh_A92v8 \
+    node test/sheets_write.test.js
+
+`node tools/seed_test_sheet.js` resets that sheet. Without `PLANNER_TEST_SHEET_ID` the
+suite skips, so `for t in test/*.test.js; do node "$t"; done` still works anywhere.
+
 Check the credentials first — this reads only, so it is safe on a live sheet:
 
     GOOGLE_APPLICATION_CREDENTIALS=... PLANNER_SHEET_ID=... \

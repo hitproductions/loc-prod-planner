@@ -454,7 +454,7 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 471, all passing
+## 6. Tests — 502, all passing
 
 | suite | count | what it protects |
 |---|---|---|
@@ -463,6 +463,7 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 | `webapp.test.js` | 217 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
+| `sheets_write.test.js` | 31 | the WRITE path against a throwaway spreadsheet — skips without one |
 
 ```bash
 for t in test/*.test.js; do node "$t"; done
@@ -718,13 +719,32 @@ thing to sabotage if these tests are ever rewritten.
 where a step happens is what exposed them. Worth remembering the next time a rewrite is
 declared at parity.
 
-**The Sheets write path has no automated coverage.** `sheets_live.test.js` (§6) now
-exercises the read path against the real book, which closes the gap that let three
-bugs through in a day — but it is deliberately read-only, so `ensureProjectColumns`,
-the managed-column writes and `appendEvent` are still only ever tested by hand
-against the live sheet. That is the riskiest remaining blind spot, because those are
-the paths that can damage data rather than merely misreport it. Covering them needs a
-scratch spreadsheet the service account owns, not the production book.
+**The Sheets write path is covered as of 2026-08-31** — `test/sheets_write.test.js`,
+31 checks against a throwaway spreadsheet Tara owns
+(`14Pl-qbFUPNKrlWjl9nTCF_0oFwPEgRuUu_5zh_A92v8`, "Loc Prod Planner — TEST SHEET").
+Seeded by `tools/seed_test_sheet.js`, which mirrors the live layout deliberately,
+including the two things that have caused bugs: the Projects banner on row 1 with
+headers on row 2, and the Engineers tab's legacy `specials_only` header.
+
+It **refuses to run against the production book** — the id is compared and the process
+exits 1 — and skips with a message when there is no test sheet, so the suite still runs
+anywhere.
+
+Every bug found by hand today is now a check that fails without the fix: the orphan
+write (bookings written, project row not), the whole-row write that would blank
+`Locked`, the silently skipped column, the log tab widened without its header, and a
+ghost clear that supersedes more than its own rows.
+
+**One of those checks was vacuous when written, and sabotage is the only reason we know.**
+"clearing a ghost leaves every other booking untouched" reseeds first, so the ghost was
+the ONLY project with bookings — the assertion compared 0 against 0 and passed while
+superseding EVERY row in the book. It now creates a neighbour project first and asserts
+there is something to protect. The most destructive possible bug was invisible to the
+test written to catch it.
+
+**What is still not covered there:** the two-step re-plan over real Sheets (preview,
+then apply against a book that moved underneath it), and `Set up sheets`, which is Apps
+Script and rebuilds the tabs. Both are reachable from the test sheet if it ever matters.
 
 **Two music specialists, and the roster must say so.** Music is confined to whoever
 carries a `music_specialist` rank, so the pool is exactly as deep as that column. If

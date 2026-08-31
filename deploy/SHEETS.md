@@ -7,6 +7,7 @@ Decided 2026-08-31: **the copy is the real book.**
 | `Loc Prod Planner Base for webapp` | `1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ` | THE BOOK |
 | its bound script | `1VuzPgXblusJLEhygMDkoT7VPt1H3j8X9KlCCRh6-jSRA5fG0KRfL09Km` | the sheet menu only |
 | `Loc Prod Planner Base` (original) | script `1b5RDT0UhuHkvmUnlICT3lOpVhwgvBUmX_6KvWbnwbNSeHoZjVAkqIgwu` | **retired — do not push** |
+| `Loc Prod Planner — TEST SHEET (safe to delete)` | `14Pl-qbFUPNKrlWjl9nTCF_0oFwPEgRuUu_5zh_A92v8` | throwaway, for `test/sheets_write.test.js` |
 
 ## How this happened
 
@@ -19,6 +20,19 @@ one actually in use — kept an older build with the untrimmed menu.
 The hazard was not the stale menu. It was that running **Set up sheets** from that old
 build rebuilds the tabs from ITS `P_HEADERS`, which would have wiped the `Status` and
 `Completed` columns the web app had just created.
+
+## The test sheet
+
+`test/sheets_write.test.js` writes, so it has a spreadsheet of its own — created
+2026-08-31, owned by Tara, shared with `planner-app@loc-prod-planner.iam.gserviceaccount.com`
+as writer. `tools/seed_test_sheet.js` resets it, and the suite reseeds before and after
+so a failed run cannot leave it half-written.
+
+The suite compares its id against the production one and **exits 1 rather than run**, so
+a mistyped environment variable cannot point a writing test at the real book.
+
+It is disposable. If it is deleted, make another, share it with the service account,
+seed it, and set `PLANNER_TEST_SHEET_ID`.
 
 ## Tabs the app maintains itself
 
