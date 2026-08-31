@@ -20,6 +20,18 @@ The hazard was not the stale menu. It was that running **Set up sheets** from th
 build rebuilds the tabs from ITS `P_HEADERS`, which would have wiped the `Status` and
 `Completed` columns the web app had just created.
 
+## Tabs the app maintains itself
+
+`Projects` gains `Status` and `Completed` on demand (`ensureProjectColumns`), and the
+`History` tab is created and widened by `ensureEventsTab`. Both work by HEADER NAME, so
+a missing column is not an error — it is a value written into a column nothing reads,
+which is the worst kind of failure. Hence the on-demand creation.
+
+`History` headers, as of 2026-08-31: `at`, `action`, `summary`, `superseded`,
+`appended`, `revert`. The `revert` column was added to the live sheet on 2026-08-31
+with Tara's approval; the 13 entries that predate it have it blank and roll back the way
+they always did (rows only, no project-row restore).
+
 ## The rule
 
 One book, one script. If a sheet is ever copied again, delete the copy's bound script
