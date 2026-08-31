@@ -376,7 +376,7 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 514, all passing
+## 6. Tests — 516, all passing
 
 | suite | count | what it protects |
 |---|---|---|
