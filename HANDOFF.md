@@ -249,6 +249,52 @@ solve gives 2.
 
 ## 4. The objective — this is the whole policy
 
+**The engine can now tell two-at-once from three-at-once (2026-08-31).** Both apps have
+shown them differently since the lead asked for it — two is a blue warning, three is red
+and must be reassigned — but the ENGINE could not: `dbl()` counted any week with more
+than one booking, so a week holding three scored exactly like a week holding two, and
+the search would create a three to avoid two twos.
+
+Four terms, ranked directly under the reserve rule:
+
+| term | what it is |
+|---|---|
+| `three_deep_weeks` | how many weeks need a reassignment — each is a separate intervention |
+| `deepest_week` | among equals, nobody stacked deeper |
+| `three_deep` | total overflow ABOVE two, so a six-deep costs four |
+| `max_three_deep` | don't concentrate what remains on one person |
+
+**Her live book does not change: it has no three-deep weeks at all.** This is preventive.
+Measured on stressed books — the real slate doubled and tripled on the same roster,
+plotted 3-4 projects at a time:
+
+| load | before | after |
+|---|---|---|
+| 2x, batch 3 | 17 weeks at 3+, deepest 5 | **12**, deepest 5 |
+| 2x, batch 4 | 16, deepest 5 | **15**, deepest 6 |
+| 3x, batch 3 | 33, deepest 10 | **29**, deepest 10 |
+| 3x, batch 4 | 35, deepest 10 | **32**, deepest 11 |
+
+Two-deep weeks go UP in every case — 29 to 39 in the first row. That is the trade the
+lead asked for in words, and it is worth being explicit that it is a trade.
+
+**The open question is `deepest`, which gets one worse in the batch-4 cases.** Ranking
+the total overflow first instead caps depth (5 stays 5, 10 stays 10) but produces MORE
+weeks at three-plus than doing nothing at all — 18 against a baseline of 16. So the
+shipped ranking minimises the NUMBER of interventions and accepts that one week can go
+a little deeper. If that is the wrong way round for a real busy quarter, swap
+`three_deep` above `three_deep_weeks` in `SOLVE_OBJECTIVE`; both terms already exist and
+the tests cover both orderings.
+
+**Two test bugs came out of this, both found by sabotage.** `SOLVE_OBJECTIVE.indexOf(k) <
+indexOf(other)` passes when the term is ABSENT, because indexOf returns -1 — so removing
+the term from the objective entirely broke nothing. And a term named in the objective but
+missing from `scorePlan` would rank `undefined` against `undefined` and do nothing
+silently; a typo in the name is now caught for every term. There is also a check that
+every objective term has a plain-English name, because `whyBetter` falls back to the raw
+key and would otherwise show a person "three_deep_weeks" in the sentence explaining a
+re-plan.
+
 **`forced_projects` was fixed on 2026-08-31 and the fix barely changes the schedule.**
 Worth recording, because the number looked alarming and the consequence did not.
 
@@ -408,13 +454,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 437, all passing
+## 6. Tests — 453, all passing
 
 | suite | count | what it protects |
 |---|---|---|
-| `wrapper.test.js` | 162 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
+| `wrapper.test.js` | 176 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 197 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
+| `webapp.test.js` | 199 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 

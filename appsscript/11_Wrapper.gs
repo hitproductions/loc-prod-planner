@@ -185,6 +185,21 @@ function scorePlan(book, engineerRows) {
   }
   const load = n => Object.keys(weeks[n] || {}).length;
   const dbl  = n => Object.keys(weeks[n] || {}).filter(w => weeks[n][w] > 1).length;
+  // Three at once is not "more of two at once", it is a different thing. Two bookings
+  // in a week is ordinary here -- a series still recording while its edit starts --
+  // and three is overflow that has to be reassigned. Both apps have shown them
+  // differently since the lead asked for it (blue vs red); the engine could not tell
+  // them apart, so it would happily create a three to avoid two twos.
+  const deep = n => Object.keys(weeks[n] || {}).filter(w => weeks[n][w] > 2).length;
+  // The EXCESS beyond two, not a count of weeks. Counting weeks let the search merge
+  // three three-deep weeks into one six-deep week and score better, because that is
+  // two fewer weeks "at three or more". Measured: worst depth went 5 -> 6 and 10 -> 11
+  // while the counts improved. Summing the excess makes a six-deep cost four and three
+  // three-deeps cost three, so consolidation is no longer a win.
+  const excess = n => Object.keys(weeks[n] || {})
+    .reduce((a, w) => a + Math.max(0, weeks[n][w] - 2), 0);
+  const worstWeek = n => Object.keys(weeks[n] || {})
+    .reduce((a, w) => Math.max(a, weeks[n][w]), 0);
 
   // Projects with at least one booking sitting in an overlapped engineer-week.
   //
@@ -222,13 +237,28 @@ function scorePlan(book, engineerRows) {
 
   const everyone = Object.keys(weeks);
   const dblEach = everyone.map(dbl);
+  const everyoneExcess = () => everyone.reduce((a, n) => a + excess(n), 0);
+  const deepEach = everyone.map(deep);
 
   return {
     reserve_double_booked: reserve.reduce((a, n) => a + dbl(n), 0),
+    // Ranked ABOVE total_double_booked, so the search will accept more ordinary
+    // two-deep weeks in order to clear a three-deep one. That is the trade the lead
+    // asked for in words: two is a warning, three must be reassigned.
+    // Ranked so that nobody is ever pushed deeper: deepest_week first caps how bad a
+    // single week can get, then the total overflow above two.
+    deepest_week: everyone.length ? Math.max.apply(null, everyone.map(worstWeek)) : 0,
+    // Two questions, two terms, in this order: HOW MANY weeks need a reassignment
+    // (each is a separate intervention someone has to make), then HOW BAD they are.
+    // The second stops the first being gamed -- counting weeks alone let the search
+    // merge three three-deep weeks into one six-deep and call it an improvement.
+    three_deep_weeks: everyone.reduce((a, n) => a + deep(n), 0),
+    three_deep: everyoneExcess(),
     forced_projects: Object.keys(compromised).length,
 
     // How unevenly the overlap burden lands. Without this the search happily
     // halves total double-booking by piling all of it onto one person.
+    max_three_deep: deepEach.length ? Math.max.apply(null, deepEach) : 0,
     max_double_booked: dblEach.length ? Math.max.apply(null, dblEach) : 0,
     total_double_booked: dblEach.reduce((a, b) => a + b, 0),
 

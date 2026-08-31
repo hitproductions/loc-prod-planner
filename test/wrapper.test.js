@@ -1079,6 +1079,81 @@ section('forced_projects counts overlapped weeks, not FORCED notes');
      `${s.forced_projects} vs ${s.total_double_booked}`);
 }
 
+section('Two at once and three at once are different things to the engine');
+{
+  // Both apps have shown these differently since the lead asked for it -- two is a blue
+  // warning, three is red and must be reassigned. The ENGINE could not tell them apart:
+  // dbl() counted any week with more than one booking, so a week holding three scored
+  // exactly like a week holding two, and the search would create a three to avoid two
+  // twos.
+  const eng = [
+    { name: 'A', can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced' },
+    { name: 'B', can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced' },
+  ];
+  const wk = (project, engineer) =>
+    ({ project, engineer, phase: 'Dub', start_date: '2026-01-05', end_date: '2026-01-11' });
+
+  const two   = [wk('P1', 'A'), wk('P2', 'A')];
+  const three = [wk('P1', 'A'), wk('P2', 'A'), wk('P3', 'A')];
+  const s2 = A.scorePlan(two, eng), s3 = A.scorePlan(three, eng);
+
+  ok('two at once is not counted as overflow', s2.three_deep_weeks === 0,
+     s2.three_deep_weeks + '');
+  ok('three at once is', s3.three_deep_weeks === 1, s3.three_deep_weeks + '');
+  ok('the old measure still cannot tell them apart — which is the point',
+     s2.total_double_booked === s3.total_double_booked,
+     `${s2.total_double_booked} vs ${s3.total_double_booked}`);
+
+  // and the plan comparison must now prefer the two
+  ok('a plan with a three is worse than a plan with a two',
+     A.planIsBetter(s2, s3, A.SOLVE_OBJECTIVE) === true);
+  ok('and not the other way round',
+     A.planIsBetter(s3, s2, A.SOLVE_OBJECTIVE) === false);
+
+  // THE TRADE the lead asked for in words: accept more twos to clear a three.
+  const oneThree = [wk('P1', 'A'), wk('P2', 'A'), wk('P3', 'A')];
+  const twoTwos  = [wk('P1', 'A'), wk('P2', 'A'), wk('P3', 'B'), wk('P4', 'B')];
+  ok('two separate two-deep weeks beat one three-deep week',
+     A.planIsBetter(A.scorePlan(twoTwos, eng), A.scorePlan(oneThree, eng),
+                    A.SOLVE_OBJECTIVE) === true);
+
+  // depth must not be gameable by consolidation
+  const deepOne = [wk('P1','A'),wk('P2','A'),wk('P3','A'),wk('P4','A'),wk('P5','A'),wk('P6','A')];
+  const sDeep = A.scorePlan(deepOne, eng);
+  ok('a six-deep week is one week but four units of overflow',
+     sDeep.three_deep_weeks === 1 && sDeep.three_deep === 4,
+     `${sDeep.three_deep_weeks} week(s), excess ${sDeep.three_deep}`);
+  ok('and it reports the worst week honestly', sDeep.deepest_week === 6,
+     sDeep.deepest_week + '');
+  ok('a three-deep week is one unit of overflow', s3.three_deep === 1, s3.three_deep + '');
+
+  // among plans with the same number of bad weeks, prefer the shallower one
+  const shallow = A.scorePlan(three, eng), deeper = A.scorePlan(deepOne, eng);
+  ok('same count, shallower worst week wins',
+     A.planIsBetter(shallow, deeper, A.SOLVE_OBJECTIVE) === true,
+     `${shallow.three_deep_weeks}/${shallow.deepest_week} vs ${deeper.three_deep_weeks}/${deeper.deepest_week}`);
+
+  // and don't pile the threes on one person
+  ok('max_three_deep names the worst-hit person', s3.max_three_deep === 1,
+     s3.max_three_deep + '');
+  // indexOf returns -1 for a term that is ABSENT, and -1 is less than any real index,
+  // so a bare `a < b` here passes when the term has been removed from the objective
+  // altogether. Sabotage caught exactly that. Presence is asserted first.
+  const at = k => A.SOLVE_OBJECTIVE.indexOf(k);
+  ok('the objective actually contains the overflow terms',
+     at('three_deep_weeks') >= 0 && at('three_deep') >= 0 && at('max_three_deep') >= 0,
+     A.SOLVE_OBJECTIVE.join(' > '));
+  ok('and ranks them above ordinary overlap',
+     at('three_deep_weeks') < at('total_double_booked'),
+     `${at('three_deep_weeks')} vs ${at('total_double_booked')}`);
+  // Every term the objective names must exist on the score, or it silently ranks
+  // `undefined` against `undefined` and does nothing at all.
+  const score = A.scorePlan(three, eng);
+  const missing = A.SOLVE_OBJECTIVE.filter(k => typeof score[k] !== 'number');
+  ok('every objective term is a number the scorer actually produces',
+     missing.length === 0, 'missing: ' + missing.join(', '));
+}
+
 // ---------------------------------------------------------------------------
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

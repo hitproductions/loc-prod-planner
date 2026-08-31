@@ -308,6 +308,10 @@ function clearOrphans(book, payload) {
 // actually improved was how evenly the work sits.
 const TERM_NAMES = {
   reserve_double_booked: 'weeks the reserve is doubled up',
+  three_deep_weeks: 'weeks needing a reassignment (three at once)',
+  deepest_week: 'most jobs on one person in a single week',
+  three_deep: 'jobs stacked above two',
+  max_three_deep: 'three-at-once weeks on the worst-hit person',
   total_double_booked: 'overlapped weeks',
   max_double_booked: 'overlapped weeks on the worst-hit person',
   forced_projects: 'projects the engine had to compromise on',
@@ -370,6 +374,6 @@ function forReplan(projects) {
     ? { ...p, locked: true } : p);
 }
 
-module.exports = { reassignWeek, undoWeekMove, saveProject, setStatus, setLock,
+module.exports = { TERM_NAMES, reassignWeek, undoWeekMove, saveProject, setStatus, setLock,
                    clearOrphans, replanPreview,
                    shapeReplan, reassignWarnings, whyBetter, live, forReplan };

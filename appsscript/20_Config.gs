@@ -168,6 +168,10 @@ var SOLVE_SEED = 20260813;
 // mild preference for handing off rather than as a welfare measure.
 var SOLVE_OBJECTIVE = [
   'reserve_double_booked',   // never double-book the reserve
+  'three_deep_weeks',        // then the fewest weeks needing a reassignment at all
+  'deepest_week',            // then, among equals, nobody stacked deeper
+  'three_deep',              // then the least overflow above two in them
+  'max_three_deep',          // then don't concentrate what remains on one person
   'total_double_booked',     // then the fewest overloaded engineer-weeks anywhere
   'max_double_booked',       // then don't concentrate what remains on one person
   'forced_projects',         // then fewest projects compromised

@@ -938,6 +938,22 @@ section('Reading a real spreadsheet layout');
 }
 
 
+section('The re-plan preview can name every term it might report');
+{
+  // whyBetter falls back to the raw key, so a term added to SOLVE_OBJECTIVE without a
+  // plain-English name shows the user "three_deep_weeks" in the sentence explaining
+  // why a re-plan is worth applying. Adding the depth terms is exactly when this
+  // happens, and nothing would have caught it.
+  const A2 = api.engine;
+  const unnamed = (A2.SOLVE_OBJECTIVE || []).filter(k => !actions.TERM_NAMES[k]);
+  ok('every objective term has a plain-English name for the preview',
+     unnamed.length === 0, 'unnamed: ' + unnamed.join(', '));
+  ok('and no name is left pointing at a term the objective dropped',
+     Object.keys(actions.TERM_NAMES).every(k => A2.SOLVE_OBJECTIVE.includes(k)),
+     'stale: ' + Object.keys(actions.TERM_NAMES)
+       .filter(k => !A2.SOLVE_OBJECTIVE.includes(k)).join(', '));
+}
+
 section('Ghost projects: detected, and clearable');
 {
   // This had no home at all. The Apps Script menu item was removed in v77 because "the
