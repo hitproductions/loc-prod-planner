@@ -1,501 +1,142 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Loc Prod Planner — How to Use It</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loc Prod Planner — how to use it</title>
 <style>
-  :root {
-    --ink: #1c1c1c;
-    --muted: #6b6b6b;
-    --line: #e2e2e2;
-    --panel: #f7f7f6;
-    --accent: #c0392b;
-    --amber: #e8a33d;
-    --blue: #4a78c9;
-    --pink: #d9789e;
+  :root{
+    --black:#000; --red:#EF4123; --gray:#646667; --cool:#D0D0CE;
+    --bg:#fff; --soft:#F5F5F4;
+    --dub:#FFC000; --edit:#BDD7EE; --mix:#EA9999; --blue:#2E75B6;
+    --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: #fff;
-    color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    line-height: 1.6;
+  *{box-sizing:border-box;border-radius:0}
+  body{margin:0;background:var(--bg);color:var(--black);font-family:var(--font);
+    font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:44px 24px 90px}
+  .tag{display:inline-block;background:var(--black);color:#fff;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.09em;padding:4px 9px;margin-bottom:18px}
+  h1{font-size:31px;line-height:1.15;letter-spacing:-.02em;margin:0 0 6px}
+  .sub{color:var(--gray);margin:0 0 34px}
+  h2{font-size:20px;letter-spacing:-.01em;margin:44px 0 10px;
+    padding-top:14px;border-top:2px solid var(--black)}
+  p{margin:0 0 13px}
+  ul{margin:0 0 13px;padding-left:20px}
+  li{margin-bottom:6px}
+  b{font-weight:700}
+  .sw{display:inline-block;width:12px;height:12px;vertical-align:-1px;margin-right:5px;
+    border:1px solid rgba(0,0,0,.25)}
+  .note{border-left:3px solid var(--black);background:var(--soft);padding:12px 15px;margin:16px 0}
+  .warn{border-left:3px solid var(--red);background:#FDF0EE;padding:12px 15px;margin:16px 0}
+  .warn b{color:var(--red)}
+  code{background:var(--soft);padding:1px 5px;font-size:14px;
+    font-family:"SF Mono",Menlo,Consolas,monospace}
+  .foot{margin-top:52px;padding-top:14px;border-top:1px solid var(--cool);
+    color:var(--gray);font-size:13px}
+  @media print{
+    body{font-size:11.5pt} .wrap{padding:0;max-width:none}
+    h2{page-break-after:avoid} .note,.warn{page-break-inside:avoid}
   }
-  .page {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 56px 24px 96px;
-  }
-  header.doc-header {
-    border-bottom: 3px solid var(--ink);
-    padding-bottom: 20px;
-    margin-bottom: 8px;
-  }
-  header.doc-header h1 {
-    margin: 0 0 6px;
-    font-size: 1.9rem;
-    letter-spacing: -0.01em;
-  }
-  .tag {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-  }
-  .lede {
-    margin: 28px 0 8px;
-    font-size: 1.05rem;
-  }
-  h2 {
-    margin: 44px 0 14px;
-    font-size: 1.3rem;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--line);
-  }
-  h3 {
-    margin: 26px 0 10px;
-    font-size: 1.05rem;
-  }
-  p { margin: 0 0 14px; }
-  ul, ol { margin: 0 0 14px; padding-left: 22px; }
-  li { margin-bottom: 6px; }
-  hr {
-    border: none;
-    border-top: 1px solid var(--line);
-    margin: 36px 0;
-  }
-  code, .path {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.9em;
-    white-space: nowrap;
-  }
-  .btn {
-    display: inline-block;
-    background: var(--ink);
-    color: #fff;
-    padding: 3px 10px;
-    border-radius: 3px;
-    font-size: 0.85em;
-    font-weight: 600;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 14px 0 20px;
-    font-size: 0.95rem;
-  }
-  th, td {
-    text-align: left;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--line);
-    vertical-align: top;
-  }
-  th {
-    color: var(--muted);
-    font-weight: 600;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-  .swatch {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border-radius: 2px;
-    margin-right: 8px;
-    vertical-align: middle;
-  }
-  .sw-amber { background: var(--amber); }
-  .sw-blue  { background: var(--blue); }
-  .sw-pink  { background: var(--pink); }
-  .sw-red   { background: var(--accent); }
-  .sw-outline { background: #fff; border: 2px solid var(--accent); }
-  .sw-dotted  { background: #fff; border: 2px dashed var(--muted); }
-  .callout {
-    background: var(--panel);
-    border-left: 3px solid var(--ink);
-    padding: 12px 16px;
-    margin: 16px 0;
-    font-size: 0.95rem;
-  }
-  .callout.warn { border-left-color: var(--accent); }
-  .callout p:last-child { margin-bottom: 0; }
-  .callout strong { display: block; margin-bottom: 4px; }
-  .footnote {
-    margin-top: 48px;
-    padding-top: 16px;
-    border-top: 1px solid var(--line);
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
-  .menu-mock {
-    display: inline-block;
-    min-width: 300px;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    padding: 6px 0;
-    margin: 16px 0;
-    font-size: 0.95rem;
-  }
-  .menu-mock-title {
-    padding: 8px 18px 10px;
-    font-weight: 600;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 4px;
-  }
-  .menu-mock-item { padding: 9px 18px; cursor: default; }
-  .menu-mock-item.has-sub {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--panel);
-  }
-  .menu-mock-item.has-sub::after {
-    content: "▶";
-    font-size: 0.65em;
-    color: var(--muted);
-  }
-  .menu-mock-sub {
-    margin: 2px 0 4px 18px;
-    padding-left: 14px;
-    border-left: 2px solid var(--line);
-  }
-  .menu-mock-sub .menu-mock-item { padding: 7px 10px; font-size: 0.93em; }
-  .menu-mock-divider {
-    border: none;
-    border-top: 1px solid var(--line);
-    margin: 4px 10px;
-  }
-  .menu-mock-item.destructive { color: var(--accent); }
-  .term-app   { color: var(--blue);  font-weight: 700; }
-  .term-sheet { color: var(--accent); font-weight: 700; }
 </style>
 </head>
 <body>
-<div class="page">
+<div class="wrap">
 
-  <header class="doc-header">
-    <div class="tag">Hit Productions — Internal</div>
-    <h1>Loc Prod Planner — how to use it</h1>
-  </header>
+<div class="tag">Internal — Hit Productions</div>
+<h1>Loc Prod Planner</h1>
+<p class="sub">How to use it. Everything here takes a few seconds; nothing here can be
+broken permanently.</p>
 
-  <p class="lede">
-    You work in the <span class="term-app">web app</span>. Bookmark its link — that's the tool.
-    The <span class="term-sheet">Google Sheet</span> behind it is storage; you should rarely need
-    to open it, and there's a short list at the end of when you do.
-  </p>
-  <p>
-    You tell it a deadline and how many weeks of dub, edit and mix a title needs. It works out
-    who does each phase and when, keeping everyone's calendar as clear as it can — and on the
-    rare project where a deadline truly can't be hit any other way, it deliberately doubles
-    someone up and tells you so, rather than missing the date.
-  </p>
+<h2>What it is</h2>
+<p>It plans localization work across the engineers — who records, who edits, who mixes,
+and in which week. It reads and writes the planning spreadsheet, so the sheet stays the
+record and you can always open it and look.</p>
 
-  <h2>The roster</h2>
-  <p>
-    Everyone the planner can assign. This lives on the <span class="path">Engineers</span> tab of
-    the <span class="term-sheet">Google Sheet</span> — shown here so you know it exists.
-  </p>
-  <table>
-    <tr>
-      <th>Name</th><th>Record</th><th>Edit</th><th>Mix</th><th>Mix level</th>
-      <th>Music</th><th>Overflow only</th><th>Specials only</th>
-    </tr>
-    <tr><td>Jek</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Developing</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>John</td><td>Yes</td><td>Yes</td><td>No</td><td>—</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Jetrho</td><td>Yes</td><td>Yes</td><td>No</td><td>—</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Via</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Advanced</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Mat</td><td>Yes</td><td>Yes</td><td>No</td><td>—</td><td>No</td><td>No</td><td>No</td></tr>
-    <tr><td>Kyle</td><td>No</td><td>No</td><td>Yes</td><td>Advanced</td><td>No</td><td>No</td><td>Yes</td></tr>
-    <tr><td>Josiah</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Advanced</td><td><strong>2</strong></td><td>No</td><td>No</td></tr>
-    <tr><td>Daryl</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Advanced</td><td><strong>1</strong></td><td>Yes</td><td>No</td></tr>
-  </table>
-  <p>
-    <strong>Music is an order, not a yes/no.</strong> <code>1</code> is first choice, <code>2</code>
-    is second. A title flagged Music/Songs goes to those people and <em>only</em> those people —
-    Daryl if he's free, Josiah if he isn't, and they can share a title between them.
-  </p>
+<h2>Reading the schedule</h2>
+<p>Weeks run down the page. Use the toggle at the top left to see the columns as
+<b>engineers</b> or as <b>projects</b>. The row in bold is the current week. The
+<b>From</b> and <b>To</b> pickers narrow it to a few quarters; <b>All</b> puts it back.</p>
+<ul>
+  <li><span class="sw" style="background:var(--dub)"></span><b>Dub</b> — recording</li>
+  <li><span class="sw" style="background:var(--edit)"></span><b>Edit</b></li>
+  <li><span class="sw" style="background:var(--mix)"></span><b>Mix</b></li>
+</ul>
+<p>Outlines tell you how loaded someone is that week:</p>
+<ul>
+  <li><b style="color:var(--blue)">Blue — two jobs at once.</b> Ordinary. A series still
+      recording while its edit starts looks like this.</li>
+  <li><b style="color:var(--red)">Red — three at once.</b> Too much. Move one.</li>
+  <li><b>Dotted</b> — somebody set this by hand, so the planner will not move it.</li>
+</ul>
 
-  <hr>
+<h2>Adding one project</h2>
+<p>Go to <b>Projects</b> and press <b>Add</b>. Fill in the title, client, deadline, and how
+many weeks each phase needs. Tick <b>Music</b>, <b>Special</b> or <b>Atmos</b> if they
+apply — they decide who is eligible. You can name a recordist, editor or mixer yourself;
+leave those blank to let the planner choose.</p>
+<p><b>Check availability</b> shows what would happen without saving anything.
+<b>Plot &amp; save</b> schedules it.</p>
+<div class="note">
+  Adding a project schedules <b>only that project</b>. Nothing already on the board moves.
+</div>
 
-  <h2>Adding a project</h2>
-  <p>In the <span class="term-app">web app</span>: <span class="path">Projects → + Add project</span></p>
-  <p>
-    Fill in the title, deadline, and the three phase lengths in whole weeks. Everything else has a
-    sensible default — client is Netflix, mix level is Advanced, Music and Special are off.
-  </p>
-  <table>
-    <tr><th style="width:190px">Button</th><th>What it does</th></tr>
-    <tr>
-      <td><span class="btn">Check availability</span></td>
-      <td>Shows you who would get it and flags any problem. Nothing is saved.</td>
-    </tr>
-    <tr>
-      <td><span class="btn">Plot &amp; save</span></td>
-      <td>Commits it.</td>
-    </tr>
-  </table>
+<h2>Adding a batch of projects</h2>
+<p>Paste the rows into the <b>Projects</b> tab of the spreadsheet, then open the app and
+run a <b>Re-plan</b>. It picks up anything that has no schedule yet.</p>
+<div class="warn">
+  <b>Re-plan moves everything that is not locked</b> — not just the rows you pasted. If
+  you only want to add a few titles without disturbing the rest, add them one at a time
+  through the form instead. Locking is described below.
+</div>
 
-  <h3>The three phase lengths</h3>
-  <p>
-    Whole weeks only. <strong>Zero is valid</strong> — a mix-only job is <code>0/0/2</code>.
-    Phases run back-to-back ending the week before the deadline, so a 2/1/1 job occupies the four
-    weeks leading up to delivery.
-  </p>
+<h2>Changing who does a week</h2>
+<p>Switch the schedule to the <b>engineers</b> view and drag a week onto somebody else.
+A week can only move sideways — same week, same phase — because you are changing
+<em>who</em> does it, not <em>when</em> it happens. If the move creates a problem you are
+told before it is saved.</p>
+<p>A cell you moved by hand shows a dotted outline. <b>Click it to hand it back to the
+planner.</b></p>
 
-  <div class="callout">
-    <p>When you have several projects to add, <strong>add them all and plot once</strong> rather
-    than one at a time. Each one added alone is decided before the others exist. On our test book
-    that's the difference between three overloaded weeks and nine.</p>
-  </div>
+<h2>Re-plan</h2>
+<p><b>Re-plan</b> proposes a fresh arrangement of everything. You see what would change
+first, and nothing is written until you accept it.</p>
+<p>To hold a project still, put <code>Yes</code> in its <b>Locked</b> column on the Projects
+tab. Completed projects lock themselves.</p>
 
-  <hr>
+<h2>Finishing a project</h2>
+<p>Open it in <b>Projects</b> and press <b>Mark complete</b>. It drops out of the working
+list and re-plan leaves it alone. Its bookings stay on the schedule, because the work
+happened and the record of who did it matters. <b>Reopen</b> undoes this.</p>
+<p><b>Report</b> lists what finished in a given month. Pick the month and print it.</p>
 
-  <h2>Reading the schedule</h2>
-  <p>In the <span class="term-app">web app</span>: <span class="path">Schedule</span></p>
-  <table>
-    <tr><td><span class="swatch sw-amber"></span>Amber</td><td>Dub</td></tr>
-    <tr><td><span class="swatch sw-blue"></span>Blue</td><td>Edit</td></tr>
-    <tr><td><span class="swatch sw-pink"></span>Pink</td><td>Mix</td></tr>
-    <tr><td><span class="swatch sw-red"></span>Solid red</td><td>The deadline week</td></tr>
-    <tr><td><span class="swatch sw-outline"></span><strong>Red outline</strong></td><td>That engineer is on two projects that week</td></tr>
-    <tr><td><span class="swatch sw-dotted"></span>Dotted outline</td><td>Someone you picked by hand</td></tr>
-  </table>
-  <p>
-    A red outline marks the <strong>specific week</strong> where someone is doubled — not the whole
-    project. One outlined cell among five clean ones means one week is a problem.
-  </p>
-  <p>Two views, laid out differently on purpose:</p>
-  <ul>
-    <li><strong>Projects</strong> — one row per title, weeks across. Read a project left to right.</li>
-    <li><strong>Engineers</strong> — one <strong>column</strong> per person, weeks <strong>down</strong>.
-        Everyone fits on screen, so a single row answers "who is free that week".</li>
-  </ul>
-  <p>
-    Set <strong>From</strong> and <strong>To</strong> to narrow it to a quarter.
-    <span class="btn">Clear</span> goes back to the whole picture.
-  </p>
+<h2>Undoing something</h2>
+<p><b>History</b> lists every change, newest first, with what it did. The most recent one
+can be rolled back.</p>
 
-  <h3>Moving a week to someone else</h3>
-  <p>
-    In <strong>Engineers</strong> view, drag a booking <strong>sideways</strong> onto another
-    person. That week becomes theirs; the rest of the project doesn't move.
-  </p>
-  <p>
-    Sideways only. A row is a week, and weeks never move — the dates come from the deadline.
-    You're moving one week of one phase, so the other weeks of that job stay put.
-  </p>
-  <p>
-    Before anything is written you get a summary: who it's going to, whether it double-books them,
-    whether they're eligible. None of it stops you — a hand decision wins, same as the dropdowns on
-    the form — but you'll know what it costs. Nothing happens until you confirm.
-  </p>
+<h2>What the planner does not decide</h2>
+<p>It assumes everybody is available every week. It does not know who is on leave, who is
+coming back mid-week, or who should not be handed a difficult title right now.</p>
+<p>That is deliberate, and it is why naming an engineer yourself is a normal thing to do
+rather than a workaround. When you pick someone by hand, the planner keeps your choice.</p>
 
-  <hr>
+<h2>If something looks wrong</h2>
+<ul>
+  <li><b>A red banner on Projects.</b> Something in the engineer roster is mistyped —
+      usually a mix level. It names the problem. Fix it in the Engineers tab.</li>
+  <li><b>A red outline.</b> Three jobs on one person in one week. Drag one away, or
+      re-plan.</li>
+  <li><b>A project's schedule vanished.</b> Its title was probably changed in the sheet.
+      The schedule is keyed to the title, so the old bookings are stranded. Use
+      <b>Engineer Assignment → Relink a renamed project</b> in the spreadsheet menu.</li>
+  <li><b>Numbers look stale.</b> Reload the page. The app holds the book in memory for
+      speed and re-reads it when you change something.</li>
+</ul>
 
-  <h2>Changing something</h2>
-  <p>
-    Click any row in Projects to reopen it. Change what you need and
-    <span class="btn">Save &amp; re-plot</span>. The old bookings are replaced; nothing is duplicated.
-  </p>
-  <p>
-    Projects are listed by deadline. <span class="btn">A–Z</span> beside <em>Add project</em> sorts
-    by title instead, which is faster when you know the name but not the date.
-  </p>
-
-  <div class="callout warn">
-    <strong>Retitle a project in the app, never in the sheet.</strong>
-    <p>The app moves the schedule across with the new name. Editing the title cell in the sheet
-    doesn't — the bookings keep pointing at the old name and the whole project drops off the
-    schedule. Fixable, but see the last section.</p>
-  </div>
-
-  <h3>Choosing someone yourself</h3>
-  <p>
-    Three dropdowns on the form: <strong>Recordist pick</strong>, <strong>Editor pick</strong>,
-    <strong>Mixer pick</strong>. Leave them on <code>Auto</code> and the tool decides.
-  </p>
-  <ul>
-    <li>Naming a <strong>recordist</strong> alone gives them the dub <em>and</em> the edit — the usual case.</li>
-    <li>Naming an <strong>editor</strong> too splits them: recordist does the dub, editor does the edit.</li>
-  </ul>
-  <p>
-    A manual pick always wins, even if it double-books that person or breaks a rule. You get a
-    warning saying exactly what it costs, and the booking is marked <strong>pinned</strong> so
-    nothing moves it later.
-  </p>
-
-  <h3>Freezing a project</h3>
-  <p>
-    The <span class="btn">Lock</span> button on each Projects row. A locked project is left
-    completely alone by a re-plan — use it once you've told people their dates.
-  </p>
-
-  <h3>Cancelling</h3>
-  <p>
-    Open the project → <span class="btn">Cancel project</span>. It comes off the schedule but the
-    row stays, marked cancelled, and its history is kept.
-  </p>
-
-  <hr>
-
-  <h2>Re-plan</h2>
-  <p>In the <span class="term-app">web app</span>: <span class="path">Re-plan → Preview re-plan</span></p>
-  <p>
-    Over time the schedule drifts: a booking that was right when it was made isn't the best answer
-    once the surrounding weeks fill in. Re-plan works out a better arrangement and shows you the
-    diff before writing anything.
-  </p>
-  <p>It will never touch:</p>
-  <ul>
-    <li>Work starting <strong>this week or earlier</strong></li>
-    <li>Anything you <strong>picked by hand</strong> or dragged</li>
-    <li>Anything you've <strong>locked</strong></li>
-  </ul>
-  <p>
-    Read the change list, then <span class="btn">Apply re-plan</span> if it looks right. Old rows
-    are superseded, not deleted, so nothing is lost.
-  </p>
-
-  <hr>
-
-  <h2>What the tool decides, and what you do</h2>
-  <p>
-    The planner is deliberately narrow. It knows deadlines, phase lengths, and who is
-    eligible for what. It does not know anything else about your people, and it is not
-    trying to.
-  </p>
-
-  <h3>What it decides</h3>
-  <ul>
-    <li><strong>Dates.</strong> Never negotiable — every phase is counted back from the deadline.</li>
-    <li><strong>Who is eligible</strong> — can they record, edit, mix; at what level; is this a
-        special or a music title.</li>
-    <li><strong>Who gets it</strong>, balancing total workload so nobody is doubled up unless
-        the deadline can't otherwise be hit.</li>
-    <li><strong>Whether to split a job.</strong> A title stays with one person where it can. It
-        is split when nobody is free for the whole run — better than missing the date — and the
-        note on the project says so.</li>
-  </ul>
-
-  <h3>What it deliberately leaves to you</h3>
-  <p>These are judgment calls. The tool has no data for them and won't pretend otherwise.</p>
-  <table>
-    <tr><th style="width:38%">Decision</th><th>Why it's yours</th></tr>
-    <tr>
-      <td><strong>Leave, sick days, availability</strong></td>
-      <td>Not modelled at all — the tool assumes everyone is available every week. Use a manual
-          pick or drag the week to someone else.</td>
-    </tr>
-    <tr>
-      <td><strong>Sharing work out in a quiet month</strong></td>
-      <td>When there's little on, the tool won't split a job up just to give more people
-          something. Who needs the hours, who's owed a quieter spell, who's being trained up —
-          you know that, it doesn't. Drag a week to whoever should have it.</td>
-    </tr>
-    <tr>
-      <td><strong>Who suits a client or a title</strong></td>
-      <td>Familiarity with a show, a difficult client, someone you'd rather not put on a
-          particular job. Nothing in the data captures it.</td>
-    </tr>
-    <tr>
-      <td><strong>Whether a title is harder than its week count</strong></td>
-      <td>You set the phase lengths. If a 2-week dub is really a hard 2 weeks, the tool can't
-          tell — it counts weeks, not difficulty.</td>
-    </tr>
-    <tr>
-      <td><strong>Whether a forced overlap is acceptable</strong></td>
-      <td>The tool will double someone up to hit a date and tell you it did. Whether to accept
-          that or renegotiate the deadline is a conversation, not a calculation.</td>
-    </tr>
-  </table>
-  <div class="callout">
-    <p>So a manual pick or a drag isn't working around the tool — it's <strong>the intended way
-    to say "not that week, not that person."</strong> Pin it or lock it and the schedule works
-    around you. Treat what it gives you as a strong first draft you correct.</p>
-  </div>
-
-  <hr>
-
-  <h2>When something looks wrong</h2>
-
-  <div class="callout warn">
-    <strong>The <span class="term-app">web app</span> is showing old information.</strong>
-    <p>Reload the page. It fetches once when it opens and doesn't notice changes made elsewhere.</p>
-  </div>
-
-  <div class="callout warn">
-    <strong>A project is on the schedule but not in the Projects list.</strong>
-    <p>Two causes, opposite fixes — check which before doing anything.</p>
-    <p><strong style="display:inline">You renamed it in the sheet:</strong>
-    <span class="term-sheet">Google Sheet</span> →
-    <span class="path">Engineer Assignment → Relink a renamed project</span>. It moves the schedule
-    onto the new name, same people, same weeks. <em>Don't</em> clear ghost projects for this — that
-    retires the bookings you're trying to keep.</p>
-    <p><strong style="display:inline">Its row was deleted by hand:</strong>
-    <span class="path">Engineer Assignment → Clear ghost projects</span>.</p>
-  </div>
-
-  <div class="callout warn">
-    <strong>Someone idle wasn't given work you expected.</strong>
-    <p><span class="term-sheet">Google Sheet</span> →
-    <span class="path">Engineer Assignment → Why this mixer?</span> and type the project title. It
-    lists every engineer and why each was or wasn't eligible. The usual answer is that the tool
-    balances <strong>total</strong> workload across all phases, so a busy recordist gets passed
-    over for a mix.</p>
-  </div>
-
-  <div class="callout warn">
-    <strong>Anything else odd.</strong>
-    <p><span class="term-sheet">Google Sheet</span> →
-    <span class="path">Engineer Assignment → Check bookings for problems</span>. It reports roster
-    mistakes, duplicated rows and bad data in one go. Worth running after anyone edits the
-    Engineers tab.</p>
-  </div>
-
-  <hr>
-
-  <h2>When you actually need the <span class="term-sheet">Google Sheet</span></h2>
-  <ol>
-    <li><strong>Changing the roster</strong> — who can record, edit or mix, and at what level.
-        Engineers tab, then <em>Admin → Refresh engineer dropdowns</em>.</li>
-    <li><strong>The fixes and diagnostics above.</strong></li>
-    <li><strong>Loading a batch of projects at once</strong> — paste rows into the Projects tab,
-        then <em>Admin → Plot all unplotted rows</em>.</li>
-  </ol>
-
-  <div class="menu-mock">
-    <div class="menu-mock-title">Engineer Assignment</div>
-    <div class="menu-mock-item">Check bookings for problems</div>
-    <div class="menu-mock-item">Relink a renamed project</div>
-    <div class="menu-mock-item">Clear ghost projects</div>
-    <div class="menu-mock-item">Why this mixer?</div>
-    <div class="menu-mock-item has-sub">Admin</div>
-    <div class="menu-mock-sub">
-      <div class="menu-mock-item">Set up sheets</div>
-      <div class="menu-mock-item">Plot all unplotted rows</div>
-      <div class="menu-mock-item">Refresh engineer dropdowns</div>
-      <hr class="menu-mock-divider">
-      <div class="menu-mock-item destructive">Wipe the schedule (build only)</div>
-    </div>
-  </div>
-
-  <div class="callout warn">
-    <p><strong>Set up sheets</strong> clears and rebuilds the Projects tab. Don't reach for it as a
-    general repair — if a dropdown is flagging a valid entry, use <em>Refresh engineer
-    dropdowns</em> instead, which only touches validation.</p>
-    <p><strong>Wipe the schedule (build only)</strong> erases bookings. It's a leftover from setting
-    the tool up and should be removed before go-live; until then, leave it alone.</p>
-  </div>
-
-  <p class="footnote">Loc Prod Planner — internal guide, Hit Productions / HAIST.</p>
+<div class="foot">
+  Hit Productions — internal. Contains scheduling and client information; do not
+  circulate outside the company.
+</div>
 
 </div>
 </body>
