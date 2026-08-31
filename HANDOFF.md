@@ -376,20 +376,34 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 522, all passing
+## 6. Tests — 391, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 156 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
-| `io_roundtrips.test.js` | 154 | Sheets round trips, wipe, ghosts, relink, drag reassignment, roster validation |
+| `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
 | `webapp.test.js` | 157 | the web app: actions, replan, history replay, report, rollback, the read-only gate |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
-| `views.test.js` | 13 | the `.html` files parse and their `api()` calls exist |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 
 ```bash
 for t in test/*.test.js; do node "$t"; done
 ```
+
+**118 tests were deleted with the Apps Script web app UI on 2026-08-31, and that is
+not a coverage regression — they exercised code that no longer exists.** Every one of
+them drove a deleted `api*` entry point: the grid payload, quarter clipping, drag
+reassignment and undo, the lock toggle, re-plan preview/apply, the orphan sweep. The
+equivalent behaviour in the Node app is covered by `webapp.test.js`, which has a
+section for each. `views.test.js` went the same way: it existed to check that the three
+deleted HTML files parsed.
+
+What genuinely went with them is the round-trip ACCOUNTING — "nothing else scales with
+row count", "superseding many rows is not one call per row". Those measured
+`SpreadsheetApp` calls per operation, which was the dominant cost in Apps Script and is
+not a cost the Node app has: it reads the whole book once over the Sheets API and
+serves everything else from memory. If the Apps Script app is ever revived, that
+harness is in git.
 
 **`sheets_live.test.js` is the only suite that touches Google.** Everything else runs
 on a fixture that has no tabs, no headers and no cell formats — which is why it could

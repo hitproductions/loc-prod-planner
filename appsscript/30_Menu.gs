@@ -76,6 +76,20 @@ function duplicateLiveRows_(live) {
 // deleted one look identical — both show as ghosts — but the fixes are opposite, and
 // clearing is the one that costs you the assignments. The recoverable action should
 // be the one people reach first.
+// Moved here from 40_WebApp.gs when the Apps Script web app UI was deleted
+// (2026-08-31). It is the one thing the menu still needed out of that file.
+function orphanProjects_(live, projectRows) {
+  var known = {};
+  projectRows.forEach(function (p) { if (p.project_title) known[p.project_title] = true; });
+  var counts = {};
+  live.forEach(function (b) {
+    if (b.project && !known[b.project]) counts[b.project] = (counts[b.project] || 0) + 1;
+  });
+  return Object.keys(counts).sort().map(function (t) {
+    return { project: t, rows: counts[t] };
+  });
+}
+
 function relinkRenamedProject() {
   var ui = SpreadsheetApp.getUi();
   var live, projectRows;
