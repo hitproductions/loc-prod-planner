@@ -63,6 +63,7 @@ function bootstrap(book) {
       mix_level: p.mix_level_required,
       music: yes(p.music_songs), special: yes(p.special_project), atmos: yes(p.atmos_required),
       status: p.status || '', completed: p.completed || '',
+      locked: p.locked === true || /^(yes|true)$/i.test(String(p.locked || '')),
       overlap: deep[p.project_title] || 0,
       rows: rows.filter(b => b.project === p.project_title).map(b => ({
         phase: b.phase, engineer: b.engineer, start: b.start_date, end: b.end_date, note: b.note || '',

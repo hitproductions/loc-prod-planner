@@ -245,6 +245,10 @@ function renderProjects() {
     let flags = '';
     if (p.overlap > 2) flags += '<span class="chip red">3 overlaps</span>';
     else if (p.overlap) flags += '<span class="chip warn">2 overlaps</span>';
+    // Visible in the list, not only inside the form. A locked project is one re-plan
+    // will refuse to move, and having to open each project in turn to find that out is
+    // how the Locked column came to be ignored.
+    if (p.locked) flags += '<span class="chip">locked</span>';
     if (p.music) flags += '<span class="chip">music</span>';
     if (p.special) flags += '<span class="chip">special</span>';
     if (p.atmos) flags += '<span class="chip">atmos</span>';
@@ -800,6 +804,8 @@ function openForm(title) {
       <button class="btn primary" id="f_save">${p ? 'Save &amp; re-plot' : 'Plot &amp; save'}</button>
       ${p ? `<button class="btn" id="f_done">${p.status === 'Complete'
         ? 'Reopen' : 'Mark complete'}</button>` : ''}
+      ${p ? `<button class="btn" id="f_lock">${p.locked
+        ? 'Unlock' : 'Lock'}</button>` : ''}
       <button class="btn" id="f_close">Close</button>
     </div>
     <div id="f_out"></div></div>`;
@@ -808,6 +814,19 @@ function openForm(title) {
   $('f_check').addEventListener('click', () => submitForm(p, true));
   $('f_save').addEventListener('click', () => submitForm(p, false));
   $('f_close').addEventListener('click', () => { $('formHost').innerHTML = ''; });
+  if ($('f_lock')) $('f_lock').addEventListener('click', async () => {
+    const to = !p.locked;
+    if (!confirm(to
+      ? `Lock ${p.title}?\n\nRe-plan will leave its schedule exactly where it is. ` +
+        'You can still move a week by hand.'
+      : `Unlock ${p.title}?\n\nRe-plan can move it again.`)) return;
+    const r = await post('/api/set-lock', { title: p.title, locked: to });
+    if (!r.ok) { $('f_out').innerHTML = `<div class="msg">${esc(r.error)}</div>`; return; }
+    BOOT = r.boot; SCHED = r.schedule || SCHED;
+    $('formHost').innerHTML = '';
+    paint();
+  });
+
   if ($('f_done')) $('f_done').addEventListener('click', async () => {
     const to = p.status === 'Complete' ? '' : 'Complete';
     if (!confirm(to

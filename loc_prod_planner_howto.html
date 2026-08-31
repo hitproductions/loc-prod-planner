@@ -72,9 +72,9 @@ record and you can always open it and look.</p>
 <ul>
   <li><span class="inl app">App</span> <b>The planner</b>, in a browser. Where you do the
       work: see the schedule, add projects, move a week, re-plan, mark things finished.</li>
-  <li><span class="inl sheet">Sheet</span> <b>The spreadsheet.</b> The record. Four things
-      are only done here: pasting in a batch of projects, locking a project, editing the
-      engineer roster, and relinking a renamed project.</li>
+  <li><span class="inl sheet">Sheet</span> <b>The spreadsheet.</b> The record. Three
+      things are only done here: pasting in a batch of projects, editing the engineer
+      roster, and relinking a renamed project.</li>
 </ul>
 <p>The app reads and writes the sheet, so a change in one shows up in the other. Every
 section below is labelled with where to be.</p>
@@ -125,12 +125,15 @@ told before it is saved.</p>
 <p>A cell you moved by hand shows a dotted outline. <b>Click it to hand it back to the
 planner.</b></p>
 
-<h2>Re-plan<span class="where app">App</span><span class="where sheet">Sheet</span></h2>
+<h2>Re-plan<span class="where app">App</span></h2>
 <p><b>Re-plan</b> proposes a fresh arrangement of everything. You see what would change
 first, and nothing is written until you accept it.</p>
-<p><span class="inl sheet">Sheet</span> To hold a project still, put <code>Yes</code> in its <b>Locked</b> column on the
-Projects tab of the spreadsheet — there is no lock button in the app. Completed projects
-lock themselves.</p>
+<p>To hold a project still, open it in <b>Projects</b> and press <b>Lock</b>. A locked
+project keeps its schedule exactly where it is and re-plan will not touch it; you can
+still move one of its weeks by hand. Locked projects show a <b>locked</b> tag in the
+list. Press <b>Unlock</b> to release it.</p>
+<p>Completed projects lock themselves. The <b>Locked</b> column on the Projects tab shows
+the same thing, and typing <code>Yes</code> there still works if you prefer.</p>
 
 <h2>Finishing a project<span class="where app">App</span></h2>
 <p>Open it in <b>Projects</b> and press <b>Mark complete</b>. It drops out of the working

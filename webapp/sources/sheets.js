@@ -58,6 +58,34 @@ function mapper(headers) {
   return get;
 }
 
+// Which Projects columns a change writes, by header name.
+//
+// Pulled out of the writer so it can be tested: the two rules here are the ones that
+// can quietly corrupt a row. A LOCK writes exactly one cell -- writing the usual map
+// would rewrite every column from a book that may be a TTL old. An ordinary save
+// writes everything EXCEPT Locked, because that is a human decision this code has no
+// business round-tripping, and a save based on a stale read would overwrite a lock
+// somebody set in the spreadsheet meanwhile.
+function projectCells(change) {
+  const p = change.project;
+  const o = change.outputs || {};
+  if (change.lock) return { 'locked': p.locked };
+  return {
+    'project': p.project_title, 'client': p.client, 'deadline': p.deadline,
+    'phases d/e/m': `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`,
+    'mix level': p.mix_level_required,
+    'music': p.music_songs, 'special': p.special_project, 'atmos': p.atmos_required,
+    'recordist pick': p.recordist_override, 'recordist pick 2': p.recordist_override_2,
+    'editor pick': p.editor_override, 'mixer pick': p.mixer_override,
+    'dub wks': p.dub_weeks, 'edit wks': p.edit_weeks, 'mix wks': p.mix_weeks,
+    'recordist': o.recordist, 'editor': o.editor, 'mixer': o.mixer,
+    'warnings': o.warnings, 'notes': o.notes,
+    'status': p.status, 'completed': p.completed,
+    'plotted': new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 10),
+  };
+}
+
 function createSheetsSource(opts) {
   const o = opts || {};
   const sheetId = o.sheetId || process.env.PLANNER_SHEET_ID;
@@ -242,20 +270,7 @@ function createSheetsSource(opts) {
       const o = change.outputs || {};
       const was = String(change.original_title || '').trim() || p.project_title;
       const rowNumber = projectsMeta.rowOf[was] || projectsMeta.nextRow;
-      const cell = {
-        'project': p.project_title, 'client': p.client, 'deadline': p.deadline,
-        'phases d/e/m': `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`,
-        'mix level': p.mix_level_required,
-        'music': p.music_songs, 'special': p.special_project, 'atmos': p.atmos_required,
-        'recordist pick': p.recordist_override, 'recordist pick 2': p.recordist_override_2,
-        'editor pick': p.editor_override, 'mixer pick': p.mixer_override,
-        'dub wks': p.dub_weeks, 'edit wks': p.edit_weeks, 'mix wks': p.mix_weeks,
-        'recordist': o.recordist, 'editor': o.editor, 'mixer': o.mixer,
-        'warnings': o.warnings, 'notes': o.notes,
-        'status': p.status, 'completed': p.completed,
-        'plotted': new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-          .toISOString().slice(0, 10),
-      };
+      const cell = projectCells(change);
       // ONE RANGE PER COLUMN, not one write of the whole row. Writing the row would
       // blank every column we have no value for — Locked above all, which is a user
       // decision this code knows nothing about. It also leaves a sheet without the
@@ -429,4 +444,5 @@ function createSheetsSource(opts) {
   return { read, write, readEvents, appendEvent, email: auth.email };
 }
 
-module.exports = { createSheetsSource, isoFrom, mapper, TABS, EVENTS_TAB, MANAGED_COLUMNS };
+module.exports = { createSheetsSource, isoFrom, mapper, projectCells,
+                   TABS, EVENTS_TAB, MANAGED_COLUMNS };

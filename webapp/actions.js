@@ -216,6 +216,34 @@ function setStatus(book, payload) {
   };
 }
 
+// Lock a project so a re-plan leaves it alone.
+//
+// This existed in the Apps Script app and was missed when the new one was built, which
+// left "put Yes in the Locked column" as the only way to do it — a documented
+// spreadsheet chore for something that is a one-click decision.
+//
+// It carries `lock: true` so the writer knows to touch the Locked cell and NOTHING
+// else. The ordinary project write deliberately skips that column: it is a human
+// decision the app has no business round-tripping, and a save based on a book read up
+// to a TTL ago would happily overwrite a lock somebody set in the sheet meanwhile.
+function setLock(book, payload) {
+  const p = payload || {};
+  const title = String(p.title || '').trim();
+  if (!title) return { ok: false, error: 'No project named.' };
+  const project = (book.projects || []).find(x => x.project_title === title);
+  if (!project) return { ok: false, error: `No project called "${title}".` };
+
+  const locked = p.locked === true || p.locked === 'true';
+  if (!!project.locked === locked) {
+    return { ok: false, error: `${title} is already ${locked ? 'locked' : 'unlocked'}.` };
+  }
+  return {
+    ok: true, title, locked,
+    change: { supersede: [], append: [], lock: true,
+              project: { ...project, locked }, original_title: title },
+  };
+}
+
 // ---------------------------------------------------------------- re-plan
 
 // Plain-English names for the objective terms, so the preview can say WHY a re-plan is
@@ -286,5 +314,5 @@ function forReplan(projects) {
     ? { ...p, locked: true } : p);
 }
 
-module.exports = { reassignWeek, undoWeekMove, saveProject, setStatus, replanPreview,
+module.exports = { reassignWeek, undoWeekMove, saveProject, setStatus, setLock, replanPreview,
                    shapeReplan, reassignWarnings, whyBetter, live, forReplan };

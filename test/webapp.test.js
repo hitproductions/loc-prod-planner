@@ -938,6 +938,59 @@ section('Reading a real spreadsheet layout');
 }
 
 
+section('Locking a project from the app');
+{
+  // The Apps Script app had this and the rewrite dropped it, which left "type Yes in
+  // the Locked column" as the only way to stop a re-plan moving something. The old
+  // implementation's guarantees are kept: one cell written, bookings untouched, an
+  // unknown title refused.
+  fixture._reset();
+  const book = await fixture.read();
+  const title = book.projects[0].project_title;
+
+  ok('a project starts unlocked', !book.projects[0].locked);
+
+  const on = actions.setLock(book, { title, locked: true });
+  ok('locking is accepted', on.ok === true, JSON.stringify(on).slice(0, 100));
+  ok('it changes no bookings at all',
+     (on.change.append || []).length === 0 && (on.change.supersede || []).length === 0);
+  ok('it marks the change as a lock, so the writer touches one cell',
+     on.change.lock === true);
+  ok('and carries the project with locked set', on.change.project.locked === true);
+
+  ok('locking an already-locked project is refused, not written twice',
+     actions.setLock({ projects: [{ project_title: title, locked: true }] },
+                     { title, locked: true }).ok === false);
+  ok('an unknown title is refused', actions.setLock(book, { title: 'No Such Show',
+     locked: true }).ok === false);
+  ok('and a missing title is refused', actions.setLock(book, { locked: true }).ok === false);
+
+  // The point of the lock: re-plan must leave it alone. forReplan is what feeds the
+  // engine, so this is the assertion that the feature actually does anything.
+  const locked = book.projects.map(x =>
+    x.project_title === title ? { ...x, locked: true } : x);
+  const fed = actions.forReplan(locked).find(x => x.project_title === title);
+  ok('a locked project reaches the engine locked', fed.locked === true);
+
+  // What actually reaches the spreadsheet. These two rules are the ones that can
+  // corrupt a row, so they are asserted on the real function the writer calls.
+  const { projectCells } = require('../webapp/sources/sheets.js');
+  const lockCells = projectCells(on.change);
+  ok('a lock writes exactly one cell', Object.keys(lockCells).length === 1,
+     JSON.stringify(lockCells));
+  ok('and that cell is Locked', 'locked' in lockCells);
+
+  const saveCells = projectCells({ project: book.projects[0] });
+  ok('an ordinary save writes many columns', Object.keys(saveCells).length > 10,
+     Object.keys(saveCells).length + '');
+  ok('but NEVER writes Locked — a stale save must not clobber a lock set in the sheet',
+     !('locked' in saveCells), Object.keys(saveCells).join(','));
+
+  const off = actions.setLock({ projects: locked }, { title, locked: false });
+  ok('unlocking is accepted', off.ok === true);
+  ok('and clears it', off.change.project.locked === false);
+}
+
 section('Read-only instance: the refusal is on the server, not in the page');
 {
   // The view-only page sets a flag in the browser, which stops the UI OFFERING an edit

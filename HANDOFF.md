@@ -376,13 +376,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 391, all passing
+## 6. Tests — 406, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 156 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 157 | the web app: actions, replan, history replay, report, rollback, the read-only gate |
+| `webapp.test.js` | 172 | the web app: actions, replan, history replay, report, rollback, the read-only gate, the project lock |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 
@@ -562,6 +562,24 @@ churn across the year.
 
 **One specials engineer.** Kyle is a single point of failure and the source of one
 remaining overlap.
+
+**The project lock was missing from the new app for a week, and nobody noticed.** The
+Apps Script app had `apiSetProjectLock`; the rewrite did not carry it, so the only way
+to stop a re-plan moving something was to type `Yes` into the Locked column by hand.
+It surfaced only because writing the how-to forced someone to say out loud where that
+step happens. Restored 2026-08-31 with the old implementation's guarantees intact: one
+cell written, no bookings touched, an unknown title refused.
+
+The rule that matters is in `projectCells()` in `webapp/sources/sheets.js`. A lock
+writes exactly ONE cell, and an ordinary project save writes every column EXCEPT
+Locked — because a save built from a book up to a TTL old would otherwise overwrite a
+lock somebody had just set in the spreadsheet. Both halves are asserted, and both were
+verified by sabotage.
+
+**Worth checking the rest of that rewrite the same way.** The lock was found by
+accident. Nothing has systematically compared what the Apps Script app could do against
+what the new one can, and the old UI is now deleted — so the comparison has to be made
+from git history.
 
 **The Sheets write path has no automated coverage.** `sheets_live.test.js` (§6) now
 exercises the read path against the real book, which closes the gap that let three
