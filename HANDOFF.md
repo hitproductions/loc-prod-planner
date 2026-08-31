@@ -376,13 +376,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 516, all passing
+## 6. Tests — 522, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 156 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 154 | Sheets round trips, wipe, ghosts, relink, drag reassignment, roster validation |
-| `webapp.test.js` | 151 | the web app: actions, replan, history replay, report, rollback |
+| `webapp.test.js` | 157 | the web app: actions, replan, history replay, report, rollback, the read-only gate |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `views.test.js` | 13 | the `.html` files parse and their `api()` calls exist |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |

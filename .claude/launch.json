@@ -6,6 +6,13 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["webapp/server.js"],
       "port": 8127
+    },
+    {
+      "name": "planner-view-only",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["webapp/server.js"],
+      "port": 8128,
+      "env": { "PORT": "8128", "PLANNER_READONLY": "1" }
     }
   ]
 }

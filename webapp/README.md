@@ -48,6 +48,31 @@ Against the real spreadsheet:
     PLANNER_SOURCE=sheets \
     node webapp/server.js
 
+### The view-only copy (for engineers)
+
+A second instance with the writes switched off, on its own port:
+
+    PORT=8128 PLANNER_READONLY=1 node webapp/server.js
+
+Give people `http://<host>:8128/view.html`. It is the ordinary Schedule page — the same
+`app.js`, the same stylesheet, the same grid — with dragging off, only the Schedule tab
+in the nav, and no "click to undo" in the legend. It is deliberately NOT a second
+hand-written page, because a second page drifts from the first.
+
+**The refusal is on the server.** `PLANNER_READONLY=1` makes every write route answer
+403; the flag in the browser only stops the UI offering an edit, and would stop nobody
+using curl. Do not rely on serving `view.html` from the editing instance — that gives
+you a page that looks read-only and an API that is not.
+
+Two instances against one spreadsheet is safe in this direction only. The read-only one
+never writes and holds no re-plan stash, so the single-instance rule still holds for the
+editing app. Its cached book can trail the editor's by up to the TTL (30s default).
+
+Not yet done: **everyone who opens the link sees the whole board**, not just their own
+row. Narrowing it to one engineer needs an identity to narrow it BY, which means
+Cloudflare Access in front of the app (HANDOFF §9) — and an `email` column on the
+Engineers tab to match a signed-in address to a name. Neither exists yet.
+
 Check the credentials first — this reads only, so it is safe on a live sheet:
 
     GOOGLE_APPLICATION_CREDENTIALS=... PLANNER_SHEET_ID=... \

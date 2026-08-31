@@ -5,6 +5,11 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g,
   c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
+// Set by view.html. It turns the editing off in the UI; the REFUSAL lives on the
+// server (PLANNER_READONLY=1), because a flag in the browser stops the page offering
+// an edit but stops nobody from calling the endpoint directly.
+const READONLY = !!window.READONLY;
+
 let BOOT = null, SCHED = null, VIEW = 'schedule', LAST_MS = null;
 let MODE = 'engineer', RANGE = { from: null, to: null };
 
@@ -127,7 +132,8 @@ function renderEngineerGrid() {
         if (deep > 1) cls.push(deep > 2 ? 'over3' : 'over2');
         if (c.items.some(i => i.hand)) cls.push('pinned');
         body = cellBands(c, it => it.p, it =>
-          ` draggable="true" data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
+          (READONLY ? '' : ' draggable="true"') +
+          ` data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
           ` data-from="${esc(n)}" data-wk="${w.start}"`);
       }
       h += `<td class="${cls.join(' ')}" data-c="${ri}" data-eng="${esc(n)}"` +
@@ -201,7 +207,9 @@ function renderSchedule() {
     '<span><span class="sw split"></span>two bookings, one week</span>' +
     '<span><span class="sw" style="border:2px solid var(--warn);background:transparent"></span>2 overlaps this week</span>' +
     '<span><span class="sw" style="border:2px solid var(--red);background:transparent"></span>3 overlaps — reassign</span>' +
-    '<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand — click to undo</span>' +
+    // The undo is a click on the cell, so on a read-only page the swatch still means
+    // something ("moved by hand") but the instruction does not.
+    `<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand${READONLY ? '' : ' — click to undo'}</span>` +
     (d.mode === 'project'
       ? '<span><span class="sw" style="background:var(--red)"></span>Deadline week</span>' : '') +
     '</div>';
@@ -898,7 +906,7 @@ function paint() {
     wireColumnHover();
     // Dragging is an Engineers-mode action: you move a week between engineers, and a
     // Projects row has no engineer column to drop into.
-    if (SCHED.mode === 'engineer') wireDrag();
+    if (SCHED.mode === 'engineer' && !READONLY) wireDrag();
   }
   else wireProjects();
 }
@@ -1018,6 +1026,8 @@ function absorb(r) {
 }
 
 async function post(path, body) {
+  if (READONLY) return { ok: false, readonly: true,
+    error: 'This is a read-only copy of the planner.' };
   const t0 = performance.now();
   // The view is sent with the write so the fresh schedule comes back in the
   // orientation and range the user is looking at, not a default one.

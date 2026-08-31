@@ -937,6 +937,71 @@ section('Reading a real spreadsheet layout');
      newRoster.either(['Kyle', 'Yes'], 'does_specials', 'specials_only') === 'Yes');
 }
 
+
+section('Read-only instance: the refusal is on the server, not in the page');
+{
+  // The view-only page sets a flag in the browser, which stops the UI OFFERING an edit
+  // and stops nobody from calling the endpoint with curl. So the boundary is a
+  // separate process started with PLANNER_READONLY=1, and this is the test of it.
+  // Exercised over HTTP for the same reason as the re-plan block above: in-process
+  // calls to actions.* would skip the gate entirely and pass while it did nothing.
+  const fresh = (env) => {
+    const before = process.env.PLANNER_READONLY;
+    if (env) process.env.PLANNER_READONLY = env; else delete process.env.PLANNER_READONLY;
+    delete require.cache[require.resolve('../webapp/server.js')];
+    const mod = require('../webapp/server.js');
+    if (before === undefined) delete process.env.PLANNER_READONLY;
+    else process.env.PLANNER_READONLY = before;
+    return mod;
+  };
+
+  const WRITES = ['reassign', 'undo', 'save-project', 'set-status',
+                  'replan', 'replan-apply', 'rollback'];
+
+  // ---- with the switch on
+  const ro = fresh('1');
+  await new Promise(r => ro.server.listen(0, r));
+  const roPort = ro.server.address().port;
+  const hit = async (port, path, body) => {
+    const r = await fetch(`http://127.0.0.1:${port}${path}`, body
+      ? { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body) }
+      : undefined);
+    return { status: r.status, body: await r.json() };
+  };
+
+  const refused = [];
+  for (const w of WRITES) {
+    const r = await hit(roPort, '/api/' + w, {});
+    if (r.status !== 403 || r.body.readonly !== true) refused.push(`${w}:${r.status}`);
+  }
+  ok('every write route is refused 403 on a read-only instance', refused.length === 0,
+     'not refused: ' + refused.join(', '));
+
+  const boot = await hit(roPort, '/api/bootstrap');
+  ok('reads still work there', boot.status === 200 && boot.body.counts.projects > 0);
+  ok('and it tells the client it is read-only', boot.body.readonly === true);
+  const sched = await hit(roPort, '/api/schedule');
+  ok('the schedule still loads', sched.status === 200 && sched.body.labels.length > 0);
+  await new Promise(r => ro.server.close(r));
+
+  // ---- with the switch off, the editing app is untouched. Without this the block
+  // above would also pass if the gate had accidentally been left on for everyone.
+  const rw = fresh(null);
+  await new Promise(r => rw.server.listen(0, r));
+  const rwPort = rw.server.address().port;
+  const bootRW = await hit(rwPort, '/api/bootstrap');
+  ok('a normal instance does not claim to be read-only', !bootRW.body.readonly);
+  const blocked = [];
+  for (const w of WRITES) {
+    const r = await hit(rwPort, '/api/' + w, {});
+    if (r.status === 403) blocked.push(w);
+  }
+  ok('and none of its write routes are blocked', blocked.length === 0,
+     'wrongly blocked: ' + blocked.join(', '));
+  await new Promise(r => rw.server.close(r));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (require.main === module) process.exit(fail ? 1 : 0);
 })();

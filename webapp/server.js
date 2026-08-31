@@ -35,6 +35,16 @@ if (SOURCE === 'sheets') {
   }
 }
 
+// A read-only instance. This is the actual boundary for the view-only page: a flag in
+// the browser stops the UI offering an edit, but anyone can POST to /api/reassign with
+// curl, so the refusal has to live here. Start a second process with PLANNER_READONLY=1
+// on another port and give engineers THAT link.
+//
+// Two instances against one sheet is safe in this direction only: the read-only one
+// holds no re-plan stash and never writes, so the single-instance rule (§ store.js)
+// still holds for the editing instance. Its cached book can trail the editor's by up
+// to the TTL, which is why the page says how old the read is.
+const READONLY = process.env.PLANNER_READONLY === '1';
 const PORT = Number(process.env.PORT || 8127);
 const store = createStore(SOURCE, { ttlMs: Number(process.env.PLANNER_TTL_MS || 30000) });
 
@@ -62,7 +72,7 @@ const ROUTES = {
              latest: events.length - 1,
              diff: history.diffEvent(b.bookings, events, i) };
   },
-  '/api/bootstrap': b => api.bootstrap(b),
+  '/api/bootstrap': b => Object.assign(api.bootstrap(b), { readonly: READONLY }),
   '/api/schedule':  (b, q) => api.schedule(b, { mode: q.get('mode'), from: q.get('from'), to: q.get('to') }),
   '/api/analysis':  (b, q) => api.analysis(b, { from: q.get('from') }),
   '/api/report':    (b, q) => api.report(b, { month: q.get('month') }),
@@ -72,7 +82,11 @@ const ROUTES = {
 // back fresh state in the same response, so the client never has to ask again — the
 // second round trip is exactly what made the Apps Script version feel slow, and a
 // separate re-read is also how that version kept showing the previous plan.
-const TODAY = () => new Date().toISOString().slice(0, 10);
+// The LOCAL date. toISOString() is UTC and Manila is UTC+8, so between midnight and
+// 8am it returns yesterday -- a re-plan run early in the morning would treat the
+// current week as already past. Same bug that once bolded last week's row in the grid;
+// there is now one implementation of "today" and both callers use it.
+const TODAY = api.todayLocal;
 const ACTIONS = {
   '/api/reassign':      (b, p) => actions.reassignWeek(b, p),
   '/api/undo':          (b, p) => actions.undoWeekMove(b, p),
@@ -205,6 +219,11 @@ const server = http.createServer(async (req, res) => {
     const action = ACTIONS[url.pathname];
     if (action) {
       if (req.method !== 'POST') return send(res, 405, '{"error":"POST only"}');
+      if (READONLY) {
+        return send(res, 403, JSON.stringify({ ok: false, readonly: true,
+          error: 'This is a read-only copy of the planner. Changes are made in the ' +
+                 'editing app.' }));
+      }
       const body = await readBody(req);
       const book = await store.get();
       const result = await action(book, body);
@@ -235,7 +254,7 @@ const server = http.createServer(async (req, res) => {
 if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`Loc Prod Planner (new) on http://localhost:${PORT}  source=${SOURCE}` +
-      `  search=${DEFAULT_RESTARTS}`);
+      `  search=${DEFAULT_RESTARTS}` + (READONLY ? '  READ-ONLY' : ''));
   });
 }
 module.exports = { server, store, api };

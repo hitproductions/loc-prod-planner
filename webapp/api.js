@@ -342,4 +342,5 @@ function report(book, opts) {
   };
 }
 
-module.exports = { bootstrap, schedule, analysis, report, depths, projectDepth, engine: A };
+module.exports = { bootstrap, schedule, analysis, report, depths, projectDepth,
+                   todayLocal, engine: A };
