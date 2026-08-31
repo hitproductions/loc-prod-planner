@@ -236,7 +236,17 @@ const server = http.createServer(async (req, res) => {
   const started = process.hrtime.bigint();
   try {
     if (url.pathname === '/api/health') {
-      return send(res, 200, JSON.stringify({ ok: true, store: store.stats() }));
+      // A real readiness probe, not a liveness ping. It loads the book if that has not
+      // happened yet, so `ok` means "this instance can reach the spreadsheet and parse
+      // it" — which is what a container healthcheck needs to know. Returning ok:true
+      // unconditionally would have reported healthy before the app could serve anything.
+      try {
+        await store.get();
+        return send(res, 200, JSON.stringify({ ok: true, store: store.stats() }));
+      } catch (e) {
+        return send(res, 503, JSON.stringify({ ok: false,
+          error: String((e && e.message) || e) }));
+      }
     }
     const route = ROUTES[url.pathname];
     if (route) {
