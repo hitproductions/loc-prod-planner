@@ -27,14 +27,20 @@
   b{font-weight:700}
   .sw{display:inline-block;width:12px;height:12px;vertical-align:-1px;margin-right:5px;
     border:1px solid rgba(0,0,0,.25)}
-  .where{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;
-    letter-spacing:.09em;padding:3px 8px;vertical-align:3px;margin-left:10px}
-  .where.app{background:var(--black);color:#fff}
-  .where.sheet{background:#fff;color:var(--black);border:1.5px solid var(--black)}
-  .inl{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;
-    letter-spacing:.09em;padding:2px 6px;margin-right:6px}
-  .inl.app{background:var(--black);color:#fff}
-  .inl.sheet{background:#fff;color:var(--black);border:1.5px solid var(--black)}
+  /* Same convention as the overlap chips in the app header: thin outline, colour in
+     the border and the text, nothing filled. Two colours so app and sheet read as two
+     categories at a glance rather than as one thing emphasised. */
+  .where{display:inline-block;border:1px solid;padding:3px 8px;font-size:11px;
+    font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+    vertical-align:4px;margin-left:10px;white-space:nowrap}
+  .where.app{border-color:var(--black);color:var(--black)}
+  .where.sheet{border-color:var(--blue);color:var(--blue)}
+  .where + .where{margin-left:5px}
+  .inl{display:inline-block;border:1px solid;padding:2px 7px;font-size:10.5px;
+    font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-right:7px;
+    white-space:nowrap}
+  .inl.app{border-color:var(--black);color:var(--black)}
+  .inl.sheet{border-color:var(--blue);color:var(--blue)}
   .note{border-left:3px solid var(--black);background:var(--soft);padding:12px 15px;margin:16px 0}
   .warn{border-left:3px solid var(--red);background:#FDF0EE;padding:12px 15px;margin:16px 0}
   .warn b{color:var(--red)}
@@ -64,16 +70,16 @@ record and you can always open it and look.</p>
 <h2>The two places</h2>
 <p>There are two, and it matters which one you are in.</p>
 <ul>
-  <li><span class="inl app">The app</span> is where you do the work — see the schedule,
-      add projects, move a week, re-plan, mark things finished. It opens in a browser.</li>
-  <li><span class="inl sheet">The spreadsheet</span> is the record. Four things are only
-      done here: pasting in a batch of projects, locking a project, editing the engineer
-      roster, and relinking a renamed project.</li>
+  <li><span class="inl app">App</span> <b>The planner</b>, in a browser. Where you do the
+      work: see the schedule, add projects, move a week, re-plan, mark things finished.</li>
+  <li><span class="inl sheet">Sheet</span> <b>The spreadsheet.</b> The record. Four things
+      are only done here: pasting in a batch of projects, locking a project, editing the
+      engineer roster, and relinking a renamed project.</li>
 </ul>
 <p>The app reads and writes the sheet, so a change in one shows up in the other. Every
 section below is labelled with where to be.</p>
 
-<h2>Reading the schedule<span class="where app">In the app</span></h2>
+<h2>Reading the schedule<span class="where app">App</span></h2>
 <p>Weeks run down the page. Use the toggle at the top left to see the columns as
 <b>engineers</b> or as <b>projects</b>. The row in bold is the current week. The
 <b>From</b> and <b>To</b> pickers narrow it to a few quarters; <b>All</b> puts it back.</p>
@@ -90,7 +96,7 @@ section below is labelled with where to be.</p>
   <li><b>Dotted</b> — somebody set this by hand, so the planner will not move it.</li>
 </ul>
 
-<h2>Adding one project<span class="where app">In the app</span></h2>
+<h2>Adding one project<span class="where app">App</span></h2>
 <p>Go to <b>Projects</b> and press <b>Add</b>. Fill in the title, client, deadline, and how
 many weeks each phase needs. Tick <b>Music</b>, <b>Special</b> or <b>Atmos</b> if they
 apply — they decide who is eligible. You can name a recordist, editor or mixer yourself;
@@ -101,7 +107,7 @@ leave those blank to let the planner choose.</p>
   Adding a project schedules <b>only that project</b>. Nothing already on the board moves.
 </div>
 
-<h2>Adding a batch of projects<span class="where app">In the app</span><span class="where sheet">In the sheet</span></h2>
+<h2>Adding a batch of projects<span class="where app">App</span><span class="where sheet">Sheet</span></h2>
 <p><span class="inl sheet">Sheet</span> Paste the rows into the <b>Projects</b> tab of the spreadsheet.</p>
 <p><span class="inl app">App</span> Then open the app and run a <b>Re-plan</b>. It picks up anything that has no
 schedule yet.</p>
@@ -111,7 +117,7 @@ schedule yet.</p>
   through the form instead. Locking is described below.
 </div>
 
-<h2>Changing who does a week<span class="where app">In the app</span></h2>
+<h2>Changing who does a week<span class="where app">App</span></h2>
 <p>Switch the schedule to the <b>engineers</b> view and drag a week onto somebody else.
 A week can only move sideways — same week, same phase — because you are changing
 <em>who</em> does it, not <em>when</em> it happens. If the move creates a problem you are
@@ -119,20 +125,20 @@ told before it is saved.</p>
 <p>A cell you moved by hand shows a dotted outline. <b>Click it to hand it back to the
 planner.</b></p>
 
-<h2>Re-plan<span class="where app">In the app</span><span class="where sheet">In the sheet</span></h2>
+<h2>Re-plan<span class="where app">App</span><span class="where sheet">Sheet</span></h2>
 <p><b>Re-plan</b> proposes a fresh arrangement of everything. You see what would change
 first, and nothing is written until you accept it.</p>
 <p><span class="inl sheet">Sheet</span> To hold a project still, put <code>Yes</code> in its <b>Locked</b> column on the
 Projects tab of the spreadsheet — there is no lock button in the app. Completed projects
 lock themselves.</p>
 
-<h2>Finishing a project<span class="where app">In the app</span></h2>
+<h2>Finishing a project<span class="where app">App</span></h2>
 <p>Open it in <b>Projects</b> and press <b>Mark complete</b>. It drops out of the working
 list and re-plan leaves it alone. Its bookings stay on the schedule, because the work
 happened and the record of who did it matters. <b>Reopen</b> undoes this.</p>
 <p><b>Report</b> lists what finished in a given month. Pick the month and print it.</p>
 
-<h2>Undoing something<span class="where app">In the app</span></h2>
+<h2>Undoing something<span class="where app">App</span></h2>
 <p><b>History</b> lists every change, newest first, with what it did. The most recent one
 can be rolled back.</p>
 
@@ -142,7 +148,7 @@ coming back mid-week, or who should not be handed a difficult title right now.</
 <p>That is deliberate, and it is why naming an engineer yourself is a normal thing to do
 rather than a workaround. When you pick someone by hand, the planner keeps your choice.</p>
 
-<h2>If something looks wrong<span class="where app">In the app</span><span class="where sheet">In the sheet</span></h2>
+<h2>If something looks wrong<span class="where app">App</span><span class="where sheet">Sheet</span></h2>
 <ul>
   <li><span class="inl app">App</span> <b>A red banner on the Projects page.</b> Something in the engineer roster is
       mistyped — usually a mix level. It names the problem. <span class="inl sheet">Sheet</span> Fix it in the
