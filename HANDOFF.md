@@ -454,13 +454,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 453, all passing
+## 6. Tests — 468, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 176 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 199 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
+| `webapp.test.js` | 214 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 
@@ -640,6 +640,31 @@ churn across the year.
 
 **One specials engineer.** Kyle is a single point of failure and the source of one
 remaining overlap.
+
+**Rolling back a cancel used to corrupt the project's state (found and fixed
+2026-08-31, by debugging — no test caught it).** `rollback` rebuilt its change from the
+event's appended and superseded ROW NUMBERS only, so undoing a cancel revived the
+bookings and left the project still marked `Cancelled` — holding three weeks of
+engineer time that re-plan would refuse to touch, which is the exact state cancelling
+exists to prevent. Lock and Complete could not be rolled back at all: the log listed
+them and rollback answered "that change wrote nothing to undo".
+
+The log now carries a `revert` blob — the prior values of the fields a change touched —
+and rollback applies it. Two consequences worth knowing:
+
+- **The History tab gains a `revert` column.** `ensureEventsTab` adds it to a tab that
+  predates it, because `readEvents` maps by header NAME: without the header the column
+  reads back blank for ever while `appendEvent` writes values into it. Same silent-skip
+  shape as the Projects columns.
+- **`change.lock` became `change.fields`,** a list of the fields a change may write.
+  Both sources honour it. This is what stops a partial write pushing a stale book back
+  over columns somebody edited in the sheet meanwhile.
+
+**That last guarantee was untestable until it was made observable.** Sabotaging the
+fixture's `fields` handling changed nothing, because a lock's project object happens to
+be correct in every other field — so the test now writes a change carrying a
+deliberately stale `client` and asserts only `locked` lands. Worth remembering as a
+pattern: a restriction is only tested if something would be wrong without it.
 
 **The project lock was missing from the new app for a week, and nobody noticed.** The
 Apps Script app had `apiSetProjectLock`; the rewrite did not carry it, so the only way

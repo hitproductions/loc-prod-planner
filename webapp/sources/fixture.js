@@ -49,8 +49,19 @@ module.exports = {
     if (change.project) {
       const was = String(change.original_title || '').trim() || change.project.project_title;
       const i = held.projects.findIndex(p => p.project_title === was);
-      if (i >= 0) held.projects[i] = { ...held.projects[i], ...change.project };
-      else held.projects.push({ ...change.project });
+      // Honour `fields` the way the Sheets writer does: a change that names fields
+      // writes ONLY those. Without this the fixture applies the whole row and the two
+      // sources disagree about what a lock or a rollback did -- which is how a test
+      // passes against a source that behaves differently from the real one.
+      if (i >= 0) {
+        if (change.fields && change.fields.length) {
+          const only = {};
+          change.fields.forEach(f => { only[f] = change.project[f]; });
+          held.projects[i] = { ...held.projects[i], ...only };
+        } else {
+          held.projects[i] = { ...held.projects[i], ...change.project };
+        }
+      } else held.projects.push({ ...change.project });
     }
     return { superseded: (change.supersede || []).length, appended: appended.length,
              appended_rows: appended,

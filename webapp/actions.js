@@ -226,7 +226,9 @@ function setStatus(book, payload) {
     ok: true, title, status, completed,
     was: project.status || '',
     superseded: rows.length,
-    change: { supersede: rows, append: [],
+    revert: { title, fields: ['status', 'completed'],
+              values: { status: project.status || '', completed: project.completed || '' } },
+    change: { supersede: rows, append: [], fields: ['status', 'completed'],
               project: { ...project, status, completed },
               original_title: title },
   };
@@ -255,7 +257,10 @@ function setLock(book, payload) {
   }
   return {
     ok: true, title, locked,
-    change: { supersede: [], append: [], lock: true,
+    // `revert` is what a rollback puts back. Without it the log can only undo rows,
+    // and a lock is not a row.
+    revert: { title, fields: ['locked'], values: { locked: !!project.locked } },
+    change: { supersede: [], append: [], fields: ['locked'],
               project: { ...project, locked }, original_title: title },
   };
 }

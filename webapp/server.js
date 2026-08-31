@@ -116,12 +116,30 @@ async function rollback(book, p) {
   const e = events[i];
   const undoAppended = history.nums(e.appended);
   const revive = history.nums(e.superseded);
-  if (!undoAppended.length && !revive.length) {
+
+  // A change may have altered the PROJECT ROW as well as the rows — cancelling does
+  // both. Reviving the bookings without restoring the status left the project marked
+  // Cancelled while holding the weeks back, which is the exact state cancelling exists
+  // to prevent. `revert` is written into the log for precisely this.
+  let restore = null;
+  if (e.revert) {
+    try { restore = JSON.parse(e.revert); } catch (err) { restore = null; }
+  }
+  if (!undoAppended.length && !revive.length && !restore) {
     return { ok: false, error: 'That change wrote nothing to undo.' };
   }
+
+  const change = { supersede: undoAppended, revive };
+  if (restore && restore.title && restore.fields && restore.values) {
+    const project = book.projects.find(x => x.project_title === restore.title);
+    if (project) {
+      change.project = { ...project, ...restore.values };
+      change.fields = restore.fields;
+      change.original_title = restore.title;
+    }
+  }
   return { ok: true, rolled_back: true, index: i,
-           summary: `Rolled back: ${e.summary || e.action}`,
-           change: { supersede: undoAppended, revive } };
+           summary: `Rolled back: ${e.summary || e.action}`, change };
 }
 
 // One line naming what happened, written into the log. Composed here rather than in
@@ -239,7 +257,8 @@ const server = http.createServer(async (req, res) => {
       // failed write can never leave the app showing a state the sheet does not have.
       if (result.ok && result.change) {
         await store.write(result.change, { action: url.pathname.replace('/api/', ''),
-                                           summary: describe(url.pathname, result) });
+                                           summary: describe(url.pathname, result),
+                                           revert: result.revert });
         const next = await store.get(true);
         result.boot = api.bootstrap(next);
         result.schedule = api.schedule(next, { mode: body.mode, from: body.from, to: body.to });

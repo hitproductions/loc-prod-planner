@@ -16,7 +16,11 @@ const { createAuth } = require('./google-auth.js');
 // does not exist yet and the whole read failed with "Unable to parse range".
 const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers' };
 const EVENTS_TAB = 'History';
-const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended'];
+// `revert` carries what a rollback needs to put a PROJECT ROW back — the row numbers
+// alone cannot express "and it was not cancelled before this". Added 2026-08-31 after
+// rolling back a cancel revived its bookings and left the project marked Cancelled,
+// which is the exact state cancelling exists to prevent.
+const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended', 'revert'];
 // Columns this app writes that an older sheet may not have. Created on demand.
 const MANAGED_COLUMNS = ['Status', 'Completed'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
@@ -66,10 +70,25 @@ function mapper(headers) {
 // writes everything EXCEPT Locked, because that is a human decision this code has no
 // business round-tripping, and a save based on a stale read would overwrite a lock
 // somebody set in the spreadsheet meanwhile.
+// Field name -> Projects column header, for the changes that write only part of a row.
+const FIELD_COLUMN = { locked: 'locked', status: 'status', completed: 'completed' };
+
 function projectCells(change) {
   const p = change.project;
   const o = change.outputs || {};
-  if (change.lock) return { 'locked': p.locked };
+  // A change may name exactly which fields it is allowed to write. Everything that
+  // touches part of a row uses this -- a lock, a status, and a rollback restoring
+  // either -- so the row is never rewritten wholesale from a book that may be a TTL
+  // old. Was a single `change.lock` flag; a rollback needs the same mechanism for
+  // status, so it is a list now.
+  if (change.fields && change.fields.length) {
+    const out = {};
+    change.fields.forEach(f => {
+      const col = FIELD_COLUMN[f];
+      if (col) out[col] = p[f];
+    });
+    return out;
+  }
   return {
     'project': p.project_title, 'client': p.client, 'deadline': p.deadline,
     'phases d/e/m': `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`,
@@ -413,6 +432,23 @@ function createSheetsSource(opts) {
         encodeURIComponent(`${EVENTS_TAB}!A1`) + '?valueInputOption=RAW', {
         method: 'PUT', body: JSON.stringify({ values: [EVENT_HEADERS] }),
       });
+    } else {
+      // A tab created before a header existed keeps its old width, and readEvents maps
+      // by header NAME — so the new column would read back blank for ever while
+      // appendEvent cheerfully wrote values into it. Same silent-skip shape as the
+      // Projects columns; healed the same way.
+      const cur = await auth.api(`spreadsheets/${id}/values/` +
+        encodeURIComponent(`${EVENTS_TAB}!A1:Z1`));
+      const have = ((cur.values && cur.values[0]) || []).map(norm);
+      const missing = EVENT_HEADERS.filter(h => !have.includes(norm(h)));
+      if (missing.length) {
+        await auth.api(`spreadsheets/${id}/values/` +
+          encodeURIComponent(`${EVENTS_TAB}!${colName(have.length)}1`) +
+          '?valueInputOption=RAW', {
+          method: 'PUT', body: JSON.stringify({ values: [missing] }),
+        });
+        console.log('Added missing History column(s): ' + missing.join(', '));
+      }
     }
     eventsTabReady = true;
   }
@@ -421,7 +457,7 @@ function createSheetsSource(opts) {
     const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties.title`);
     if (!(meta.sheets || []).some(x => x.properties.title === EVENTS_TAB)) return [];
     const res = await auth.api(`spreadsheets/${id}/values/` +
-      encodeURIComponent(`${EVENTS_TAB}!A:E`));
+      encodeURIComponent(`${EVENTS_TAB}!A:F`));
     const vals = res.values || [];
     const head = (vals[0] || []).map(norm);
     return vals.slice(1).filter(r => r.length).map((r, i) => {

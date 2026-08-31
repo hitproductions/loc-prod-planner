@@ -73,6 +73,9 @@ function createStore(sourceName, opts) {
             summary: meta.summary || '',
             superseded: (change.supersede || []).join(','),
             appended: (result.appended_rows || []).join(','),
+            // What a rollback needs to put a project row back. Row numbers alone
+            // cannot say "and it was not cancelled before this".
+            revert: meta.revert ? JSON.stringify(meta.revert) : '',
           });
         } catch (e) {
           console.error('change applied, log entry failed: ' + (e && e.message));

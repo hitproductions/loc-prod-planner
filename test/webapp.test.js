@@ -1053,8 +1053,8 @@ section('Locking a project from the app');
   ok('locking is accepted', on.ok === true, JSON.stringify(on).slice(0, 100));
   ok('it changes no bookings at all',
      (on.change.append || []).length === 0 && (on.change.supersede || []).length === 0);
-  ok('it marks the change as a lock, so the writer touches one cell',
-     on.change.lock === true);
+  ok('it names the one field the writer may touch',
+     JSON.stringify(on.change.fields) === '["locked"]', JSON.stringify(on.change.fields));
   ok('and carries the project with locked set', on.change.project.locked === true);
 
   ok('locking an already-locked project is refused, not written twice',
@@ -1095,9 +1095,113 @@ section('Locking a project from the app');
        x.project_title === title ? { ...x, locked: 'Yes' } : x) })
        .projects.find(x => x.title === title).locked === true);
 
+  // Why `fields` exists, made observable. A change carries a whole project object, and
+  // that object came from a book which may be up to a TTL old -- so if the writer
+  // applied all of it, a lock would quietly push stale values back over columns somebody
+  // edited in the spreadsheet meanwhile. Asserted on BOTH sources: the fixture ignoring
+  // `fields` is not otherwise detectable, because a lock's project object happens to be
+  // correct in every other field.
+  const stale = { ...book.projects[0], client: 'STALE VALUE', locked: true };
+  const cells = projectCells({ fields: ['locked'], project: stale });
+  ok('the Sheets writer drops everything outside fields',
+     Object.keys(cells).join(',') === 'locked', Object.keys(cells).join(','));
+
+  fixture._reset();
+  const fresh = await fixture.read();
+  const realClient = fresh.projects[0].client;
+  await fixture.write({ supersede: [], append: [], fields: ['locked'],
+                        project: { ...fresh.projects[0], client: 'STALE VALUE', locked: true },
+                        original_title: fresh.projects[0].project_title });
+  const after = await fixture.read();
+  ok('and so does the fixture — the lock landed',
+     after.projects[0].locked === true);
+  ok('and the stale client did NOT overwrite the real one',
+     after.projects[0].client === realClient,
+     `${after.projects[0].client} (was ${realClient})`);
+  fixture._reset();
+
   const off = actions.setLock({ projects: locked }, { title, locked: false });
   ok('unlocking is accepted', off.ok === true);
   ok('and clears it', off.change.project.locked === false);
+}
+
+section('Rolling back a change that altered the project row');
+{
+  // Found by debugging, not by a test. Rolling back a CANCEL revived its bookings and
+  // left the project marked Cancelled -- so it held three weeks of engineer time that
+  // re-plan would not touch, which is the exact state cancelling exists to prevent.
+  // Lock and Complete could not be rolled back at all: the log recorded them and
+  // rollback answered "that change wrote nothing to undo", because it only ever looked
+  // at appended and superseded ROW NUMBERS.
+  //
+  // Over HTTP, because the defect was in the server's rollback and in what store.write
+  // puts in the log -- calling actions.* directly would have missed all of it.
+  const { server, store } = require('../webapp/server.js');
+  fixture._reset();
+  await new Promise(r => server.listen(0, r));
+  const port = server.address().port;
+  const call = async (path, body) => {
+    const r = await fetch(`http://127.0.0.1:${port}${path}`, body
+      ? { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body) }
+      : undefined);
+    return r.json();
+  };
+  const state = async title => {
+    const b = await call('/api/bootstrap');
+    const p = b.projects.find(x => x.title === title);
+    return { status: p.status, locked: p.locked, rows: p.rows.length,
+             live: b.counts.live_rows };
+  };
+  const lastIndex = async () => {
+    const h = await call('/api/history');
+    const e = h.events || h;
+    return e.length - 1;
+  };
+
+  // fresh=1, because the store is module-level and holds whatever an earlier section
+  // left in it. Without this the baseline counts came from a stale book and the
+  // arithmetic below failed while the code was correct.
+  const boot0 = await call('/api/bootstrap?fresh=1');
+  const title = boot0.projects.find(p => !p.status).title;
+  const start = await state(title);
+  ok('it starts active, with bookings', start.status === '' && start.rows > 0,
+     JSON.stringify(start));
+
+  // ---- cancel, then undo it
+  const c = await call('/api/set-status', { title, status: 'Cancelled' });
+  ok('cancelling works over HTTP', c.ok === true, JSON.stringify(c).slice(0, 80));
+  const cancelled = await state(title);
+  ok('its weeks are freed', cancelled.rows === 0 && cancelled.live === start.live - start.rows,
+     JSON.stringify(cancelled));
+
+  const rb = await call('/api/rollback', { index: await lastIndex() });
+  ok('the cancel can be rolled back', rb.ok === true, JSON.stringify(rb).slice(0, 100));
+  const undone = await state(title);
+  ok('the bookings come back', undone.rows === start.rows && undone.live === start.live,
+     JSON.stringify(undone));
+  ok('AND the project is active again — not left marked Cancelled',
+     undone.status === '', `status is ${JSON.stringify(undone.status)}`);
+
+  // ---- lock, then undo it
+  await call('/api/set-lock', { title, locked: true });
+  ok('locking took effect', (await state(title)).locked === true);
+  const rbLock = await call('/api/rollback', { index: await lastIndex() });
+  ok('a lock can be rolled back at all', rbLock.ok === true,
+     JSON.stringify(rbLock).slice(0, 100));
+  ok('and it is unlocked again', (await state(title)).locked === false);
+
+  // ---- complete, then undo it
+  await call('/api/set-status', { title, status: 'Complete' });
+  ok('completing took effect', (await state(title)).status === 'Complete');
+  const rbDone = await call('/api/rollback', { index: await lastIndex() });
+  ok('a complete can be rolled back at all', rbDone.ok === true,
+     JSON.stringify(rbDone).slice(0, 100));
+  const back = await state(title);
+  ok('and it is active again with its bookings untouched',
+     back.status === '' && back.rows === start.rows, JSON.stringify(back));
+
+  await new Promise(r => server.close(r));
 }
 
 section('Read-only instance: the refusal is on the server, not in the page');
