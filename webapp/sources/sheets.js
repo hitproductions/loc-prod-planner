@@ -454,10 +454,22 @@ function createSheetsSource(opts) {
   }
 
   async function readEvents() {
-    const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties.title`);
-    if (!(meta.sheets || []).some(x => x.properties.title === EVENTS_TAB)) return [];
-    const res = await auth.api(`spreadsheets/${id}/values/` +
-      encodeURIComponent(`${EVENTS_TAB}!A:F`));
+    // ONE round trip, not two. This used to ask for the spreadsheet's metadata purely
+    // to find out whether the tab existed, then read it — 290ms of pure overhead on
+    // every History load, measured. A missing tab is a 400 "Unable to parse range",
+    // which is a perfectly good answer to the same question.
+    //
+    // Only that one error is swallowed. Anything else — no access, a bad id, Google
+    // being down — still propagates, because an empty log and a broken connection must
+    // not look the same.
+    let res;
+    try {
+      res = await auth.api(`spreadsheets/${id}/values/` +
+        encodeURIComponent(`${EVENTS_TAB}!A:F`));
+    } catch (e) {
+      if (e && e.status === 400 && /unable to parse range/i.test(e.message)) return [];
+      throw e;
+    }
     const vals = res.values || [];
     const head = (vals[0] || []).map(norm);
     return vals.slice(1).filter(r => r.length).map((r, i) => {

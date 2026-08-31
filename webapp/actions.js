@@ -157,9 +157,24 @@ function saveProject(book, payload) {
   const rest = rows.filter(b => !titles.includes(b.project));
   const out = A.runAssign(project, rest, book.engineers);
 
+  // What a rollback needs to put the Projects row back. Without it, undoing a RENAME
+  // revived the old title's bookings and left the row under the new name — bookings
+  // with no project row, which is the definition of a ghost. Verified: the app reported
+  // one immediately after the rollback.
+  //
+  // Only for an EDIT. Rolling back the save of a brand-new project supersedes the rows
+  // it appended and leaves the row behind, because nothing here deletes a row; that is
+  // an unplotted project, not a stranded schedule.
+  const prior = book.projects.find(x =>
+    x.project_title === (original || project.project_title));
+  const revert = prior
+    ? { title: project.project_title, project: { ...prior } }
+    : undefined;
+
   return {
     ok: true, errors: [], dry_run: !!p.dry_run,
     title: project.project_title,
+    revert,
     recordist: out.recordist, dubber: out.dubber || out.recordist,
     editor: out.editor || out.recordist, mixer: out.mixer,
     warnings: out.warnings || '',

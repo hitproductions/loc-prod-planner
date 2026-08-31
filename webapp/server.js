@@ -130,12 +130,19 @@ async function rollback(book, p) {
   }
 
   const change = { supersede: undoAppended, revive };
-  if (restore && restore.title && restore.fields && restore.values) {
-    const project = book.projects.find(x => x.project_title === restore.title);
-    if (project) {
-      change.project = { ...project, ...restore.values };
-      change.fields = restore.fields;
+  if (restore && restore.title) {
+    if (restore.project) {
+      // A whole row, including its title — this is how undoing a rename puts the name
+      // back. No `fields`, because every column is being restored to what it was.
+      change.project = restore.project;
       change.original_title = restore.title;
+    } else if (restore.fields && restore.values) {
+      const project = book.projects.find(x => x.project_title === restore.title);
+      if (project) {
+        change.project = { ...project, ...restore.values };
+        change.fields = restore.fields;
+        change.original_title = restore.title;
+      }
     }
   }
   return { ok: true, rolled_back: true, index: i,

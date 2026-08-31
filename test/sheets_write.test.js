@@ -215,6 +215,54 @@ if (TEST_ID === LIVE_ID) {
     })(), last.revert);
   }
 
+  // ---------------------------------------------------------------- no log tab
+  section('A book with no log tab reads as an empty log, not an error');
+  {
+    // readEvents used to ask for the spreadsheet's metadata purely to find out whether
+    // the tab existed, then read it — 290ms of overhead on every History load. It now
+    // just reads, and treats a 400 "Unable to parse range" as "no log yet". That makes
+    // this the important test: an empty log and a broken connection must not look the
+    // same, and a missing tab must not throw the way `History!A:Z` in TABS once did.
+    const s = src();
+    const meta = await auth.api(`spreadsheets/${enc}?fields=sheets.properties`);
+    const tab = (meta.sheets || []).find(x => x.properties.title === 'History');
+    if (tab) {
+      await auth.api(`spreadsheets/${enc}:batchUpdate`, { method: 'POST',
+        body: JSON.stringify({ requests: [{ deleteSheet:
+          { sheetId: tab.properties.sheetId } }] }) });
+    }
+    let got, threw = null;
+    try { got = await s.readEvents(); } catch (e) { threw = e; }
+    ok('it does not throw', threw === null, threw && threw.message);
+    ok('and returns an empty log', Array.isArray(got) && got.length === 0,
+       JSON.stringify(got));
+
+    // and the book itself must still read — this is what broke when the log tab was
+    // added to TABS
+    const bk = await src().read();
+    ok('the book still reads with no log tab at all', bk.projects.length > 0);
+
+    await s.ensureEventsTab();
+    const head = (await raw('History!A1:Z1'))[0] || [];
+    ok('ensureEventsTab recreates it with every header',
+       ['at', 'action', 'summary', 'superseded', 'appended', 'revert']
+         .every(h => head.map(x => String(x).toLowerCase()).includes(h)),
+       head.join(','));
+    ok('and it reads back empty', (await s.readEvents()).length === 0);
+
+    // The other half, and sabotage is why it is here: widening that catch to swallow
+    // EVERY error passed every test above, because "no log yet" and "cannot reach
+    // Google" both came back as an empty array. A real failure has to propagate.
+    let realFailure = null;
+    try {
+      await sheets.createSheetsSource({ sheetId: '1ThisSheetDoesNotExistAAAAAAAAAAAAAAAAAAAAAA' })
+        .readEvents();
+    } catch (e) { realFailure = e; }
+    ok('a genuine failure is NOT reported as an empty log',
+       realFailure !== null && !/unable to parse range/i.test(realFailure.message),
+       realFailure ? realFailure.message.slice(0, 80) : 'it returned normally');
+  }
+
   // ---------------------------------------------------------------- ghosts
   section('Clearing a ghost supersedes only its rows');
   {

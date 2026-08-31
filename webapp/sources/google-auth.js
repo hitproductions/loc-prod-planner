@@ -83,7 +83,12 @@ function createAuth(keyPath, scope) {
         throw new Error(`Spreadsheet not found (404): ${msg}\n` +
           '  → check PLANNER_SHEET_ID is the long id from the sheet URL.');
       }
-      throw new Error(`Sheets API ${res.status}: ${msg}`);
+      // The status is attached, not just spelled into the message, so a caller can
+      // branch on it without matching English. readEvents needs exactly this to tell
+      // "that tab does not exist yet" from a real failure.
+      const err = new Error(`Sheets API ${res.status}: ${msg}`);
+      err.status = res.status;
+      throw err;
     }
     return body;
   }

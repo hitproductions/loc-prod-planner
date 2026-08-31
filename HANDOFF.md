@@ -454,16 +454,16 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 502, all passing
+## 6. Tests — 517, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 176 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 217 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
+| `webapp.test.js` | 226 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
-| `sheets_write.test.js` | 31 | the WRITE path against a throwaway spreadsheet — skips without one |
+| `sheets_write.test.js` | 37 | the WRITE path against a throwaway spreadsheet — skips without one |
 
 ```bash
 for t in test/*.test.js; do node "$t"; done
@@ -656,6 +656,39 @@ This also covers a project marked complete before it was ever plotted, which the
 An existing assertion — `re-plan is told to leave it alone`, checking `locked === true` —
 was measuring the mechanism rather than the intent. Updated to assert the project is
 absent from the planning list, which is the thing that was always meant.
+
+**Rolling back a RENAME stranded the schedule as a ghost (found and fixed
+2026-08-31).** The same root cause as the cancel bug below, missed on the first pass:
+`saveProject` carried no `revert`, so undoing a rename revived the old title's bookings
+and left the Projects row under the NEW name. The app reported a ghost immediately
+afterwards — bookings with no project row, which is precisely the condition
+`clearOrphans` exists to clean up.
+
+`saveProject` now carries the whole prior row, and a `revert` holding a `project` is
+applied without `fields` — every column restored, title included. Rolling back the save
+of a BRAND-NEW project still leaves its row behind, because nothing here deletes a row;
+that is an unplotted project, not a stranded schedule, and it is the honest outcome.
+
+## Round trips to Google, measured
+
+Rebuilt after the Apps Script accounting was deleted with its app. Measured against the
+test sheet, token already warm:
+
+| operation | round trips | time |
+|---|---|---|
+| read the whole book | 1 | ~420ms |
+| write a lock (one cell) | 1 | ~310ms |
+| read the change log | **1** (was 2) | **~317ms** (was ~578ms) |
+
+`readEvents` used to fetch the spreadsheet's metadata purely to ask whether the tab
+existed, then read it — 290ms of pure overhead on every History load. It now just
+reads, and treats a 400 "Unable to parse range" as "no log yet". Errors from
+`google-auth` carry a `status` so that branch does not have to match English.
+
+**Only that one error is swallowed, and the test for it exists because sabotage found
+the gap.** Widening the catch to swallow everything passed every test in the suite —
+"no log yet" and "cannot reach Google" both came back as an empty array. There is now a
+check that a genuine failure propagates.
 
 **Rolling back a cancel used to corrupt the project's state (found and fixed
 2026-08-31, by debugging — no test caught it).** `rollback` rebuilt its change from the

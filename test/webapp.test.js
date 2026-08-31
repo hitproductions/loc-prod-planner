@@ -1225,6 +1225,37 @@ section('Rolling back a change that altered the project row');
   ok('and it is active again with its bookings untouched',
      back.status === '' && back.rows === start.rows, JSON.stringify(back));
 
+  // ---- a RENAME, then undo it. The nastiest of the three: rollback revived the old
+  // title's bookings and left the row under the NEW name, so the app reported a ghost
+  // immediately afterwards -- bookings with no project row.
+  const ren = await call('/api/save-project', { title: 'Renamed Show',
+    original_title: title, client: 'Netflix', deadline: '2026-12-11',
+    dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+  ok('renaming works', ren.ok === true, JSON.stringify(ren).slice(0, 90));
+  const afterRename = await call('/api/bootstrap?fresh=1');
+  ok('the new name is on the list',
+     afterRename.projects.some(p => p.title === 'Renamed Show'));
+  ok('and the old one is gone',
+     !afterRename.projects.some(p => p.title === title));
+  ok('no ghosts yet', (afterRename.orphans || []).length === 0,
+     JSON.stringify(afterRename.orphans));
+
+  const rbRen = await call('/api/rollback', { index: await lastIndex() });
+  ok('the rename can be rolled back', rbRen.ok === true,
+     JSON.stringify(rbRen).slice(0, 100));
+  const undoneRen = await call('/api/bootstrap?fresh=1');
+  ok('the ORIGINAL title is back on the Projects list',
+     undoneRen.projects.some(p => p.title === title),
+     undoneRen.projects.filter(p => /Show|' + title + '/.test(p.title))
+       .map(p => p.title).join(', '));
+  ok('the renamed one is gone again',
+     !undoneRen.projects.some(p => p.title === 'Renamed Show'));
+  // The actual defect: bookings under one name, project row under another.
+  ok('and it left NO ghost behind', (undoneRen.orphans || []).length === 0,
+     JSON.stringify(undoneRen.orphans));
+  ok('its bookings belong to the restored title',
+     undoneRen.projects.find(p => p.title === title).rows.length > 0);
+
   await new Promise(r => server.close(r));
 }
 
