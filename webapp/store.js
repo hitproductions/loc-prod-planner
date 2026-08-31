@@ -24,6 +24,8 @@ function createStore(sourceName, opts) {
   const ttlMs = (opts && opts.ttlMs) != null ? opts.ttlMs : 30000;
 
   let book = null;
+
+  let events = null, eventsAt = 0;
   let loadedAt = 0;
   let inflight = null;
   // Bumped on every load and every write. A re-plan is previewed against one book and
@@ -63,6 +65,7 @@ function createStore(sourceName, opts) {
     async write(change, meta) {
       const result = await source.write(change);
       book = null;
+      events = null;      // an entry is about to be appended
       version++;
       if (meta && source.appendEvent) {
         try {
@@ -83,7 +86,18 @@ function createStore(sourceName, opts) {
       }
       return result;
     },
-    async events() { return source.readEvents ? source.readEvents() : []; },
+    // Cached on the same terms as the book. Every /api/history request used to read
+    // the log from Google -- and the History page reads it again for each event you
+    // open, so browsing three entries cost four round trips. The log only grows when
+    // we append, and write() clears this straight after doing so; a change made by
+    // somebody else shows up within the TTL, exactly like a change to the book.
+    async events(force) {
+      if (!source.readEvents) return [];
+      if (!force && events && Date.now() - eventsAt <= ttlMs) return events;
+      events = await source.readEvents();
+      eventsAt = Date.now();
+      return events;
+    },
     version() { return version; },
     stats() {
       return { source: sourceName, version, loaded_at: loadedAt || null,

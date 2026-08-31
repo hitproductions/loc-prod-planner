@@ -454,13 +454,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 517, all passing
+## 6. Tests — 521, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 176 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 226 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
+| `webapp.test.js` | 230 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 | `sheets_write.test.js` | 37 | the WRITE path against a throwaway spreadsheet — skips without one |
@@ -679,6 +679,13 @@ test sheet, token already warm:
 | read the whole book | 1 | ~420ms |
 | write a lock (one cell) | 1 | ~310ms |
 | read the change log | **1** (was 2) | **~317ms** (was ~578ms) |
+
+**The log is also cached now**, on the same terms as the book: `/api/history` read it
+from Google on every request, and the History page reads it again for each entry you
+open — browsing three cost four round trips. Against the live sheet: 477ms for the
+first load, then **1ms**. `write()` clears the cache immediately before appending, so a
+change is always visible in History straight away; somebody else's change appears within
+the TTL, exactly like a change to the book.
 
 `readEvents` used to fetch the spreadsheet's metadata purely to ask whether the tab
 existed, then read it — 290ms of pure overhead on every History load. It now just

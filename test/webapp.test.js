@@ -816,6 +816,44 @@ section('History: a log of what you did, and undoing the last of it');
   fixture._reset();
 }
 
+section('The change log is cached, but never stale after a write');
+{
+  // /api/history read the log from Google on every request, and the History page reads
+  // it again for each entry you open -- browsing three cost four round trips at ~317ms
+  // each. It is cached now, which is only safe if a write clears it: a log that does
+  // not show the change you just made is worse than a slow one.
+  fixture._reset();
+  const st = createStore('fixture', { ttlMs: 30000 });
+  const book = await st.get();
+
+  // Counter installed BEFORE the first read, or the cache is already warm and this
+  // measures nothing -- which is what it did on the first attempt.
+  let reads = 0;
+  const src = require('../webapp/sources/fixture.js');
+  const realRead = src.readEvents.bind(src);
+  src.readEvents = async () => { reads++; return realRead(); };
+
+  const before = (await st.events()).length;
+  await st.events(); await st.events(); await st.events();
+  ok('four reads of the log hit the source once', reads === 1, reads + '');
+
+  const title = book.projects.find(p => !p.status).project_title;
+  const r = actions.setLock(book, { title, locked: true });
+  await st.write(r.change, { action: 'set-lock', summary: 'locked it',
+                             revert: r.revert });
+
+  const after = await st.events();
+  ok('the new entry is visible immediately', after.length === before + 1,
+     `${after.length} vs ${before}`);
+  ok('and it is the one we just wrote',
+     after[after.length - 1].summary === 'locked it',
+     after[after.length - 1].summary);
+  ok('which means the write cleared the cache — one more read, not zero',
+     reads === 2, reads + '');
+
+  src.readEvents = realRead;
+}
+
 section('The store');
 {
   fixture._reset();
