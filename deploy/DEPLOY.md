@@ -154,6 +154,48 @@ re-plan is about 5 seconds — see above.
 
 Logs go to stdout. There is no log file and nothing to rotate.
 
+## Redeploying — Tara needs to do this from home, without you
+
+She works on her own laptop and takes it home. The goal is that she commits and the
+server picks it up, with you involved once.
+
+**Preferred: a bare git repo on this server.** Nothing leaves the company, and the deploy
+is instant rather than polled.
+
+```bash
+# once, as whatever user runs the containers
+sudo -u planner git init --bare /srv/planner.git
+sudo -u planner git clone /srv/planner.git /srv/planner
+cp /srv/planner/deploy/post-receive /srv/planner.git/hooks/post-receive
+chmod +x /srv/planner.git/hooks/post-receive
+# edit WORK_TREE in that hook if /srv/planner is not where you put the checkout
+```
+
+Then Tara adds it as a remote and pushes. She needs SSH to this box from outside —
+a key, and whatever you normally allow for that. If SSH from the internet is not on the
+table, a Cloudflare Tunnel to port 22 works, or use the fallback below.
+
+**Fallback: a private GitHub repo, pulled on a timer.** No inbound access needed.
+
+```bash
+*/5 * * * * cd /srv/planner && ./deploy/redeploy.sh --pull >> /var/log/planner-deploy.log 2>&1
+```
+
+Either way the work is done by `deploy/redeploy.sh`, which:
+
+1. pulls (only in the cron flavour), and exits silently if nothing changed
+2. **runs the four test suites that need no credentials — and refuses to deploy if any
+   fail.** About 65 seconds. A broken push leaves the running app untouched.
+3. `docker compose up -d --build`
+4. polls `/api/health` for up to 60s and reports whether it came back
+
+It is safe to run twice and safe to run when nothing changed. `git pull --ff-only` means
+it will refuse rather than create a merge commit if anyone has committed on the server.
+
+**Please do not commit on the server.** If you need to change something to make it run,
+tell Tara so it goes into the repo — otherwise the next push conflicts and the deploy
+stops.
+
 ## Backups
 
 Nothing to back up on the server. The data is the Google Sheet, which has its own version

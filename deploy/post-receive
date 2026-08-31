@@ -1,0 +1,19 @@
+#!/bin/sh
+# Git hook for a bare repo ON the server: deploy the moment Tara pushes.
+#
+# Install into <bare-repo>/hooks/post-receive and chmod +x. WORK_TREE is the checkout
+# the containers build from; the bare repo is only the inbox.
+set -eu
+WORK_TREE=/srv/planner
+GIT_DIR_ABS=$(pwd)
+
+while read -r _old _new ref; do
+  case "$ref" in
+    refs/heads/main|refs/heads/master) ;;
+    *) echo "  ignoring $ref"; continue ;;
+  esac
+  echo "  deploying $ref"
+  git --work-tree="$WORK_TREE" --git-dir="$GIT_DIR_ABS" checkout -f "${ref#refs/heads/}"
+  # unset so the hook's git env does not leak into the deploy script's own git calls
+  env -u GIT_DIR -u GIT_WORK_TREE sh "$WORK_TREE/deploy/redeploy.sh"
+done

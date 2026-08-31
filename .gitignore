@@ -10,6 +10,16 @@ node_modules/
 
 # Service-account keys. Never commit these — anyone with the file can act as the
 # account, and the account has write access to the spreadsheet.
+#
+# `*.key.json` alone did NOT cover this: it matches "foo.key.json" and misses both
+# `key.json` and `planner-key.json` — and deploy/docker-compose.planner.yml tells the
+# administrator to put `planner-key.json` in this very directory. One `git add -A` and
+# the credential would have been committed.
+key.json
+*key.json
+*-key.json
 *service-account*.json
 *credentials*.json
-*.key.json
+.env
+.env.*
+!.env.example
