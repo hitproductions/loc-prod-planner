@@ -41,7 +41,23 @@ function topRight() {
   if (c.over2) bits.push(`<span class="pill warn">${wk(c.over2)} with 2 overlaps</span>`);
   if (c.over3) bits.push(`<span class="pill bad">${wk(c.over3)} with 3+ overlaps</span>`);
   if (LAST_MS != null) bits.push(`<span class="pill timing">${LAST_MS.toFixed(0)} ms</span>`);
+  // Anything typed straight into the spreadsheet -- a pasted batch of projects above
+  // all -- is invisible until the book is re-read. The store re-reads after every
+  // write and on its TTL, but the client holds BOOT and SCHED in memory, so without
+  // this the only way to see a sheet-side edit was to reload the browser.
+  bits.push('<button class="btn small" id="reload" title="Re-read the spreadsheet">' +
+    'Refresh</button>');
   $('topright').innerHTML = bits.join('');
+  const rl = $('reload');
+  if (rl) rl.addEventListener('click', async () => {
+    rl.disabled = true;
+    rl.textContent = 'Reading\u2026';
+    // fresh=1 skips the TTL, so this is a real re-read and not a cache hit.
+    BOOT = await get('/api/bootstrap?fresh=1');
+    SCHED = await get(scheduleUrl());
+    ANALYSIS = null; REPORT = null; HISTORY = null; OPENED = null;
+    paint();
+  });
 }
 
 function numLabel(w) {

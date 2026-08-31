@@ -606,25 +606,28 @@ locking and the preview, which matter once assignments are out with people.
 **Nothing is verified in a real Apps Script session.** Every check ran in Node or
 the preview harness, which stubs `google.script.run` and `SpreadsheetApp`.
 
-**`tools/build_app_preview.js` reimplements the read models, and they drift.**
-The preview stubs the `api*` surface in the browser rather than running the real
-`40_WebApp.gs`, so `listProjects_`, `apiBootstrap` and `apiSchedule` all exist
-twice. By 2026-08-30 the copies had diverged badly: the stub still derived
-`forced` from the FORCED note (the bug removed from the real code weeks earlier),
-still returned the retired `counts.forced_rows`, and had never gained the
-per-booking `items` — which meant drag-and-drop was silently dead in the preview
-and nobody noticed, because the preview is the only place drag can be tried
-outside a deployment. Patched to match, but the duplication is the real defect.
-The fix is to drop the hand-written stub and run the genuine functions over an
-in-memory sheet — `loadWithSheet` in `test/io_roundtrips.test.js` already does
-exactly this in Node, and is now exported so it can be reused.
+**~~`tools/build_app_preview.js` reimplements the read models, and they drift.~~
+Resolved 2026-08-31 by deleting it** along with the Apps Script UI it previewed. It had
+stubbed the `api*` surface in the browser rather than running the real code, so
+`listProjects_`, `apiBootstrap` and `apiSchedule` each existed twice and had diverged
+badly — the stub still derived `forced` from the FORCED note, still returned the retired
+`counts.forced_rows`, and had never gained the per-booking `items`, which meant
+drag-and-drop was silently dead in the preview and nobody noticed.
 
-This is the same failure as the five stale-note surfaces: two implementations of
-one fact, and no test comparing them. If the preview disagrees with the app, the
-preview is the thing that gets trusted, because it is the thing you can see.
+**The lesson outlives the file, and it is the most expensive one in this project: two
+implementations of one fact, and no test comparing them.** When the preview disagreed
+with the app, the preview was trusted, because it was the thing you could see. `core/engine.js`
+exists so the two apps cannot diverge that way, and the engine-drift suite exists to
+prove it.
 
-**No refresh in the app.** Views cache in `LOADED` and never refetch, so sheet-side
-changes are invisible until a browser reload. A header refresh button is a few lines.
+**~~No refresh in the app.~~ Added 2026-08-31.** The description above was about the
+Apps Script app's `LOADED` cache, but the gap was just as real in the new one: the client
+holds `BOOT` and `SCHED` in memory, so anything typed straight into the spreadsheet was
+invisible until a browser reload. That matters most for the batch-add workflow the how-to
+describes — paste rows into the Projects tab, then look at the app. There is now a
+**Refresh** in the header; it calls `?fresh=1`, which skips the store's TTL and is a real
+re-read rather than a cache hit, and it drops the Analysis, Report and History caches
+with it.
 
 **Services required (Atmos) is now modelled** — `atmos` is its own capability column
 on the Engineers tab and gates every mix path, so the engine no longer assigns a mixer
