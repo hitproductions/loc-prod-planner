@@ -375,8 +375,16 @@ function replanPreview(book, todayISO) {
 // idea of "do not touch". Re-planning finished work would move names on a job that
 // has already been delivered.
 function forReplan(projects) {
-  return (projects || []).map(p => (p.status === 'Complete' || p.status === 'Cancelled')
-    ? { ...p, locked: true } : p);
+  // A closed project is not PLANNED at all. Marking it locked was not enough: `locked`
+  // stops the engine moving a project's existing rows, and a cancelled project has
+  // none -- so the engine planned it from scratch and the very next re-plan put back
+  // the weeks that cancelling had just freed. Verified: 4 rows re-appended for a
+  // project that had been cancelled.
+  //
+  // Their bookings are NOT removed from the book here -- a completed project's weeks
+  // stay occupied and immovable, because the work happened. Only the planning list
+  // loses them.
+  return (projects || []).filter(p => !p.status);
 }
 
 module.exports = { TERM_NAMES, reassignWeek, undoWeekMove, saveProject, setStatus, setLock,

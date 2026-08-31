@@ -454,13 +454,13 @@ levels, mis-cased mix levels, superseded-row filtering, the replan defects.
 
 ---
 
-## 6. Tests — 468, all passing
+## 6. Tests — 471, all passing
 
 | suite | count | what it protects |
 |---|---|---|
 | `wrapper.test.js` | 176 | acceptance criteria, sharing policy, order search, rule 11, the lock, music |
 | `io_roundtrips.test.js` | 36 | Sheets round trips, ghosts, relink, roster validation |
-| `webapp.test.js` | 214 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
+| `webapp.test.js` | 217 | the web app: actions, replan, history replay, report, rollback, the read-only gate, lock, cancel, ghosts |
 | `engine_drift.test.js` | 28 | the engine has not changed except where declared |
 | `sheets_live.test.js` | 14 | the real spreadsheet, read-only — skips without credentials |
 
@@ -640,6 +640,21 @@ churn across the year.
 
 **One specials engineer.** Kyle is a single point of failure and the source of one
 remaining overlap.
+
+**Cancelling freed a project's weeks and the next re-plan handed them straight back
+(found and fixed 2026-08-31, by debugging).** `forReplan` marked closed projects
+`locked`, and `locked` stops the engine MOVING a project's existing rows — a cancelled
+project has none, so the engine planned it from scratch. Four rows came back
+immediately. A closed project is now dropped from the planning list entirely; its
+bookings stay in the book, so a completed project's weeks remain occupied and
+immovable, which is the point of Complete.
+
+This also covers a project marked complete before it was ever plotted, which the
+`locked` mechanism would have re-plotted for the same reason.
+
+An existing assertion — `re-plan is told to leave it alone`, checking `locked === true` —
+was measuring the mechanism rather than the intent. Updated to assert the project is
+absent from the planning list, which is the thing that was always meant.
 
 **Rolling back a cancel used to corrupt the project's state (found and fixed
 2026-08-31, by debugging — no test caught it).** `rollback` rebuilt its change from the

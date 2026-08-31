@@ -345,11 +345,17 @@ section('Marking a project complete');
      A.activeRows(after.bookings).filter(b => b.project === title).length === bookingsBefore,
      `${A.activeRows(after.bookings).filter(b => b.project === title).length} vs ${bookingsBefore}`);
 
-  // Frozen to the engine, by the mechanism that already exists for locked projects.
-  const frozen = actions.forReplan(after.projects).find(x => x.project_title === title);
-  ok('re-plan is told to leave it alone', frozen.locked === true);
-  ok('and other projects are not', actions.forReplan(after.projects)
-     .filter(x => x.project_title !== title).every(x => x.locked !== true));
+  // Frozen to the engine. This used to assert `locked === true`; a closed project is
+  // now dropped from the planning list instead, because `locked` only stops existing
+  // rows MOVING -- it did not stop the engine planning a project that had none, which
+  // is how a cancelled project got its freed weeks handed straight back. The intent
+  // being measured is the same: re-plan must leave it alone.
+  const planned = actions.forReplan(after.projects);
+  ok('re-plan is not given it to plan at all',
+     !planned.some(x => x.project_title === title));
+  ok('and every other project still is',
+     planned.length === after.projects.length - 1,
+     `${planned.length} of ${after.projects.length}`);
 
   ok('marking it complete twice is refused',
      !actions.setStatus(after, { title, status: 'Complete' }).ok);
@@ -1026,11 +1032,29 @@ section('Cancelling a project frees its weeks');
      done.change.supersede.length === 0, done.change.supersede.length + '');
   ok('and does date it', !!done.completed);
 
-  // Cancelled is locked for re-plan, so it cannot be silently re-plotted.
-  const fed = actions.forReplan(book.projects.map(x =>
-    x.project_title === title ? { ...x, status: 'Cancelled' } : x))
-    .find(x => x.project_title === title);
-  ok('a cancelled project reaches the engine locked', fed.locked === true);
+  // A cancelled project must not be PLANNED. Marking it locked was not enough: locked
+  // stops the engine moving existing rows, and a cancelled project has none -- so the
+  // engine planned it fresh and the next re-plan restored the weeks cancelling had
+  // just freed. Found by debugging; four rows came straight back.
+  const closed = book.projects.map(x =>
+    x.project_title === title ? { ...x, status: 'Cancelled' } : x);
+  ok('a cancelled project is off the planning list entirely',
+     !actions.forReplan(closed).some(x => x.project_title === title));
+  ok('and so is a completed one',
+     !actions.forReplan(book.projects.map(x =>
+       x.project_title === title ? { ...x, status: 'Complete' } : x))
+       .some(x => x.project_title === title));
+  ok('but active projects still reach the engine',
+     actions.forReplan(closed).length === book.projects.length - 1,
+     `${actions.forReplan(closed).length} of ${book.projects.length}`);
+
+  // The end-to-end version: the weeks stay freed.
+  const rowsNow = actions.live(book).filter(b => b.project !== title);
+  const rep = api.engine.replanBook(actions.forReplan(closed), rowsNow,
+                                    book.engineers, '2026-08-31');
+  ok('a re-plan appends nothing for it',
+     (rep.rows_to_append || []).filter(r => r.project === title).length === 0,
+     (rep.rows_to_append || []).filter(r => r.project === title).length + ' rows');
 
   ok('cancelling an already-cancelled project is refused',
      actions.setStatus({ projects: [{ project_title: title, status: 'Cancelled' }],
