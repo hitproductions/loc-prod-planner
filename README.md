@@ -1,6 +1,6 @@
 # Loc Prod Planner — how to use it
 
-*Internal — Hit Productions. Contains client project names.*
+*Internal — Hit Productions.*
 
 You work in the **app**. Bookmark its link — that's the tool. The Google Sheet
 behind it is storage; you should rarely need to open it, and there's a short list
