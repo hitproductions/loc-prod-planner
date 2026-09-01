@@ -1,6 +1,6 @@
 # Loc Prod Planner — handoff
 
-**Internal — Hit Productions / HAIST. Contains client project names. Do not share externally.**
+**Internal — Hit Productions / HAIST.**
 
 Written 2026-08-13, revised 2026-08-15. This supersedes the original build brief,
 kept as `HANDOFF_original.md`; where they disagree, this document is later. An
