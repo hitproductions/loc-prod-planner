@@ -612,13 +612,23 @@ section('Re-plan: preview, then apply against the same book');
     const wrong = await call('/api/replan-apply', { token: 'not-the-token' });
     ok('a token that does not match is refused', wrong.ok === false, wrong.error);
 
-    const before = (await call('/api/bootstrap')).counts.live_rows;
+    // The ASSIGNMENTS before and after, not the row COUNT. Counting rows was a proxy,
+    // and it broke a week after it was written: a re-plan that supersedes 38 rows and
+    // appends 38 is a pure swap — different engineers, identical count — so the book
+    // plainly changed while the number did not move. Time exposed it, because the
+    // fixture's dates are fixed and re-plan may only touch future weeks, so what it
+    // does shifts as the real date advances.
+    const shape = b => (b.projects || []).flatMap(p =>
+      (p.rows || []).map(r => `${p.title}|${r.phase}|${r.engineer}|${r.start}`)).sort().join('\n');
+    const before = shape(await call('/api/bootstrap'));
     const done = await call('/api/replan-apply', { token: pre.token });
     ok('the right token applies', done.ok === true, done.error);
     ok('and it reports what it wrote', done.superseded > 0 || done.appended > 0,
        `${done.superseded} superseded, ${done.appended} appended`);
+    const after = shape(await call('/api/bootstrap'));
     ok('the book actually changed',
-       (await call('/api/bootstrap')).counts.live_rows !== before || done.appended === 0);
+       after !== before || done.appended === 0,
+       `${done.superseded} superseded / ${done.appended} appended, yet every assignment identical`);
 
     // Not just "the second call returns ok:false" — that passes even with the stash
     // left in place, because the version bump from the first apply refuses it anyway.
