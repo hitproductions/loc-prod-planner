@@ -28,10 +28,23 @@ if [ "${1:-}" = "--public" ]; then
   # included, on the open internet at a guessable *.run.app address. Refuse rather than
   # let that happen by omission.
   if [ -z "${PLANNER_PASSWORD:-}" ]; then
-    echo "REFUSING: --public needs PLANNER_PASSWORD set." >&2
-    echo "  The app authenticates nobody. Without a password the URL is open to anyone." >&2
-    echo "  e.g.  PLANNER_PASSWORD='something-long' ./deploy/cloudrun.sh --public" >&2
-    exit 1
+    # Prompted rather than required on the command line: a password typed as an argument
+    # is written to ~/.zsh_history in the clear and stays there.
+    if [ -t 0 ]; then
+      printf 'Password for the planner (typing is hidden): ' >&2
+      stty -echo 2>/dev/null; read -r PLANNER_PASSWORD; stty echo 2>/dev/null
+      printf '\n' >&2
+    fi
+    if [ -z "${PLANNER_PASSWORD:-}" ]; then
+      echo "REFUSING: --public needs a password." >&2
+      echo "  The app authenticates nobody. Without one the URL is open to anyone." >&2
+      exit 1
+    fi
+    if [ ${#PLANNER_PASSWORD} -lt 12 ]; then
+      echo "REFUSING: that password is under 12 characters." >&2
+      echo "  This is the only thing between a public URL and the whole schedule." >&2
+      exit 1
+    fi
   fi
   PW_ARG="--set-env-vars PLANNER_PASSWORD=$PLANNER_PASSWORD"
 fi
