@@ -40,11 +40,13 @@ if [ "${1:-}" = "--public" ]; then
       echo "  The app authenticates nobody. Without one the URL is open to anyone." >&2
       exit 1
     fi
-    if [ ${#PLANNER_PASSWORD} -lt 12 ]; then
-      echo "REFUSING: that password is under 12 characters." >&2
-      echo "  This is the only thing between a public URL and the whole schedule." >&2
-      exit 1
-    fi
+  fi
+  # OUTSIDE the block above, so it also applies to a password supplied through the
+  # environment. Inside it, PLANNER_PASSWORD=short skipped the check and deployed.
+  if [ ${#PLANNER_PASSWORD} -lt 12 ]; then
+    echo "REFUSING: that password is under 12 characters." >&2
+    echo "  This is the only thing between a public URL and the whole schedule." >&2
+    exit 1
   fi
   PW_ARG="--set-env-vars PLANNER_PASSWORD=$PLANNER_PASSWORD"
 fi
