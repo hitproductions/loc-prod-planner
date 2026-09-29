@@ -17,6 +17,15 @@ set -eu
 PROJECT=${PLANNER_GCP_PROJECT:-loc-prod-planner}
 REGION=${PLANNER_GCP_REGION:-asia-southeast1}
 SERVICE=${PLANNER_GCP_SERVICE:-planner}
+# --view deploys a SECOND service with the writes switched off. That is the only honest
+# way to give engineers /view.html: the read-only guarantee is PLANNER_READONLY=1 on the
+# server, not the flag the page sets in the browser. Serving /view.html from the editing
+# service would look read-only and refuse nothing.
+RO=""
+if [ "${1:-}" = "--view" ] || [ "${2:-}" = "--view" ]; then
+  SERVICE="${SERVICE}-view"
+  RO=",PLANNER_READONLY=1"
+fi
 SHEET=${PLANNER_SHEET_ID:-1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ}
 SA=planner-app@loc-prod-planner.iam.gserviceaccount.com
 
@@ -62,7 +71,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --source . \
   --service-account "$SA" \
-  --set-env-vars "PLANNER_SOURCE=sheets,PLANNER_SHEET_ID=$SHEET" \
+  --set-env-vars "PLANNER_SOURCE=sheets,PLANNER_SHEET_ID=$SHEET$RO" \
   $PW_ARG \
   --memory 512Mi \
   --cpu 1 \
@@ -81,6 +90,7 @@ gcloud run deploy "$SERVICE" \
 # app picks up credentials from the metadata server — nothing to leak, nothing to rotate.
 
 echo
+[ -n "$RO" ] && echo "This is the READ-ONLY service. Every write route answers 403."
 echo "deployed. To use it:"
 echo "  gcloud run services proxy $SERVICE --region $REGION --port 8127"
 echo "  then open http://localhost:8127"
