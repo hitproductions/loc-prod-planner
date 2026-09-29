@@ -71,19 +71,36 @@ if (!keyPath || !sheetId || !fs.existsSync(keyPath.replace(/^~/, process.env.HOM
   ok('the book reads at all', true);
 
   // ---- shape
+  // An empty roster is always a fault. An empty book is NOT: the sheet is legitimately
+  // cleared between rounds. But the row checks below would then pass over nothing at
+  // all, which is the vacuous-green trap -- so they are reported as skipped instead of
+  // counted as passes.
   ok('there are engineers', book.engineers.length > 0);
-  ok('there are projects', book.projects.length > 0);
-  ok('there are bookings', book.bookings.length > 0);
+  // Gated separately: a sheet can legitimately have projects but no schedule yet, and
+  // a single combined flag skipped the deadline check on a book that had 3 projects to
+  // check it against.
+  const hasProjects = book.projects.length > 0;
+  const hasBookings = book.bookings.length > 0;
+  if (!hasProjects || !hasBookings) {
+    console.log(`  NOTE  ${book.projects.length} projects, ${book.bookings.length} ` +
+      'bookings — checks with nothing to run over are skipped, not passed');
+  }
+  const gate = have => (name, cond, detail) => {
+    if (!have) { console.log('  SKIP  ' + name + ' — nothing to check'); return; }
+    ok(name, cond, detail);
+  };
+  const projCheck = gate(hasProjects);
+  const rowCheck = gate(hasBookings);
 
   // ---- dates. Sheets hands these back as serial numbers unless asked otherwise, and
   // a serial used as a date silently plots work in 1899.
   const isISO = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d));
   const badBooking = book.bookings.filter(b => !isISO(b.start_date) || !isISO(b.end_date));
-  ok('every booking date is an ISO date, not a serial number',
+  rowCheck('every booking date is an ISO date, not a serial number',
      badBooking.length === 0,
      badBooking.slice(0, 3).map(b => `${b.project}: ${b.start_date}..${b.end_date}`).join(' | '));
   const badDeadline = book.projects.filter(p => p.deadline && !isISO(p.deadline));
-  ok('every project deadline is an ISO date',
+  projCheck('every project deadline is an ISO date',
      badDeadline.length === 0,
      badDeadline.slice(0, 3).map(p => `${p.project_title}: ${p.deadline}`).join(' | '));
 
@@ -92,7 +109,7 @@ if (!keyPath || !sheetId || !fs.existsSync(keyPath.replace(/^~/, process.env.HOM
     const a = A.widx(b.start_date), z = A.widx(b.end_date);
     return !Number.isFinite(a) || !Number.isFinite(z) || z < a;
   });
-  ok('and every booking runs forwards in time', unplaceable.length === 0,
+  rowCheck('and every booking runs forwards in time', unplaceable.length === 0,
      unplaceable.slice(0, 3).map(b => `${b.project} ${b.start_date}..${b.end_date}`).join(' | '));
 
   // ---- reading the book must not depend on the log tab existing.
@@ -119,7 +136,7 @@ if (!keyPath || !sheetId || !fs.existsSync(keyPath.replace(/^~/, process.env.HOM
     const score = A.scorePlan(live, book.engineers);
     ok('the engine can score the book as read', typeof score.total_double_booked === 'number',
        JSON.stringify(score.total_double_booked));
-    ok('and every booking names someone on the roster',
+    rowCheck('and every booking names someone on the roster',
        live.every(b => book.engineers.some(e => e.name === b.engineer)),
        [...new Set(live.filter(b => !book.engineers.some(e => e.name === b.engineer))
          .map(b => b.engineer))].join(', '));
