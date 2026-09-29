@@ -8,7 +8,7 @@ names in the sample data under `validation/`.
 | | |
 |---|---|
 | this repo | the app, its tests, and the Apps Script version it replaced |
-| `deploy/Dockerfile` | image definition — no build step, no dependencies |
+| `Dockerfile` (repo root) | image definition — no build step, no dependencies |
 | `deploy/docker-compose.planner.yml` | two services to add beside the n8n stack |
 | `planner-key.json` | **sent separately.** A credential. |
 

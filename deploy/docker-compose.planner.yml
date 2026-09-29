@@ -8,7 +8,7 @@ services:
   planner:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: planner
     restart: unless-stopped
     environment:
@@ -25,7 +25,7 @@ services:
   planner-view:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: planner-view
     restart: unless-stopped
     environment:
