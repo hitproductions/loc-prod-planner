@@ -298,7 +298,12 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, JSON.stringify(result));
     }
     // static client
+    // A read-only instance IS the engineer view, so it serves that page at every path.
+    // Otherwise '/' handed back the full app — writes refused, but Projects, Analysis,
+    // Re-plan and History all still on screen, which is not what "view-only" means to
+    // the person opening the link.
     let p = url.pathname === '/' ? '/index.html' : url.pathname;
+    if (READONLY && (p === '/index.html' || p === '/view.html')) p = '/view.html';
     if (p.includes('..')) return send(res, 400, '{"error":"bad path"}');
     const file = path.join(__dirname, 'public', p);
     if (!fs.existsSync(file)) return send(res, 404, '{"error":"not found"}');

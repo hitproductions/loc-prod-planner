@@ -1425,6 +1425,16 @@ section('Read-only instance: the refusal is on the server, not in the page');
   ok('and it tells the client it is read-only', boot.body.readonly === true);
   const sched = await hit(roPort, '/api/schedule');
   ok('the schedule still loads', sched.status === 200 && sched.body.labels.length > 0);
+  // The engineer view IS the whole read-only instance. Serving the full app at '/'
+  // refused every write but still showed Projects, Analysis, Re-plan and History, which
+  // is not what "view-only" means to whoever opens the link.
+  for (const path of ['/', '/index.html', '/view.html']) {
+    const html = await (await fetch(`http://127.0.0.1:${roPort}${path}`)).text();
+    const tabs = (html.match(/data-view="[a-z]+"/g) || []);
+    ok(`${path} serves the engineer view only`, tabs.length === 1 &&
+       /schedule/.test(tabs[0]), `${path} -> ${tabs.join(',') || 'no nav'}`);
+  }
+
   await new Promise(r => ro.server.close(r));
 
   // ---- with the switch off, the editing app is untouched. Without this the block

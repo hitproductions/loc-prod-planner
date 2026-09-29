@@ -142,7 +142,7 @@ Top right. The planner holds the schedule in memory for speed; Refresh re-reads 
 
 ## The engineer view
 
-**https://planner-view-63803252709.asia-southeast1.run.app/view.html**
+**https://planner-view-63803252709.asia-southeast1.run.app**
 
 The same schedule, read-only — nothing to press, nothing to break. Same password.
 
