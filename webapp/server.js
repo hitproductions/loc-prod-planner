@@ -11,6 +11,7 @@ const api = require('./api.js');
 const actions = require('./actions.js');
 const { solveReplan, DEFAULT_RESTARTS } = require('./solver.js');
 const history = require('./history.js');
+const { gate } = require('./gate.js');
 
 register('fixture', require('./sources/fixture.js'));
 
@@ -220,7 +221,7 @@ function applyReplan(book, p) {
            change };
 }
 
-function readBody(req) {
+function readBody(req, raw) {
   return new Promise((resolve, reject) => {
     let n = 0; const parts = [];
     req.on('data', c => {
@@ -229,7 +230,9 @@ function readBody(req) {
       parts.push(c);
     });
     req.on('end', () => {
-      try { resolve(parts.length ? JSON.parse(Buffer.concat(parts).toString('utf8')) : {}); }
+      const text = Buffer.concat(parts).toString('utf8');
+      if (raw) return resolve(text);
+      try { resolve(text ? JSON.parse(text) : {}); }
       catch (e) { reject(new Error('Body is not JSON')); }
     });
     req.on('error', reject);
@@ -240,6 +243,11 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const started = process.hrtime.bigint();
   try {
+    // Before anything else, health included: an endpoint that answered without a cookie
+    // would leak the book's size and prove the service exists. Off unless
+    // PLANNER_PASSWORD is set, so local runs and a LAN box are unaffected.
+    if (!(await gate(req, res, url, readBody))) return;
+
     if (url.pathname === '/api/health') {
       // A real readiness probe, not a liveness ping. It loads the book if that has not
       // happened yet, so `ok` means "this instance can reach the spreadsheet and parse

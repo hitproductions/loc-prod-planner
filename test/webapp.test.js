@@ -1307,6 +1307,79 @@ section('Rolling back a change that altered the project row');
   await new Promise(r => server.close(r));
 }
 
+section('The password gate, for when the URL is public');
+{
+  // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud
+  // Run URL. Off unless PLANNER_PASSWORD is set, so nothing below changes local runs.
+  // The gate reads PLANNER_PASSWORD per REQUEST, not at require time, so the variable
+  // has to stay set while the requests run. Restoring it straight after require left
+  // the gate off and every assertion below passed for the wrong reason.
+  const savedPw = process.env.PLANNER_PASSWORD;
+  const fresh = (pw) => {
+    if (pw) process.env.PLANNER_PASSWORD = pw; else delete process.env.PLANNER_PASSWORD;
+    delete require.cache[require.resolve('../webapp/server.js')];
+    return require('../webapp/server.js');
+  };
+  const PW = 'test-password-123';
+  const app = fresh(PW);
+  await new Promise(r => app.server.listen(0, r));
+  const port = app.server.address().port;
+  const hit = (path, opts) => fetch(`http://127.0.0.1:${port}${path}`,
+    { redirect: 'manual', ...(opts || {}) });
+  const form = body => ({ method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
+
+  for (const p of ['/', '/view.html', '/api/bootstrap', '/api/schedule', '/api/health']) {
+    ok(`${p} is refused without a cookie`, (await hit(p)).status === 401, p);
+  }
+  ok('a wrong password is refused',
+     (await hit('/login', form('password=nope'))).status === 401);
+
+  const inRes = await hit('/login', form('password=' + PW));
+  const setCookie = inRes.headers.get('set-cookie') || '';
+  const cookie = setCookie.split(';')[0];
+  ok('the right password signs you in', inRes.status === 302, String(inRes.status));
+  ok('and the cookie is HttpOnly and SameSite', /HttpOnly/.test(setCookie) &&
+     /SameSite=Lax/.test(setCookie), setCookie.slice(0, 80));
+  ok('no Secure flag over plain http — the browser would drop it',
+     !/Secure/.test(setCookie));
+
+  ok('the cookie opens the app', (await hit('/api/bootstrap',
+     { headers: { cookie } })).status === 200);
+
+  // The part that matters: the cookie must not be forgeable.
+  ok('a forged cookie is refused', (await hit('/api/bootstrap',
+     { headers: { cookie: 'planner_auth=9999999999.deadbeef' } })).status === 401);
+  const { sign } = require('../webapp/gate.js');
+  const past = Math.floor(Date.now() / 1000) - 10;
+  ok('a correctly signed but EXPIRED cookie is refused',
+     (await hit('/api/bootstrap', { headers: { cookie: 'planner_auth=' +
+       encodeURIComponent(past + '.' + sign(PW, past)) } })).status === 401);
+  const other = Math.floor(Date.now() / 1000) + 600;
+  ok('a cookie signed with a different password is refused',
+     (await hit('/api/bootstrap', { headers: { cookie: 'planner_auth=' +
+       encodeURIComponent(other + '.' + sign('some-other-password', other)) } })).status === 401);
+
+  // Behind Cloud Run the request arrives over https and the flag must appear, or the
+  // cookie is sent in the clear.
+  const sec = (await hit('/login', { ...form('password=' + PW),
+    headers: { 'content-type': 'application/x-www-form-urlencoded',
+               'x-forwarded-proto': 'https' } })).headers.get('set-cookie') || '';
+  ok('behind https the cookie IS marked Secure', /Secure/.test(sec), sec.slice(0, 90));
+  await new Promise(r => app.server.close(r));
+
+  // And with no password configured nothing is gated.
+  const open = fresh(null);
+  await new Promise(r => open.server.listen(0, r));
+  const p2 = open.server.address().port;
+  ok('with no password set, the app is not gated at all',
+     (await fetch(`http://127.0.0.1:${p2}/api/bootstrap`)).status === 200);
+  await new Promise(r => open.server.close(r));
+
+  if (savedPw === undefined) delete process.env.PLANNER_PASSWORD;
+  else process.env.PLANNER_PASSWORD = savedPw;
+}
+
 section('Read-only instance: the refusal is on the server, not in the page');
 {
   // The view-only page sets a flag in the browser, which stops the UI OFFERING an edit

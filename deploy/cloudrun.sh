@@ -21,13 +21,26 @@ SHEET=${PLANNER_SHEET_ID:-1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ}
 SA=planner-app@loc-prod-planner.iam.gserviceaccount.com
 
 AUTH=--no-allow-unauthenticated
-[ "${1:-}" = "--public" ] && AUTH=--allow-unauthenticated
+PW_ARG=""
+if [ "${1:-}" = "--public" ]; then
+  AUTH=--allow-unauthenticated
+  # A public Cloud Run URL with no gate puts the whole schedule, client project names
+  # included, on the open internet at a guessable *.run.app address. Refuse rather than
+  # let that happen by omission.
+  if [ -z "${PLANNER_PASSWORD:-}" ]; then
+    echo "REFUSING: --public needs PLANNER_PASSWORD set." >&2
+    echo "  The app authenticates nobody. Without a password the URL is open to anyone." >&2
+    echo "  e.g.  PLANNER_PASSWORD='something-long' ./deploy/cloudrun.sh --public" >&2
+    exit 1
+  fi
+  PW_ARG="--set-env-vars PLANNER_PASSWORD=$PLANNER_PASSWORD"
+fi
 
 cd "$(dirname "$0")/.."
 
 echo "project $PROJECT / region $REGION / service $SERVICE"
 [ "$AUTH" = "--allow-unauthenticated" ] && \
-  echo "WARNING: deploying PUBLIC. The app has no login — put Cloudflare Access in front before sharing the URL."
+  echo "deploying PUBLIC, behind the shared-password gate." 
 
 gcloud run deploy "$SERVICE" \
   --project "$PROJECT" \
@@ -35,6 +48,7 @@ gcloud run deploy "$SERVICE" \
   --source . \
   --service-account "$SA" \
   --set-env-vars "PLANNER_SOURCE=sheets,PLANNER_SHEET_ID=$SHEET" \
+  $PW_ARG \
   --memory 512Mi \
   --cpu 1 \
   --timeout 120 \
