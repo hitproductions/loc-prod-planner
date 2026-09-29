@@ -31,7 +31,6 @@ spell takes a couple of seconds while it wakes, then it's instant.
 | 8 | Recognise a new order as a continuation of an existing series | **Pending** — needs coordination with Tel moving forward |
 | 9 | Drag-and-drop rescheduling, without a manual refresh | **Applied** — the drag saves and redraws immediately |
 | 10 | Toggle a hand-picked booking back to Auto | **Applied** — click the dotted cell |
-| 11 | Clearer instructions than the old ones | **Applied** — this document |
 
 ---
 
