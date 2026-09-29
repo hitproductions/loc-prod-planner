@@ -1,104 +1,226 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Loc Prod Planner</title>
 <style>
- :root{--black:#000;--red:#EF4123;--gray:#646667;--cool:#D0D0CE;--soft:#F5F5F4;
-   --font:"Avenir Next",Avenir,-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
- *{box-sizing:border-box;border-radius:0}
- body{margin:0;background:#fff;color:var(--black);font-family:var(--font);
-   font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
- .wrap{max-width:780px;margin:0 auto;padding:44px 24px 90px}
- .tag{display:inline-block;background:var(--black);color:#fff;font-size:11px;font-weight:700;
-   text-transform:uppercase;letter-spacing:.09em;padding:4px 9px;margin-bottom:18px}
- h1{font-size:31px;letter-spacing:-.02em;margin:0 0 30px}
- h2{font-size:20px;letter-spacing:-.01em;margin:42px 0 12px;padding-top:14px;
-   border-top:2px solid var(--black)}
- p{margin:0 0 13px} ul{margin:0 0 13px;padding-left:20px} li{margin-bottom:7px}
- b{font-weight:700}
- a{color:var(--black);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
- code{background:var(--soft);padding:1px 5px;font-size:14px;
-   font-family:"SF Mono",Menlo,Consolas,monospace}
- .tw{overflow-x:auto;margin:0 0 16px}
- table{border-collapse:collapse;width:100%;font-size:14px}
- th,td{text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--cool);
-   vertical-align:top}
- th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gray);
-   border-bottom:1px solid var(--black)}
- td:first-child{width:1%;color:var(--gray)}
- .foot{margin-top:52px;padding-top:14px;border-top:1px solid var(--cool);
-   color:var(--gray);font-size:13px}
- @media print{body{font-size:11.5pt} .wrap{padding:0;max-width:none}
-   h2{page-break-after:avoid} a{text-decoration:none}}
-</style></head><body><div class="wrap">
-<div class="tag">Internal — Hit Productions</div>
-<h1>Loc Prod Planner</h1>
+  /* Layout: single measured column, rules between sections, status carried by pill colour. */
+  :root{
+    --ink:#0a0a0a; --ink-2:#5c5e5f; --ink-3:#8a8c8d;
+    --paper:#ffffff; --sunk:#f4f3f1; --rule:#d0d0ce; --hair:#e6e5e2;
+    --red:#ef4123; --blue:#2e75b6;
+    --ok:#1f6f43; --ok-bg:#e8f2ec; --wait:#8a5a00; --wait-bg:#fdf1dc;
+    --display:"Avenir Next","Avenir","Helvetica Neue",Helvetica,Arial,sans-serif;
+    --body:"Avenir Next","Avenir","Helvetica Neue",Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#f2f1ef; --ink-2:#a8a9a8; --ink-3:#7e807f;
+      --paper:#121212; --sunk:#1c1c1b; --rule:#3a3a38; --hair:#2a2a28;
+      --red:#ff6a4d; --blue:#6fa8dc;
+      --ok:#6fcf97; --ok-bg:#16301f; --wait:#e0b050; --wait-bg:#332715;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#f2f1ef; --ink-2:#a8a9a8; --ink-3:#7e807f;
+    --paper:#121212; --sunk:#1c1c1b; --rule:#3a3a38; --hair:#2a2a28;
+    --red:#ff6a4d; --blue:#6fa8dc;
+    --ok:#6fcf97; --ok-bg:#16301f; --wait:#e0b050; --wait-bg:#332715;
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);
+    font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:720px;margin:0 auto;padding-block:40px 88px;padding-left:20px;padding-right:20px}
 
-<h2>Opening it</h2>
-<p><b><a href="https://planner-63803252709.asia-southeast1.run.app">https://planner-63803252709.asia-southeast1.run.app</a></b> — password sent separately. It remembers you for 30 days.</p>
-<p>The schedule starts empty; nothing in it is real work yet. The first click after a quiet spell takes a couple of seconds while it wakes, then it&#x27;s instant.</p>
-<h2>Your requests</h2>
-<div class="tw"><table>
-<thead><tr><th>#</th><th>Request</th><th>Status</th></tr></thead><tbody>
-<tr><td>1</td><td>Two engineers on one phase, picked by hand</td><td><b>Applied</b> — Recordist pick + Recordist pick 2 on the project form</td></tr>
-<tr><td>2</td><td>&quot;Project Complete&quot; / archive status</td><td><b>Applied</b> — Mark complete, keeps the record</td></tr>
-<tr><td>3</td><td>Monthly report of completed projects</td><td><b>Applied</b> — Report tab, printable</td></tr>
-<tr><td>4</td><td>View-only access for engineers</td><td><b>Applied</b> — read-only link at the end</td></tr>
-<tr><td>5</td><td>Sort the schedule by deadline or project</td><td><b>Applied</b> — Deadline / A–Z buttons on Projects</td></tr>
-<tr><td>6</td><td>Atmos as its own flag, separate from Special</td><td><b>Applied</b> — own column and own tickbox; only engineers marked for Atmos get Atmos mixes</td></tr>
-<tr><td>7</td><td>2 overlaps = warning, 3 = overflow that must be reassigned; replaces FORCED</td><td><b>Applied</b> — blue at two, red at three. FORCED colouring is gone</td></tr>
-<tr><td>8</td><td>Recognise a new order as a continuation of an existing series</td><td><b>Pending</b> — needs coordination with Tel moving forward</td></tr>
-<tr><td>9</td><td>Drag-and-drop rescheduling, without a manual refresh</td><td><b>Applied</b> — the drag saves and redraws immediately</td></tr>
-<tr><td>10</td><td>Toggle a hand-picked booking back to Auto</td><td><b>Applied</b> — click the dotted cell</td></tr>
-<tr><td>11</td><td>Clearer instructions than the old ones</td><td><b>Applied</b> — this document</td></tr>
-</tbody></table></div>
-<h2>Adding a project</h2>
-<p><b>Projects → Add.</b></p>
-<p>Title, client, deadline, and how many weeks each phase needs — dub, edit, mix.</p>
-<p>Tick <b>Music</b>, <b>Special</b> or <b>Atmos</b> if they apply. Those decide who is eligible.</p>
-<p><b>Engineer picks.</b> Leave blank and it chooses. Fill them and it uses your choice:</p>
-<ul><li><b>Recordist pick</b> and <b>Recordist pick 2</b> — name both to split one dub across two engineers by hand</li><li><b>Editor pick</b>, <b>Mixer pick</b> — one each</li></ul>
-<p><b>Check availability</b> shows what would happen without saving. <b>Plot &amp; save</b> schedules it, and only it — nothing already on the board moves.</p>
-<h2>The Projects list</h2>
-<p><b>Deadline</b> and <b>A–Z</b> re-sort it.</p>
-<p><b>Lock</b> on any row freezes that project: re-plan won&#x27;t move it, though you can still drag its weeks. Press again to unlock.</p>
-<p><b>Show closed</b> brings back completed and cancelled projects.</p>
-<p>Click a row to edit it.</p>
-<h2>Reading the schedule</h2>
-<p>Weeks run down the page; the bold row is this week.</p>
-<p><b>Yellow</b> dub, <b>blue</b> edit, <b>pink</b> mix.</p>
-<p><b>Projects / Engineers</b> switches what the columns are. <b>From</b> and <b>To</b> narrow it to a few quarters; <b>All</b> puts it back.</p>
-<p>The outline is the part to watch:</p>
-<ul><li><b>Blue — two at once.</b> Ordinary. A series still recording while its edit starts.</li><li><b>Red — three at once.</b> Overflow. Move one.</li><li><b>Dotted — set by hand.</b> The planner leaves it alone.</li></ul>
-<h2>Moving work</h2>
-<p>In the <b>Engineers</b> view, drag a week onto someone else. It can only move sideways — same week, same phase — because you&#x27;re changing who does it, not when. Problems are flagged before it saves.</p>
-<p><b>Click a dotted cell</b> to hand it back to automatic.</p>
-<h2>Finishing vs cancelling</h2>
-<p><b>Mark complete</b> — it happened. Leaves the list, but <b>its weeks stay on the schedule</b>, because who did the work is the record. This is what feeds the monthly report.</p>
-<p><b>Cancel project</b> — it isn&#x27;t happening. <b>Its weeks go back to the engineers.</b></p>
-<p>Both leave the list; <b>Show closed</b> brings them back; either can be undone.</p>
-<h2>Re-plan</h2>
-<p>Proposes a better arrangement of everything and shows what would change before saving.</p>
-<p>It moves <b>everything not locked</b> — not only the newest project. To add one title without disturbing the rest, use the form. It takes a few seconds to think.</p>
-<h2>Analysis</h2>
-<p>Where the pressure is: who is carrying most, which weeks are tightest, who is free. Useful before promising a deadline.</p>
-<h2>History and undo</h2>
-<p>Every change, newest first. <b>The most recent can be undone</b> — a cancel, a lock, a completion, a rename, a dragged week — and it restores the project&#x27;s details too.</p>
-<p>Only the most recent: undoing an older one would clash with what came after.</p>
-<h2>Report</h2>
-<p>Pick a month, print it. A project appears once somebody marks it complete — nothing is guessed from deadlines, since a job can land early or late.</p>
-<h2>Refresh</h2>
-<p>Top right. The planner holds the schedule in memory for speed; Refresh re-reads it.</p>
-<h2>The engineer view</h2>
-<p><b><a href="https://planner-view-63803252709.asia-southeast1.run.app">https://planner-view-63803252709.asia-southeast1.run.app</a></b></p>
-<p>The same schedule, read-only — nothing to press, nothing to break. Same password.</p>
-<h2>The spreadsheet behind it</h2>
-<p><b><a href="https://docs.google.com/spreadsheets/d/1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ/edit">https://docs.google.com/spreadsheets/d/1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ/edit</a></b></p>
-<p>The planner reads and writes this sheet. It is the record; the app is the way in. You rarely need to open it, but it is there, and nothing is hidden from you.</p>
-<p><b>Worth opening it for:</b></p>
-<ul><li><b>The engineer roster</b> — who can record, edit or mix, who is Advanced or Developing, who does Music, Specials or Atmos. The app reads this and never edits it. Changing who is eligible for what happens here.</li><li><b>Checking history</b> — a <code>History</code> tab logs every change with a timestamp: what was moved, cancelled, re-planned, and by which action.</li><li><b>Reading the raw rows</b> — <code>Projects</code> is one row per project, <code>Bookings</code> one row per engineer-week.</li></ul>
-<p><b>Worth knowing:</b></p>
-<ul><li>Cancelled bookings are <b>marked</b>, not deleted. Nothing is thrown away, so the record of what was planned survives.</li><li>The app holds the sheet in memory for speed. Edit the sheet directly and the app won&#x27;t see it until somebody presses <b>Refresh</b>.</li><li>Editing the sheet while people are working in the app is the one way to confuse it. Prefer the app; use the sheet to look.</li></ul>
-<div class="foot">Hit Productions — internal. Contains scheduling information; do not
-circulate outside the company.</div>
-</div></body></html>
+  .eyebrow{display:inline-block;background:var(--ink);color:var(--paper);font-size:10.5px;
+    font-weight:700;text-transform:uppercase;letter-spacing:.11em;padding:4px 9px}
+  h1{font-family:var(--display);font-size:clamp(28px,7vw,36px);line-height:1.08;
+    letter-spacing:-.025em;margin:16px 0 0;text-wrap:balance}
+  .sub{color:var(--ink-2);margin:6px 0 0}
+
+  h2{font-family:var(--display);font-size:19px;letter-spacing:-.012em;margin:0;
+    text-wrap:balance}
+  section{border-top:1px solid var(--rule);margin-top:34px;padding-top:18px;
+    display:flex;flex-direction:column;gap:11px}
+  section.lead{border-top-width:2px;border-top-color:var(--ink)}
+  p{margin:0} ul{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px}
+  b{font-weight:700}
+  a{color:inherit;text-decoration:underline;text-underline-offset:3px;
+    text-decoration-color:var(--ink-3);word-break:break-word}
+  a:hover{text-decoration-color:var(--red)}
+  a:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+  code{font-family:var(--mono);font-size:.86em;background:var(--sunk);padding:1px 5px}
+
+  .link{font-family:var(--mono);font-size:14px;display:inline-block;word-break:break-all}
+
+  .tw{overflow-x:auto;margin-top:2px}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:0}
+  th,td{text-align:left;padding:9px 14px 9px 0;vertical-align:top;
+    border-bottom:1px solid var(--hair)}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3);
+    font-weight:700;border-bottom:1px solid var(--rule);padding-bottom:7px}
+  td.n{width:1%;color:var(--ink-3);font-variant-numeric:tabular-nums;padding-right:16px}
+  tr:last-child td{border-bottom:none}
+
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.07em;padding:2.5px 7px;white-space:nowrap;margin-right:7px}
+  .pill.ok{background:var(--ok-bg);color:var(--ok)}
+  .pill.wait{background:var(--wait-bg);color:var(--wait)}
+
+  .swatch{display:inline-block;width:11px;height:11px;margin-right:7px;
+    vertical-align:-1px;border:1px solid rgba(128,128,128,.45)}
+  .dub{background:#ffc000} .edit{background:#bdd7ee} .mix{background:#ea9999}
+  .two{color:var(--blue);font-weight:700} .three{color:var(--red);font-weight:700}
+
+  .note{border-left:3px solid var(--ink);background:var(--sunk);padding:12px 15px}
+  .foot{margin-top:44px;padding-top:14px;border-top:1px solid var(--rule);
+    color:var(--ink-3);font-size:13px}
+  @media (max-width:420px){ td.n{display:none} th:first-child{display:none} }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Internal — Hit Productions</div>
+  <h1>Loc Prod Planner</h1>
+  <p class="sub">Test build. The schedule starts empty; nothing in it is real work yet.</p>
+
+  <section class="lead">
+    <h2>Opening it</h2>
+    <p><a class="link" href="https://planner-63803252709.asia-southeast1.run.app">planner-63803252709.asia-southeast1.run.app</a></p>
+    <p>Password sent separately. It remembers you for 30 days.</p>
+    <p>The first click after a quiet spell takes a couple of seconds while it wakes. After that it's instant.</p>
+  </section>
+
+  <section>
+    <h2>Your requests</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>#</th><th>Request</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><td>Two engineers on one phase, picked by hand</td>
+            <td><span class="pill ok">Applied</span>Recordist pick + Recordist pick 2 on the project form</td></tr>
+          <tr><td class="n">2</td><td>“Project Complete” / archive status</td>
+            <td><span class="pill ok">Applied</span>Mark complete, keeps the record</td></tr>
+          <tr><td class="n">3</td><td>Monthly report of completed projects</td>
+            <td><span class="pill ok">Applied</span>Report tab, printable</td></tr>
+          <tr><td class="n">4</td><td>View-only access for engineers</td>
+            <td><span class="pill ok">Applied</span>Read-only link at the end</td></tr>
+          <tr><td class="n">5</td><td>Sort the schedule by deadline or project</td>
+            <td><span class="pill ok">Applied</span>Deadline / A–Z buttons on Projects</td></tr>
+          <tr><td class="n">6</td><td>Atmos as its own flag, separate from Special</td>
+            <td><span class="pill ok">Applied</span>Own column and tickbox; only engineers marked for Atmos get Atmos mixes</td></tr>
+          <tr><td class="n">7</td><td>2 overlaps = warning, 3 = overflow that must be reassigned; replaces FORCED</td>
+            <td><span class="pill ok">Applied</span>Blue at two, red at three. FORCED colouring is gone</td></tr>
+          <tr><td class="n">8</td><td>Recognise a new order as a continuation of an existing series</td>
+            <td><span class="pill wait">Pending</span>Needs coordination with Tel moving forward</td></tr>
+          <tr><td class="n">9</td><td>Drag-and-drop rescheduling, without a manual refresh</td>
+            <td><span class="pill ok">Applied</span>The drag saves and redraws immediately</td></tr>
+          <tr><td class="n">10</td><td>Toggle a hand-picked booking back to Auto</td>
+            <td><span class="pill ok">Applied</span>Click the dotted cell</td></tr>
+          <tr><td class="n">11</td><td>Clearer instructions than the old ones</td>
+            <td><span class="pill ok">Applied</span>This document</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Adding a project</h2>
+    <p><b>Projects → Add.</b> Title, client, deadline, and how many weeks each phase needs — dub, edit, mix.</p>
+    <p>Tick <b>Music</b>, <b>Special</b> or <b>Atmos</b> if they apply. Those decide who is eligible.</p>
+    <p>Leave the engineer boxes blank and it chooses. Fill them and it uses your choice:</p>
+    <ul>
+      <li><b>Recordist pick</b> and <b>Recordist pick 2</b> — name both to split one dub across two engineers by hand</li>
+      <li><b>Editor pick</b>, <b>Mixer pick</b> — one each</li>
+    </ul>
+    <p><b>Check availability</b> shows what would happen without saving. <b>Plot &amp; save</b> schedules it, and only it — nothing already on the board moves.</p>
+  </section>
+
+  <section>
+    <h2>The Projects list</h2>
+    <p><b>Deadline</b> and <b>A–Z</b> re-sort it. Click a row to edit it.</p>
+    <p><b>Lock</b> on any row freezes that project: re-plan won't move it, though you can still drag its weeks. Press again to unlock.</p>
+    <p><b>Show closed</b> brings back completed and cancelled projects.</p>
+  </section>
+
+  <section>
+    <h2>Reading the schedule</h2>
+    <p>Weeks run down the page; the bold row is this week.</p>
+    <ul>
+      <li><span class="swatch dub"></span><b>Dub</b> — recording</li>
+      <li><span class="swatch edit"></span><b>Edit</b></li>
+      <li><span class="swatch mix"></span><b>Mix</b></li>
+    </ul>
+    <p><b>Projects / Engineers</b> switches what the columns are. <b>From</b> and <b>To</b> narrow it to a few quarters; <b>All</b> puts it back.</p>
+    <p>The outline is the part to watch:</p>
+    <ul>
+      <li><span class="two">Blue — two at once.</span> Ordinary. A series still recording while its edit starts.</li>
+      <li><span class="three">Red — three at once.</span> Overflow. Move one.</li>
+      <li><b>Dotted — set by hand.</b> The planner leaves it alone.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Moving work</h2>
+    <p>In the <b>Engineers</b> view, drag a week onto someone else. It can only move sideways — same week, same phase — because you're changing who does it, not when. Problems are flagged before it saves.</p>
+    <p><b>Click a dotted cell</b> to hand it back to automatic.</p>
+  </section>
+
+  <section>
+    <h2>Finishing vs cancelling</h2>
+    <p><b>Mark complete</b> — it happened. Leaves the list, but <b>its weeks stay on the schedule</b>, because who did the work is the record. This is what feeds the monthly report.</p>
+    <p><b>Cancel project</b> — it isn't happening. <b>Its weeks go back to the engineers.</b></p>
+    <p>Both leave the list; <b>Show closed</b> brings them back; either can be undone.</p>
+  </section>
+
+  <section>
+    <h2>Re-plan</h2>
+    <p>Proposes a better arrangement of everything and shows what would change before saving.</p>
+    <div class="note">It moves <b>everything not locked</b> — not only the newest project. To add one title without disturbing the rest, use the form. It takes a few seconds to think.</div>
+  </section>
+
+  <section>
+    <h2>Analysis</h2>
+    <p>Where the pressure is: who is carrying most, which weeks are tightest, who is free. Useful before promising a deadline.</p>
+  </section>
+
+  <section>
+    <h2>History and undo</h2>
+    <p>Every change, newest first. <b>The most recent can be undone</b> — a cancel, a lock, a completion, a rename, a dragged week — and it restores the project's details too.</p>
+    <p>Only the most recent: undoing an older one would clash with what came after.</p>
+  </section>
+
+  <section>
+    <h2>Report</h2>
+    <p>Pick a month, print it. A project appears once somebody marks it complete — nothing is guessed from deadlines, since a job can land early or late.</p>
+  </section>
+
+  <section>
+    <h2>Refresh</h2>
+    <p>Top right. The planner holds the schedule in memory for speed; Refresh re-reads it.</p>
+  </section>
+
+  <section>
+    <h2>The engineer view</h2>
+    <p><a class="link" href="https://planner-view-63803252709.asia-southeast1.run.app">planner-view-63803252709.asia-southeast1.run.app</a></p>
+    <p>The same schedule, read-only — nothing to press, nothing to break. Same password.</p>
+  </section>
+
+  <section>
+    <h2>The spreadsheet behind it</h2>
+    <p><a class="link" href="https://docs.google.com/spreadsheets/d/1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ/edit">docs.google.com/spreadsheets/…/1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ</a></p>
+    <p>The planner reads and writes this sheet. It is the record; the app is the way in. You rarely need to open it, but it is there, and nothing is hidden from you.</p>
+    <p><b>Worth opening it for:</b></p>
+    <ul>
+      <li><b>The engineer roster</b> — who can record, edit or mix, who is Advanced or Developing, who does Music, Specials or Atmos. The app reads this and never edits it. Changing who is eligible for what happens here.</li>
+      <li><b>Checking history</b> — a <code>History</code> tab logs every change with a timestamp.</li>
+      <li><b>Reading the raw rows</b> — <code>Projects</code> is one row per project, <code>Bookings</code> one row per engineer-week.</li>
+    </ul>
+    <p><b>Worth knowing:</b></p>
+    <ul>
+      <li>Cancelled bookings are <b>marked</b>, not deleted. Nothing is thrown away.</li>
+      <li>The app holds the sheet in memory for speed. Edit the sheet directly and the app won't see it until somebody presses <b>Refresh</b>.</li>
+      <li>Editing the sheet while people are working in the app is the one way to confuse it. Prefer the app; use the sheet to look.</li>
+    </ul>
+  </section>
+
+  <div class="foot">Hit Productions — internal. Contains scheduling information; do not circulate outside the company.</div>
+</div>

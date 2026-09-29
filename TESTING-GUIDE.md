@@ -1,5 +1,8 @@
 # Loc Prod Planner
 
+Published for the lead at https://claude.ai/artifact/MvqZ842NTbPMY2ijxaDTYC
+(private — share from the page's Share menu). TESTING-GUIDE.html is the same page.
+
 **Internal — Hit Productions.**
 
 ---
