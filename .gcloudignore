@@ -1,0 +1,12 @@
+# Keep appsscript/ and validation/: core/engine.js EVALUATES the .gs sources at runtime,
+# and server.js loads the fixture source (which reads validation/*.json) even when
+# PLANNER_SOURCE=sheets. Excluding either crashes the container on boot.
+.git
+.gitignore
+.DS_Store
+test
+tools
+lean-rule-wip
+attic
+preview
+*.md

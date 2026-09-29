@@ -28,14 +28,54 @@ function loadKey(keyPath) {
   return key;
 }
 
+// On Google's own infrastructure (Cloud Run, GCE) there is no key file: the platform
+// runs the service AS a service account and hands out tokens through a metadata server
+// on a link-local address. That is strictly better than mounting a key — nothing to
+// leak, nothing to rotate — so it is used whenever no key is configured and the
+// metadata server is present.
+const METADATA_TOKEN_URL =
+  'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token';
+const METADATA_EMAIL_URL =
+  'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/email';
+
+async function metadataGet(url, ms) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms || 1000);
+  try {
+    const r = await fetch(url, { headers: { 'Metadata-Flavor': 'Google' }, signal: c.signal });
+    if (!r.ok) return null;
+    return await r.text();
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+
 function createAuth(keyPath, scope) {
-  const key = loadKey(keyPath);
+  // A key file if one is configured; otherwise the metadata server, which only exists
+  // on Google's own infrastructure. The key path is unchanged and still wins, so local
+  // runs and Paolo's server behave exactly as before.
+  let key = null, keyError = null;
+  try { key = loadKey(keyPath); } catch (e) { keyError = e; }
+
   const scopes = scope || 'https://www.googleapis.com/auth/spreadsheets';
   let token = null, expiresAt = 0;
+
+  async function metadataToken() {
+    const body = await metadataGet(METADATA_TOKEN_URL, 3000);
+    if (!body) {
+      // No key AND no metadata server: report the ORIGINAL missing-key error, which is
+      // the one that tells a person what to do. "metadata unreachable" would send
+      // someone debugging a network they do not have.
+      throw keyError;
+    }
+    const j = JSON.parse(body);
+    token = j.access_token;
+    expiresAt = Date.now() + (j.expires_in || 3600) * 1000;
+    return token;
+  }
 
   async function accessToken() {
     // 60s of slack, so a token never expires mid-request.
     if (token && Date.now() < expiresAt - 60000) return token;
+    if (!key) return metadataToken();
     const now = Math.floor(Date.now() / 1000);
     const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
     const claim = b64url(JSON.stringify({
@@ -93,7 +133,15 @@ function createAuth(keyPath, scope) {
     return body;
   }
 
-  return { email: key.client_email, projectId: key.project_id, accessToken, api };
+  // Resolved lazily: with no key file the identity is whatever Cloud Run was told to
+  // run as, and only the metadata server knows it.
+  async function whoAmI() {
+    if (key) return key.client_email;
+    return (await metadataGet(METADATA_EMAIL_URL, 3000)) || 'the attached service account';
+  }
+
+  return { email: key ? key.client_email : null, whoAmI,
+           projectId: key ? key.project_id : null, accessToken, api };
 }
 
 module.exports = { createAuth, loadKey };

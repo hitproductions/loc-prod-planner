@@ -23,7 +23,12 @@ if (SOURCE === 'sheets') {
     const src = createSheetsSource();
     register('sheets', src);
     console.log(`Sheets source : ${process.env.PLANNER_SHEET_ID}`);
-    console.log(`  acting as   : ${src.email}`);
+    // With no key file the identity comes from the metadata server, so it is only
+    // known asynchronously. Never block startup on it.
+    if (src.email) console.log(`  acting as   : ${src.email}`);
+    else if (src.whoAmI) src.whoAmI()
+      .then(w => console.log(`  acting as   : ${w} (no key file — using the platform's own identity)`))
+      .catch(() => {});
   } catch (e) {
     // A missing env var is a setup mistake, not a crash. A stack trace here buries the
     // one line that says what to do.

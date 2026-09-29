@@ -492,7 +492,8 @@ function createSheetsSource(opts) {
   // ensureEventsTab is exposed so the log's schema can be brought up to date without
   // writing a spurious entry to do it. appendEvent calls it anyway on the next real
   // change; this just lets that happen deliberately.
-  return { read, write, readEvents, appendEvent, ensureEventsTab, email: auth.email };
+  return { read, write, readEvents, appendEvent, ensureEventsTab,
+           email: auth.email, whoAmI: auth.whoAmI };
 }
 
 module.exports = { createSheetsSource, isoFrom, mapper, projectCells,
