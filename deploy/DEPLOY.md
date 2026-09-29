@@ -200,3 +200,20 @@ stops.
 
 Nothing to back up on the server. The data is the Google Sheet, which has its own version
 history, and the app keeps an append-only change log on the sheet's `History` tab.
+
+## Keeping Artifact Registry from filling up
+
+Every `gcloud run deploy --source .` pushes a new container image, and they accumulate.
+The free storage allowance is 0.5 GB — about ten deploys of this image — after which it
+starts charging. A cleanup policy fixes it once:
+
+```bash
+gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
+  --location=asia-southeast1 --project=loc-prod-planner \
+  --policy=deploy/artifact-cleanup.json
+```
+
+Keeps the three most recent images and deletes anything older than 30 days. The `Keep`
+rule wins over the `Delete` rule, so the current image can never be removed by age.
+
+Add `--dry-run` first to see what it would delete without deleting it.
