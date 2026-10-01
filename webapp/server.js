@@ -52,6 +52,7 @@ if (SOURCE === 'sheets') {
 // to the TTL, which is why the page says how old the read is.
 const READONLY = process.env.PLANNER_READONLY === '1';
 const PORT = Number(process.env.PORT || 8127);
+const HOST = process.env.HOST || undefined;
 const store = createStore(SOURCE, { ttlMs: Number(process.env.PLANNER_TTL_MS || 30000) });
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -314,8 +315,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, () => {
-    console.log(`Loc Prod Planner (new) on http://localhost:${PORT}  source=${SOURCE}` +
+  server.listen(PORT, HOST, () => {
+    const displayHost = HOST || '0.0.0.0';
+    console.log(`Loc Prod Planner (new) on http://${displayHost}:${PORT}  source=${SOURCE}` +
       `  search=${DEFAULT_RESTARTS}` + (READONLY ? '  READ-ONLY' : ''));
   });
 }
