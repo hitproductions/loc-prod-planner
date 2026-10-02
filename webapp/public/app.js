@@ -10,6 +10,9 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g,
 // an edit but stops nobody from calling the endpoint directly.
 const READONLY = !!window.READONLY;
 
+const requestUrl = path =>
+  new URL(String(path).replace(/^\/+/, ''), document.baseURI).toString();
+
 let BOOT = null, SCHED = null, VIEW = 'schedule', LAST_MS = null;
 let MODE = 'engineer', RANGE = { from: null, to: null };
 
@@ -27,7 +30,7 @@ async function loadSchedule() {
 
 async function get(path) {
   const t0 = performance.now();
-  const r = await fetch(path);
+  const r = await fetch(requestUrl(path));
   const body = await r.json();
   LAST_MS = performance.now() - t0;
   return body;
@@ -1145,9 +1148,10 @@ async function post(path, body) {
   const t0 = performance.now();
   // The view is sent with the write so the fresh schedule comes back in the
   // orientation and range the user is looking at, not a default one.
-  const r = await fetch(path, { method: 'POST',
+  const r = await fetch(requestUrl(path), { method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ...body, mode: MODE, from: RANGE.from, to: RANGE.to }) });
+
   const out = await r.json();
   LAST_MS = performance.now() - t0;
   return out;
