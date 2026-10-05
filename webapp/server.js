@@ -12,6 +12,7 @@ const actions = require('./actions.js');
 const { solveReplan, DEFAULT_RESTARTS } = require('./solver.js');
 const history = require('./history.js');
 const { gate } = require('./gate.js');
+const { ssoGate } = require('./sso.js');
 
 register('fixture', require('./sources/fixture.js'));
 
@@ -247,6 +248,7 @@ const server = http.createServer(async (req, res) => {
     // Before anything else, health included: an endpoint that answered without a cookie
     // would leak the book's size and prove the service exists. Off unless
     // PLANNER_PASSWORD is set, so local runs and a LAN box are unaffected.
+    if (!(await ssoGate(req, res, url))) return;
     if (!(await gate(req, res, url, readBody))) return;
 
     if (url.pathname === '/api/health') {
