@@ -50,7 +50,25 @@ function topRight() {
   // this the only way to see a sheet-side edit was to reload the browser.
   bits.push('<button class="btn small" id="reload" title="Re-read the spreadsheet">' +
     'Refresh</button>');
+if (
+  BOOT.session &&
+  BOOT.session.logout_path
+) {
+  bits.push(
+    '<button class="btn small" id="logout" title="Sign out of Production Planner">' +
+    'Logout</button>'
+  );
+}
   $('topright').innerHTML = bits.join('');
+  const logout = $('logout');
+
+if (logout) {
+  logout.addEventListener('click', () => {
+    logout.disabled = true;
+    logout.textContent = 'Signing out\u2026';
+    window.location.assign(BOOT.session.logout_path);
+  });
+}
   const rl = $('reload');
   if (rl) rl.addEventListener('click', async () => {
     rl.disabled = true;

@@ -240,6 +240,30 @@ function readBody(req, raw) {
     req.on('error', reject);
   });
 }
+function withPlannerSession(payload, req) {
+  if (!payload || !req.plannerUser) {
+    return payload;
+  }
+
+  const logoutPath =
+    typeof req.plannerUser.logout_path === 'string' &&
+    req.plannerUser.logout_path.startsWith(
+      '/?lokal_planner_logout=1'
+    )
+      ? req.plannerUser.logout_path
+      : '';
+
+  return {
+    ...payload,
+    session: {
+      login:
+        typeof req.plannerUser.login === 'string'
+          ? req.plannerUser.login
+          : '',
+      logout_path: logoutPath,
+    },
+  };
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -269,7 +293,13 @@ const server = http.createServer(async (req, res) => {
       const book = await store.get(url.searchParams.get('fresh') === '1');
       // await, because a read route may be async too — /api/history reads the log.
       // Without this the handler's Promise was JSON.stringify'd, which is "{}".
-      const payload = await route(book, url.searchParams);
+      let payload = await route(book, url.searchParams);
+      if (url.pathname === '/api/bootstrap') {
+      payload = withPlannerSession(
+      payload,
+      req
+     );
+    }
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
       return send(res, 200, JSON.stringify(payload));
@@ -292,9 +322,21 @@ const server = http.createServer(async (req, res) => {
         await store.write(result.change, { action: url.pathname.replace('/api/', ''),
                                            summary: describe(url.pathname, result),
                                            revert: result.revert });
-        const next = await store.get(true);
-        result.boot = api.bootstrap(next);
-        result.schedule = api.schedule(next, { mode: body.mode, from: body.from, to: body.to });
+const next = await store.get(true);
+
+result.boot = withPlannerSession(
+  api.bootstrap(next),
+  req
+);
+
+result.schedule = api.schedule(
+  next,
+  {
+    mode: body.mode,
+    from: body.from,
+    to: body.to
+  }
+);
       }
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
