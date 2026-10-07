@@ -172,18 +172,32 @@ function redirectToWordPress(res, loginUrl) {
 }
 
 async function ssoGate(req, res, url) {
-  const secret = process.env.PLANNER_SSO_SECRET;
+const secret = process.env.PLANNER_SSO_SECRET;
 
-  /*
-   * SSO is opt-in so existing development and Docker deployments
-   * remain unchanged when PLANNER_SSO_SECRET is absent.
-   */
-  if (!secret) {
-    return true;
+/*
+ * SSO is opt-in for development/standalone deployments.
+ * Production can explicitly require SSO with
+ * PLANNER_REQUIRE_SSO=1.
+ */
+if (!secret) {
+  if (process.env.PLANNER_REQUIRE_SSO === '1') {
+    res.writeHead(503, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store'
+    });
+
+    res.end(JSON.stringify({
+      ok: false,
+      error: 'Production Planner authentication unavailable.'
+    }));
+
+    return false;
   }
 
-  const loginUrl = process.env.PLANNER_SSO_LOGIN_URL;
+  return true;
+}
 
+const loginUrl = process.env.PLANNER_SSO_LOGIN_URL;
   if (!loginUrl) {
     res.writeHead(503, {
       'content-type': 'text/plain; charset=utf-8',

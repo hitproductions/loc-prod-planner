@@ -13,6 +13,7 @@ const { solveReplan, DEFAULT_RESTARTS } = require('./solver.js');
 const history = require('./history.js');
 const { gate } = require('./gate.js');
 const { ssoGate } = require('./sso.js');
+const { makeCsrfToken, writeGate } = require('./csrf.js');
 
 register('fixture', require('./sources/fixture.js'));
 
@@ -261,6 +262,11 @@ function withPlannerSession(payload, req) {
           ? req.plannerUser.login
           : '',
       logout_path: logoutPath,
+
+      csrf_token: makeCsrfToken(
+        req.plannerUser,
+        process.env.PLANNER_SSO_SECRET
+      ),
     },
   };
 }
@@ -299,6 +305,11 @@ const server = http.createServer(async (req, res) => {
       payload,
       req
      );
+
+     res.setHeader(
+       'Cache-Control',
+       'private, no-store'
+     );
     }
       const ms = Number(process.hrtime.bigint() - started) / 1e6;
       res.setHeader('server-timing', `app;dur=${ms.toFixed(1)}`);
@@ -307,7 +318,15 @@ const server = http.createServer(async (req, res) => {
 
     const action = ACTIONS[url.pathname];
     if (action) {
-      if (req.method !== 'POST') return send(res, 405, '{"error":"POST only"}');
+      if (req.method !== 'POST')
+         return send(res, 405, '{"error":"POST only"}');
+
+      res.setHeader(
+        'Cache-Control',
+        'private, no-store'
+      );
+
+      if (!writeGate(req, res)) return;
       if (READONLY) {
         return send(res, 403, JSON.stringify({ ok: false, readonly: true,
           error: 'This is a read-only copy of the planner. Changes are made in the ' +

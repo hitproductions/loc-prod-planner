@@ -1167,7 +1167,10 @@ async function post(path, body) {
   // The view is sent with the write so the fresh schedule comes back in the
   // orientation and range the user is looking at, not a default one.
   const r = await fetch(requestUrl(path), { method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json',
+               'x-planner-csrf':
+    (BOOT && BOOT.session && BOOT.session.csrf_token) || ''
+ },
     body: JSON.stringify({ ...body, mode: MODE, from: RANGE.from, to: RANGE.to }) });
 
   const out = await r.json();
