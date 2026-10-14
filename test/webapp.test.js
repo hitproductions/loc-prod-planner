@@ -165,7 +165,18 @@ section('Both grid orientations, and the quarter range');
 
 section('Dragging a week to another engineer');
 {
-  const book = await freshBook();
+  // Explicit bookings: dragging must not depend on who a scheduling policy happens
+  // to choose in the validation book. Keep an unrelated double-booking so creating
+  // one more changes total_double_booked rather than deepest_week first.
+  const book = { engineers: (await freshBook()).engineers,
+    projects: ['Drag', 'Busy', 'Existing double A', 'Existing double B'].map(project_title =>
+      ({ project_title, mix_level_required: 'Advanced', music_songs: 'No', special_project: 'No' })),
+    bookings: [
+      { project: 'Drag', phase: 'Dub', engineer: 'John', start_date: '2026-11-02', end_date: '2026-11-22', row_number: 2 },
+      { project: 'Busy', phase: 'Dub', engineer: 'Via', start_date: '2026-11-09', end_date: '2026-11-15', row_number: 3 },
+      { project: 'Existing double A', phase: 'Dub', engineer: 'Mat', start_date: '2026-08-03', end_date: '2026-08-09', row_number: 4 },
+      { project: 'Existing double B', phase: 'Dub', engineer: 'Mat', start_date: '2026-08-03', end_date: '2026-08-09', row_number: 5 },
+    ].map(b => ({ ...b, status: '', source: 'plot', note: '' })) };
   const rows = A.activeRows(book.bookings);
   const run = rows.find(b => A.widx(b.end_date) - A.widx(b.start_date) >= 2);
   ok('the fixture has a run long enough to take a week out of the middle', !!run);
@@ -244,9 +255,9 @@ section('Dragging a week to another engineer');
      `${covered.size} of ${wanted}`);
 
   ok('moving onto someone already booked warns rather than refusing', (() => {
-    const busy = now.find(b => b.engineer !== run.engineer &&
+    const busy = rows.find(b => b.engineer !== run.engineer &&
       A.widx(b.start_date) <= midW && midW <= A.widx(b.end_date));
-    if (!busy) return true;
+    if (!busy) return false;
     const r = actions.reassignWeek(book, { project: run.project, phase: run.phase,
       week_start: week, to_engineer: busy.engineer });
     return r.ok && r.warnings.some(w => w.kind === 'double');

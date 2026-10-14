@@ -64,7 +64,7 @@ function reassignWeek(book, payload) {
   const preview = () => {
     const after = rows.map(b => b === row ? null : b).filter(Boolean)
       .concat(splitRun(row, wi, to));
-    return whyBetter(A.scorePlan(rows, book.engineers), A.scorePlan(after, book.engineers));
+    return whyBetter(A.scorePlan(rows, book.engineers, book.projects), A.scorePlan(after, book.engineers, book.projects));
   };
 
   if (!p.confirmed) {
@@ -338,6 +338,7 @@ const TERM_NAMES = {
   regular_spread: 'gap between the busiest and quietest engineer',
   max_consecutive: 'longest unbroken run of booked weeks',
   reserve_weeks: 'weeks spent out of the reserve',
+  developing_mix_weeks: 'mix weeks assigned to Developing mixers',
   regular_peak: 'weeks on the busiest engineer',
 };
 
@@ -361,8 +362,8 @@ function shapeReplan(book, rows, r) {
   if (!r.no_improvement) {
     const gone = new Set(r.rows_to_supersede || []);
     const proposed = rows.filter(b => !gone.has(b.row_number)).concat(r.rows_to_append || []);
-    why = whyBetter(A.scorePlan(rows, book.engineers),
-                    A.scorePlan(proposed, book.engineers));
+    why = whyBetter(A.scorePlan(rows, book.engineers, book.projects),
+                    A.scorePlan(proposed, book.engineers, book.projects));
   }
 
   return {

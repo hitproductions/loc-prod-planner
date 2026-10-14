@@ -369,31 +369,16 @@ section('Order search — solves for balance without changing rules or dates');
   // and double-book someone. That is the intended trade (Tara, 2026-08-13: an
   // overlap IS the overload; a long run of single-project weeks is just work).
   //
-  // So what must hold is that overload never gets worse, and — the part that makes
-  // a long run acceptable — that the runs it creates contain no doubled weeks.
+  // Overlap must not get worse. A particular holder or longest run is not a
+  // policy invariant: changes to mixer preference change the chosen schedule.
   ok('overloaded engineer-weeks never increase',
      best.total_double_booked <= base.total_double_booked,
      base.total_double_booked + ' -> ' + best.total_double_booked);
-  {
-    const per = {}, wkOf = {};
-    solved.new_rows.forEach(b => {
-      for (let w = widx(b.start_date); w <= widx(b.end_date); w++) {
-        const k = b.engineer + '|' + w;
-        per[k] = (per[k] || 0) + 1;
-        (wkOf[b.engineer] = wkOf[b.engineer] || new Set()).add(w);
-      }
-    });
-    // the longest run belongs to someone; check it is not a run of overloaded weeks
-    let worst = { who: null, run: 0, doubled: 0 };
-    Object.keys(wkOf).forEach(n => {
-      const ws = [...wkOf[n]].sort((a, b) => a - b);
-      let run = 1, bestRun = 1;
-      for (let i = 1; i < ws.length; i++) { run = ws[i] === ws[i - 1] + 1 ? run + 1 : 1; bestRun = Math.max(bestRun, run); }
-      if (bestRun > worst.run) worst = { who: n, run: bestRun, doubled: ws.filter(w => per[n + '|' + w] > 1).length };
-    });
-    ok(`the longest run (${worst.who}, ${worst.run}wk) carries no overloaded weeks`,
-       worst.doubled === 0, `${worst.doubled} doubled week(s) inside it`);
-  }
+  const steady = [{ project: 'Continuous work', phase: 'Dub', engineer: 'Mat',
+    start_date: '2026-01-05', end_date: '2026-03-29', note: '' }];
+  const steadyScore = S.scorePlan(steady, engineers);
+  ok('twelve continuous single-project weeks are work, not overlap',
+     steadyScore.max_consecutive === 12 && steadyScore.total_double_booked === 0);
   ok('the plan is better on the objective as a whole',
      S.planIsBetter(best, base, S.SOLVE_OBJECTIVE));
   ok('the reserve is never double-booked', best.reserve_double_booked === 0);
@@ -1155,5 +1140,92 @@ section('Two at once and three at once are different things to the engine');
 }
 
 // ---------------------------------------------------------------------------
+
+section('Advanced-first mixing — assignment, re-plan, and optimizer (2026-10-14)');
+{
+  const row = (name, level, extra = {}) => ({ name, can_record: 'Yes', can_edit: 'Yes',
+    can_mix: 'Yes', mix_level: level, music_specialist: 'No', overflow_only: 'No',
+    does_specials: 'No', atmos: 'No', ...extra });
+  const dev = row('Dev', 'Developing');
+  const senior = row('Senior', 'Advanced');
+  const reserve = row('Reserve', 'Advanced', { overflow_only: 'Yes' });
+  const roster = [dev, senior, reserve];
+  const p = { project_title: 'Mix preference', client: 'Netflix', deadline: '2027-03-01',
+    dub_weeks: 0, edit_weeks: 0, mix_weeks: 1, mix_level_required: 'Developing',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No' };
+  const booking = (engineer, extra = {}) => ({ project: 'Fixed ' + engineer, phase: 'Mix',
+    engineer, start_date: '2027-02-22', end_date: '2027-02-28', note: 'manual',
+    status: '', row_number: engineer === 'Senior' ? 2 : 3, ...extra });
+  const choose = (project, book, eng) => [
+    ['plot', A.runAssign(project, book, eng).mixer],
+    ['re-plan', (A.replan([project], book, eng, '2027-01-01').proposed_rows
+      .find(b => b.project === project.project_title && b.phase === 'Mix') || {}).engineer],
+  ];
+  const expect = (label, project, book, eng, wanted) => choose(project, book, eng)
+    .forEach(([path, got]) => ok(path + ': ' + label, got === wanted, String(got)));
+
+  expect('Senior wins while both levels are free', p, [], roster, 'Senior');
+  expect('an available Developing mixer beats a free reserve', p, [booking('Senior')], roster, 'Dev');
+  expect('reserve is used when regular mixers are busy', p,
+    [booking('Senior'), booking('Dev')], roster, 'Reserve');
+  expect('an Advanced job never goes to a Developing mixer',
+    { ...p, mix_level_required: 'Advanced' }, [booking('Senior')], roster, 'Reserve');
+  choose({ ...p, mix_level_required: 'Advanced' },
+    [booking('Senior'), booking('Reserve')], roster).forEach(([path, got]) =>
+      ok(path + ': even forced Advanced mixing excludes Developing', ['Senior', 'Reserve'].includes(got), got));
+  expect('Atmos eligibility takes priority over the level preference',
+    { ...p, atmos_required: 'Yes' }, [], [row('Dev', 'Developing', { atmos: 'Yes' }), senior, reserve], 'Dev');
+  expect('music cannot leave its specialists to find an Advanced mixer',
+    { ...p, music_songs: 'Yes' }, [], [row('Dev', 'Developing', { music_specialist: '1' }), senior, reserve], 'Dev');
+  expect('other Developing mixers follow the same rule', p, [],
+    [row('Dev2', 'Developing'), senior, reserve], 'Senior');
+  expect('a Developing-only roster still covers Developing work', p, [], [dev], 'Dev');
+
+  const manual = A.runAssign({ ...p, mixer_override: 'Dev' }, [], roster);
+  ok('a manual Developing mixer remains honored', manual.mixer === 'Dev');
+  const pinned = booking('Dev', { project: p.project_title });
+  const held = A.replanBook([p], [pinned], roster, '2027-01-01', { restarts: 0 });
+  ok('re-plan leaves a hand-assigned mix pinned', !held.rows_to_supersede.includes(pinned.row_number));
+
+  const current = booking('Dev', { project: p.project_title, note: '', source: 'plot', row_number: 4 });
+  const fixed = [booking('Senior', { phase: 'Dub', start_date: '2027-02-01', end_date: '2027-02-07' })];
+  const after = { ...current, engineer: 'Senior' };
+  const beforeScore = A.scorePlan(fixed.concat(current), roster, [p]);
+  const afterScore = A.scorePlan(fixed.concat(after), roster, [p]);
+  ok('the senior option is intentionally less balanced in this example',
+    afterScore.regular_spread > beforeScore.regular_spread);
+  ok('Advanced mixing still beats that workload-balance advantage',
+    A.planIsBetter(afterScore, beforeScore, A.SOLVE_OBJECTIVE));
+  const improved = A.improveBySwaps_([current], fixed, roster, [p], A.SOLVE_OBJECTIVE);
+  ok('the optimizer moves an automatic Developing mix to the free Senior',
+    improved.rows[0].engineer === 'Senior');
+  const full = A.replanBook([p], fixed.concat(current), roster, '2027-01-01', { restarts: 0 });
+  ok('the complete re-plan proposes the Advanced-first change',
+    full.rows_to_append.some(b => b.project === p.project_title && b.engineer === 'Senior'));
+
+  const crowded = A.scorePlan([booking('Senior', { note: '' }), after], roster, [p]);
+  ok('avoiding overlap remains more important than preferring an Advanced mixer',
+    A.planIsBetter(A.scorePlan([current], roster, [p]), crowded, A.SOLVE_OBJECTIVE));
+  ok('Developing mixing is cheaper than spending the reserve',
+    A.planIsBetter(A.scorePlan([current], roster, [p]),
+      A.scorePlan([{ ...current, engineer: 'Reserve' }], roster, [p]), A.SOLVE_OBJECTIVE));
+  ok('manual Developing mix weeks do not affect the new preference',
+    A.scorePlan([pinned], roster, [p]).developing_mix_weeks === 0);
+  ok('ranked music mixing is excluded from the ordinary level preference',
+    A.scorePlan([current], roster, [{ ...p, music_songs: 'Yes' }]).developing_mix_weeks === 0);
+  ok('fragmented rows count actual booked mix weeks',
+    A.scorePlan([current, { ...current, start_date: '2027-03-08', end_date: '2027-03-14' }],
+      roster, [p]).developing_mix_weeks === 2);
+  const musicRanked = [row('Dev', 'Developing', { music_specialist: '1' }),
+    row('Senior', 'Advanced', { music_specialist: '2' }), reserve];
+  expect('music retains its rank order even when rank 1 is Developing',
+    { ...p, music_songs: 'Yes' }, [], musicRanked, 'Dev');
+  const atmosMove = A.improveBySwaps_([current], [],
+    [row('Dev', 'Developing', { atmos: 'Yes' }), senior, reserve],
+    [{ ...p, atmos_required: 'Yes' }], A.SOLVE_OBJECTIVE);
+  ok('the optimizer cannot move Atmos mixing to a Senior without the room',
+    atmosMove.rows[0].engineer === 'Dev');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

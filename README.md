@@ -122,6 +122,13 @@ A manual pick always wins, even if it double-books that person or breaks a rule.
 You'll get a warning saying exactly what it costs, and the booking is marked
 **pinned** so nothing moves it later.
 
+Automatic mixing prefers available **Advanced** mixers for ordinary work at either
+level. **Developing** mixers are the fallback for Developing-level projects, ahead
+of the overflow reserve; Advanced projects still require an Advanced mixer. Music
+specialist ranking and Atmos room requirements still apply. Re-plan follows the
+same preference, with avoiding overlaps and reserve use ahead of level preference,
+and level preference ahead of balancing total workload.
+
 ### Freezing a project
 
 The **Lock** button on each Projects row. A locked project is left completely alone
@@ -202,8 +209,10 @@ so check which of the two you're looking at first.
 
 **Someone idle wasn't given work you expected.** Sheet → *Engineer Assignment →
 Why this mixer?* and type the project title. It lists every engineer and the reason
-each was or wasn't eligible. The usual answer is that the tool balances **total**
-workload across all phases, so a busy recordist gets passed over for a mix.
+each was or wasn't eligible. For ordinary mixing, the tool prefers available
+Advanced mixers first and then balances **total** workload within the eligible tier.
+Developing mixers remain a fallback; a busy recordist may also be passed over
+because of their existing bookings.
 
 **Anything else odd.** Sheet → *Engineer Assignment → Check bookings for problems*.
 It reports roster mistakes, duplicated rows and bad data in one go. Worth running

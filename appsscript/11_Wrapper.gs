@@ -175,8 +175,19 @@ function engineerRoles(engineerRows) {
 }
 
 // Every figure here counts distinct booked weeks, so it reconciles with the grid.
-function scorePlan(book, engineerRows) {
+function scorePlan(book, engineerRows, projectRows) {
   const { regular, reserve } = engineerRoles(engineerRows);
+  const roster = {}; (engineerRows || []).forEach(e => { if (e && e.name) roster[e.name] = e; });
+  const music = new Set((projectRows || []).filter(p => p &&
+    /^yes$/i.test(String(p.music_songs || '').trim())).map(p => p.project_title));
+  // Count automatic ordinary Developing mix booking-weeks. Separate rows on two
+  // titles are two assignments, even when they occupy the same calendar week.
+  // Manual choices and ranked music routing are outside this preference.
+  const developingMixWeeks = book.reduce((sum, b) => {
+    if (!b || b.phase !== 'Mix' || /manual/i.test(b.note || '') || music.has(b.project)) return sum;
+    const e = roster[b.engineer];
+    return sum + (e && String(e.mix_level).trim() === 'Developing' ? weeksOf(b).length : 0);
+  }, 0);
   const weeks = {};
   for (const b of book) {
     if (!b || !b.engineer || !b.start_date || !b.end_date) continue;
@@ -264,6 +275,7 @@ function scorePlan(book, engineerRows) {
 
     regular_spread: regLoads.length ? Math.max.apply(null, regLoads) - Math.min.apply(null, regLoads) : 0,
     reserve_weeks: reserve.reduce((a, n) => a + load(n), 0),
+    developing_mix_weeks: developingMixWeeks,
     regular_peak: regLoads.length ? Math.max.apply(null, regLoads) : 0,
     regular_sd: Math.round(sd * 100) / 100,
 
@@ -340,7 +352,7 @@ function solveOrder(projects, baseBook, engineerRows, opts) {
   let best = null, baseline = null, tried = 0;
   for (const order of candidates) {
     const played = replayOrder(order, baseBook, engineerRows);
-    const score = scorePlan(baseBook.concat(played.new_rows), engineerRows);
+    const score = scorePlan(baseBook.concat(played.new_rows), engineerRows, projects);
     tried++;
     if (!baseline) baseline = score;
     if (planIsBetter(score, best ? best.score : null, objective)) {
@@ -366,7 +378,7 @@ function solveOrder(projects, baseBook, engineerRows, opts) {
         ? Object.assign({}, p, { divide_dub: !p.divide_dub })
         : p));
       const played = replayOrder(trial, baseBook, engineerRows);
-      const score = scorePlan(baseBook.concat(played.new_rows), engineerRows);
+      const score = scorePlan(baseBook.concat(played.new_rows), engineerRows, projects);
       tried++;
       if (planIsBetter(score, best.score, objective)) {
         order = trial;
@@ -412,6 +424,7 @@ function swapEligible_(e, phase, proj) {
 
   if (phase === 'Mix') {
     if (!yes(e.can_mix)) return false;
+    if (yes(proj.atmos_required) && !yes(e.atmos)) return false;
     if (String(proj.mix_level_required).trim() === 'Advanced' &&
         String(e.mix_level).trim() !== 'Advanced') return false;
     return true;
@@ -447,7 +460,7 @@ function improveBySwaps_(rows, baseBook, engineerRows, projectRows, objective, o
   const P = {}; (projectRows || []).forEach(p => { if (p && p.project_title) P[p.project_title] = p; });
 
   let best = rows.map(r => ({ ...r }));
-  let bestScore = scorePlan(baseBook.concat(best), engineerRows);
+  let bestScore = scorePlan(baseBook.concat(best), engineerRows, projectRows);
   let swaps = 0;
 
   // weeks each engineer holds, counting the fixed base book plus the current trial
@@ -469,7 +482,7 @@ function improveBySwaps_(rows, baseBook, engineerRows, projectRows, objective, o
     return true;
   };
   const take = trial => {
-    const sc = scorePlan(baseBook.concat(trial), engineerRows);
+    const sc = scorePlan(baseBook.concat(trial), engineerRows, projectRows);
     if (!planIsBetter(sc, bestScore, objective)) return false;
     best = trial; bestScore = sc; swaps++; return true;
   };
@@ -546,7 +559,7 @@ function divideDubsIfBetter_(rows, fixedBook, engineerRows, projectRows, objecti
   const P = {}; (projectRows || []).forEach(x => { if (x && x.project_title) P[x.project_title] = x; });
 
   let best = rows.map(r => ({ ...r }));
-  let bestScore = scorePlan(fixedBook.concat(best), engineerRows);
+  let bestScore = scorePlan(fixedBook.concat(best), engineerRows, projectRows);
   let divided = 0;
 
   const occupancy = trial => {
@@ -595,7 +608,7 @@ function divideDubsIfBetter_(rows, fixedBook, engineerRows, projectRows, objecti
             start_date: weekStart(r2[0]), end_date: weekEnd(r2[r2.length - 1]) })));
           runsOfWeeks_(run).forEach(r2 => trial.push(shape({ engineer: y,
             start_date: weekStart(r2[0]), end_date: weekEnd(r2[r2.length - 1]) })));
-          const sc = scorePlan(fixedBook.concat(trial), engineerRows);
+          const sc = scorePlan(fixedBook.concat(trial), engineerRows, projectRows);
           if (planIsBetter(sc, bestScore, objective)) {
             best = trial; bestScore = sc; divided++; improved = true; break;
           }
@@ -814,7 +827,7 @@ function replanBook(projectRows, bookingRows, engineerRows, todayISO, opts) {
   };
 
   const baselineRes = replanOnce(usable, bookingRows, engineerRows, todayISO, false);
-  const baseline = scorePlan(resultingBook(baselineRes), engineerRows);
+  const baseline = scorePlan(resultingBook(baselineRes), engineerRows, usable);
   let best = baselineRes, bestScore = baseline, tried = 1;
 
   if (restarts > 0 && usable.length > 1) {
@@ -831,7 +844,7 @@ function replanBook(projectRows, bookingRows, engineerRows, todayISO, opts) {
     }
     for (const order of orders) {
       const res = replanOnce(order, bookingRows, engineerRows, todayISO, true);
-      const sc = scorePlan(resultingBook(res), engineerRows);
+      const sc = scorePlan(resultingBook(res), engineerRows, usable);
       tried++;
       if (planIsBetter(sc, bestScore, objective)) { best = res; bestScore = sc; }
     }
@@ -849,7 +862,7 @@ function replanBook(projectRows, bookingRows, engineerRows, todayISO, opts) {
   // Wiping and re-plotting is not an alternative in real use: projects arrive when
   // they arrive. So re-plan has to be safe to run at any time, and that means it must
   // be allowed to decline.
-  const currentScore = scorePlan(active, engineerRows);
+  const currentScore = scorePlan(active, engineerRows, usable);
   const worthDoing = planIsBetter(bestScore, currentScore, objective);
   if (!worthDoing) {
     return Object.assign({}, best, {
