@@ -92,7 +92,7 @@ const REWRITTEN = {
   ],
   'engine/assign.js': [
     {
-      what: 'the mix assignment — Developing work may fall back to a senior mixer',
+      what: 'the mix assignment — Advanced-first, Developing fallback (Tara, 2026-10-14)',
       refStart:  "    const needAdv = String(proj.mix_level_required).trim() === 'Advanced';",
       liveStart: "    const needAdv = String(proj.mix_level_required).trim() === 'Advanced';",
       end:       "    assignments.push(['Mix', mixer, mixw]);",
@@ -206,13 +206,18 @@ const APPROVED_SUBS = {
      "    const hasAtmos = n => !needAtmos || eng[n].atmos;"],
     ["        const regular = Object.keys(eng).filter(n => eng[n].mix && !eng[n].overflow &&\n" +
      "          (needAdv ? eng[n].lvl === 'Advanced' : eng[n].lvl === 'Developing'));",
-     "        const regular = Object.keys(eng).filter(n => eng[n].mix && !eng[n].overflow &&\n" +
-     "          hasAtmos(n) &&\n" +
-     "          (needAdv ? eng[n].lvl === 'Advanced' : eng[n].lvl === 'Developing'));"],
+     "        // Tara, 2026-10-14: the same Advanced-first ladder as the plot engine.\n" +
+     "        const canMix = n => eng[n].mix && !eng[n].overflow && hasAtmos(n);\n" +
+     "        const regular = Object.keys(eng).filter(n => canMix(n) && eng[n].lvl === 'Advanced');\n" +
+     "        const fallback = needAdv ? []\n" +
+     "          : Object.keys(eng).filter(n => canMix(n) && eng[n].lvl === 'Developing');"],
+    ["        let mp = regular.filter(n => free(n, mixw));",
+     "        let mp = regular.filter(n => free(n, mixw));\n" +
+     "        if (!mp.length) mp = fallback.filter(n => free(n, mixw));"],
     ["            (!needAdv || eng[n].lvl === 'Advanced') && free(n, mixw));",
      "            (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n) && free(n, mixw));"],
     ["            const all = regular.concat(Object.keys(eng).filter(n => eng[n].overflow && eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced')));",
-     "            const all = regular.concat(Object.keys(eng).filter(n => eng[n].overflow && eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n)));"],
+     "            const all = regular.concat(fallback).concat(Object.keys(eng).filter(n => eng[n].overflow && eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n)));"],
     ['overflow: yes(r.overflow_only), nonNetflix: yes(r.non_netflix_router) };',
      'overflow: yes(r.overflow_only), specials: yes(r.does_specials),\n' +
      '    atmos: yes(r.atmos) };'],

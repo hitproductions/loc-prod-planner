@@ -175,9 +175,10 @@ var SOLVE_OBJECTIVE = [
   'total_double_booked',     // then the fewest overloaded engineer-weeks anywhere
   'max_double_booked',       // then don't concentrate what remains on one person
   'forced_projects',         // then fewest projects compromised
+  'reserve_weeks',           // use a regular fallback before spending the reserve
+  'developing_mix_weeks',    // Advanced-first mixing, before balancing total workload
   'regular_spread',          // then flattest load across the regular pool
   'max_consecutive',         // then prefer handing off, all else equal
-  'reserve_weeks',           // then spend as little of the reserve as possible
   'regular_peak',            // then the lowest peak in the regular pool
 ];
 

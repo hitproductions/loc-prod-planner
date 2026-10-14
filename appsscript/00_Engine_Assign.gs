@@ -1,8 +1,5 @@
-// Ported verbatim from the build handoff (HANDOFF §5: "port as-is, do not
-// rewrite"). The ONLY change from the handed-over file is the removal of the
-// trailing `module.exports` line, which §5 explicitly permits and Apps Script
-// has no use for. test/engine_drift.test.js asserts that is still the only
-// difference — do not edit the logic here.
+// Based on the build handoff. Intentional policy changes are recorded in
+// test/engine_drift.test.js; all other engine logic remains drift-checked.
 
 function runAssign(proj, bookingRows, engineerRows) {
   const W0 = Date.UTC(2025, 11, 1), DAY = 86400000;
@@ -467,18 +464,10 @@ function runAssign(proj, bookingRows, engineerRows) {
     const developingMixers = Object.keys(eng).filter(n => canMix(n) && eng[n].lvl === 'Developing');
     const advancedMixers   = Object.keys(eng).filter(n => canMix(n) && eng[n].lvl === 'Advanced');
 
-    // Rule 8 is one-directional: a Developing mixer never mixes a project that
-    // requires Advanced. The reverse was never a rule — an Advanced mixer can
-    // obviously handle a Developing-level job, and the workbook says the
-    // Developing mixer gets "first refusal" on that work, which is a preference,
-    // not a monopoly.
-    //
-    // The original pool implemented a monopoly: for a Developing project only
-    // Developing mixers were considered, so with one Developing mixer on the
-    // roster every such project became a single point of failure on one person's
-    // calendar. When they were busy the engine spent the overflow reserve, or
-    // forced an overlap, while senior mixers sat free. Corrected on Tara's
-    // instruction (2026-08-13): prefer, then fall back.
+    // Tara, 2026-10-14: prefer Advanced mixers for ordinary mixing at either level.
+    // Developing mixers remain a fallback for Developing work, leaving them more
+    // available for recording. This is a level preference, never a named-person rule.
+    // Developing mixers still cannot automatically take Advanced work.
     // A music mix never leaves the specialists, so it gets its own branch rather than
     // a filter on rungs that are allowed to fall back. Forcing an overlap onto a
     // specialist is the correct outcome when they are all busy — the alternative is
@@ -498,8 +487,8 @@ function runAssign(proj, bookingRows, engineerRows) {
       }
     } else {
 
-    const regular = needAdv ? advancedMixers : developingMixers;
-    const fallback = needAdv ? [] : advancedMixers;
+    const regular = advancedMixers;
+    const fallback = needAdv ? [] : developingMixers;
 
     let mixPool = regular.filter(n => free(n, mixw));
     if (!mixPool.length) mixPool = fallback.filter(n => free(n, mixw));
