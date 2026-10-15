@@ -17,6 +17,20 @@
 //   PLANNER_TEST_SHEET_ID=<id> GOOGLE_APPLICATION_CREDENTIALS=<key> \
 //   node test/sheets_write.test.js
 const fs = require('fs');
+
+// Per-phase dates are required on the form since 2026-10-15. Most saving tests predate
+// them and were written as weeks-per-phase; this turns those into the dates the old
+// backward plotting produced (mix ends the week before the deadline's week, edit before
+// the mix, dub before the edit), so their expectations still hold unchanged.
+function datesFor(deadline, dub, edit, mix) {
+  const E = require('../core/engine.js').loadAppsScript();
+  const out = {};
+  let end = E.widx(deadline) - 1;
+  [['mix', mix], ['edit', edit], ['dub', dub]].forEach(([k, n]) => {
+    if (n > 0) { out[k + '_from'] = E.weekStart(end - n + 1); out[k + '_to'] = E.weekEnd(end); end -= n; }
+  });
+  return out;
+}
 const { execFileSync } = require('child_process');
 const path = require('path');
 
@@ -72,7 +86,7 @@ if (TEST_ID === LIVE_ID) {
     let book = await src().read();
     const before = book.bookings.length;
     const r = actions.saveProject(book, { title: 'Test Delta', client: 'Netflix',
-      deadline: '2026-12-11', dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+      deadline: '2026-12-11', ...datesFor('2026-12-11', 2, 1, 1), mix_level: 'Advanced' });
     ok('the save is accepted', r.ok === true, JSON.stringify(r).slice(0, 120));
 
     const res = await src().write(r.change);
@@ -93,6 +107,13 @@ if (TEST_ID === LIVE_ID) {
        `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`);
     ok('and its deadline came back as an ISO date, not a serial',
        p.deadline === '2026-12-11', String(p.deadline));
+    // The six date columns run past Z. Reading A:Z dropped the last four, so the edit and
+    // mix dates were written and never came back (found 2026-10-15).
+    const want = datesFor('2026-12-11', 2, 1, 1);
+    const got = { dub_from: p.dub_from, dub_to: p.dub_to, edit_from: p.edit_from,
+                  edit_to: p.edit_to, mix_from: p.mix_from, mix_to: p.mix_to };
+    ok('all six phase dates round-tripped, including the columns past Z',
+       Object.keys(got).every(k => got[k] === want[k]), JSON.stringify(got));
     ok('the engine can place every booking it wrote',
        rows.every(b => api.engine.widx(b.start_date) <= api.engine.widx(b.end_date)));
   }
@@ -272,12 +293,12 @@ if (TEST_ID === LIVE_ID) {
     // untouched" compares 0 against 0 and passes however destructive the code is --
     // sabotage caught exactly that: superseding EVERY row in the book went unnoticed.
     const keep = actions.saveProject(book, { title: 'Test Neighbour', client: 'Netflix',
-      deadline: '2026-12-25', dub: 1, edit: 1, mix: 1, mix_level: 'Advanced' });
+      deadline: '2026-12-25', ...datesFor('2026-12-25', 1, 1, 1), mix_level: 'Advanced' });
     await src().write(keep.change);
     book = await src().read();
 
     const r = actions.saveProject(book, { title: 'Test Ghost', client: 'Netflix',
-      deadline: '2026-12-18', dub: 1, edit: 1, mix: 1, mix_level: 'Advanced' });
+      deadline: '2026-12-18', ...datesFor('2026-12-18', 1, 1, 1), mix_level: 'Advanced' });
     await src().write(r.change);
     book = await src().read();
     const ghostRows = actions.live(book).filter(b => b.project === 'Test Ghost').length;

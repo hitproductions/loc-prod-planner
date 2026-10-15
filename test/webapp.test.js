@@ -10,6 +10,20 @@ const actions = require('../webapp/actions.js');
 const { register, createStore } = require('../webapp/store.js');
 const fixture = require('../webapp/sources/fixture.js');
 const { loadAppsScript } = require('../core/engine.js');
+
+// Per-phase dates are required on the form since 2026-10-15. Most saving tests predate
+// them and were written as weeks-per-phase; this turns those into the dates the old
+// backward plotting produced (mix ends the week before the deadline's week, edit before
+// the mix, dub before the edit), so their expectations still hold unchanged.
+function datesFor(deadline, dub, edit, mix) {
+  const E = require('../core/engine.js').loadAppsScript();
+  const out = {};
+  let end = E.widx(deadline) - 1;
+  [['mix', mix], ['edit', edit], ['dub', dub]].forEach(([k, n]) => {
+    if (n > 0) { out[k + '_from'] = E.weekStart(end - n + 1); out[k + '_to'] = E.weekEnd(end); end -= n; }
+  });
+  return out;
+}
 const A = loadAppsScript();
 
 let pass = 0, fail = 0;
@@ -291,15 +305,15 @@ section('Saving a project');
   const before = A.activeRows(book.bookings).length;
 
   const bad = actions.saveProject(book, { title: '', client: 'Netflix', deadline: '2026-11-01',
-    dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+    ...datesFor('2026-11-01', 2, 1, 1), mix_level: 'Advanced' });
   ok('a project with no title is refused', !bad.ok && bad.errors.length > 0);
 
   const dry = actions.saveProject(book, { title: 'New Show', client: 'Netflix',
-    deadline: '2026-11-20', dub: 3, edit: 1, mix: 2, mix_level: 'Advanced', dry_run: true });
+    deadline: '2026-11-20', ...datesFor('2026-11-20', 3, 1, 2), mix_level: 'Advanced', dry_run: true });
   ok('a dry run plots but returns no change set', dry.ok && dry.rows.length > 0 && !dry.change);
 
   const saved = actions.saveProject(book, { title: 'New Show', client: 'Netflix',
-    deadline: '2026-11-20', dub: 3, edit: 1, mix: 2, mix_level: 'Advanced' });
+    deadline: '2026-11-20', ...datesFor('2026-11-20', 3, 1, 2), mix_level: 'Advanced' });
   ok('a real save returns rows to append', saved.ok && saved.change.append.length > 0);
   const after = apply(book, saved.change);
   ok('and the book grows by exactly those rows',
@@ -307,14 +321,14 @@ section('Saving a project');
 
   // Atmos and the hand-split dub must survive the whole path, not just the engine
   const atmos = actions.saveProject(book, { title: 'Atmos Show', client: 'Netflix',
-    deadline: '2026-11-20', dub: 2, edit: 1, mix: 2, mix_level: 'Advanced', atmos: true });
+    deadline: '2026-11-20', ...datesFor('2026-11-20', 2, 1, 2), mix_level: 'Advanced', atmos: true });
   const withRoom = book.engineers.filter(e => /^yes$/i.test(e.atmos)).map(e => e.name);
   ok('an Atmos title reaches someone with the room', withRoom.includes(atmos.mixer),
      `${atmos.mixer} — rooms: ${withRoom.join(', ')}`);
 
   const recs = book.engineers.filter(e => /^yes$/i.test(e.can_record)).map(e => e.name);
   const split = actions.saveProject(book, { title: 'Split Show', client: 'Netflix',
-    deadline: '2026-11-20', dub: 4, edit: 1, mix: 1, mix_level: 'Advanced',
+    deadline: '2026-11-20', ...datesFor('2026-11-20', 4, 1, 1), mix_level: 'Advanced',
     recordist: recs[0], recordist2: recs[1] });
   const dubbers = [...new Set(split.rows.filter(r => r.phase === 'Dub').map(r => r.engineer))];
   ok('a hand-split dub reaches both named recordists', dubbers.length === 2,
@@ -322,7 +336,7 @@ section('Saving a project');
 
   // renaming must not leave the old title's bookings behind
   const renamed = actions.saveProject(book, { title: 'New Name', original_title: 'Animals',
-    client: 'Netflix', deadline: '2026-09-08', dub: 2, edit: 1, mix: 2, mix_level: 'Advanced' });
+    client: 'Netflix', deadline: '2026-09-08', ...datesFor('2026-09-08', 2, 1, 2), mix_level: 'Advanced' });
   const renamedBook = apply(book, renamed.change);
   ok('renaming supersedes the old title\'s rows',
      !A.activeRows(renamedBook.bookings).some(b => b.project === 'Animals'));
@@ -755,7 +769,7 @@ section('History: a log of what you did, and undoing the last of it');
   // back has nothing to revive — and a rollback that never revives would pass. The
   // drag retires a row, so undoing it has to bring that row back.
   await call('/api/save-project', { title: 'Logged Show', client: 'Netflix',
-    deadline: '2026-12-04', dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+    deadline: '2026-12-04', ...datesFor('2026-12-04', 2, 1, 1), mix_level: 'Advanced' });
   await call('/api/reassign', { project: run.project, phase: run.phase,
     week_start: A.weekStart(A.widx(run.start_date)), to_engineer: to, confirmed: true });
 
@@ -916,7 +930,7 @@ section('A saved project reaches the Projects list, not just the schedule');
   const before = book.projects.length;
 
   const saved = actions.saveProject(book, { title: 'Brand New Show', client: 'Netflix',
-    deadline: '2026-11-20', dub: 2, edit: 1, mix: 2, mix_level: 'Advanced' });
+    deadline: '2026-11-20', ...datesFor('2026-11-20', 2, 1, 2), mix_level: 'Advanced' });
   ok('the change set carries the project, not only its bookings',
      !!saved.change.project && saved.change.project.project_title === 'Brand New Show');
   ok('and the engine outputs, so the sheet can record who got it',
@@ -934,7 +948,7 @@ section('A saved project reaches the Projects list, not just the schedule');
   // a rename must move the existing row, not add a second one
   const renamed = actions.saveProject(after, { title: 'Renamed Show',
     original_title: 'Brand New Show', client: 'Netflix', deadline: '2026-11-20',
-    dub: 2, edit: 1, mix: 2, mix_level: 'Advanced' });
+    ...datesFor('2026-11-20', 2, 1, 2), mix_level: 'Advanced' });
   await fixture.write(renamed.change);
   const last = await fixture.read();
   ok('a rename updates the row rather than leaving two',
@@ -1289,7 +1303,7 @@ section('Rolling back a change that altered the project row');
   // immediately afterwards -- bookings with no project row.
   const ren = await call('/api/save-project', { title: 'Renamed Show',
     original_title: title, client: 'Netflix', deadline: '2026-12-11',
-    dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+    ...datesFor('2026-12-11', 2, 1, 1), mix_level: 'Advanced' });
   ok('renaming works', ren.ok === true, JSON.stringify(ren).slice(0, 90));
   const afterRename = await call('/api/bootstrap?fresh=1');
   ok('the new name is on the list',
@@ -1316,6 +1330,68 @@ section('Rolling back a change that altered the project row');
      undoneRen.projects.find(p => p.title === title).rows.length > 0);
 
   await new Promise(r => server.close(r));
+}
+
+
+section('Per-phase dates on the form, and dub + edit as one job (Tara, 2026-10-15)');
+{
+  const book = await freshBook();
+  const noDates = actions.saveProject(book, { title: 'Dateless', client: 'X', deadline: '2026-12-20',
+    dub: 2, edit: 1, mix: 1, mix_level: 'Advanced' });
+  ok('a save with no phase dates is refused', !noDates.ok &&
+     noDates.errors.some(e => /start and end date for each phase/.test(e)), JSON.stringify(noDates.errors));
+
+  const payload = { title: 'Overlapper', client: 'X', deadline: '2027-01-17', mix_level: 'Advanced',
+    dub_from: '2026-11-02', dub_to: '2026-11-22', edit_from: '2026-11-16', edit_to: '2026-11-29',
+    mix_from: '2026-11-30', mix_to: '2026-12-13' };
+  const saved = actions.saveProject(book, payload);
+  ok('a save with dates is accepted', saved.ok, JSON.stringify(saved.errors));
+  const span = ph => { const rs = saved.rows.filter(r => r.phase === ph);
+    return rs.map(r => r.start).sort()[0] + '..' + rs.map(r => r.end).sort().pop(); };
+  ok('and books the dub on the entered dates', span('Dub') === '2026-11-02..2026-11-22', span('Dub'));
+
+  const { projectCells } = require('../webapp/sources/sheets.js');
+  const cells = projectCells({ project: saved.project });
+  ok('the six date columns are written to the Projects row',
+     cells['dub start'] === '2026-11-02' && cells['dub end'] === '2026-11-22' &&
+     cells['edit start'] === '2026-11-16' && cells['edit end'] === '2026-11-29' &&
+     cells['mix start'] === '2026-11-30' && cells['mix end'] === '2026-12-13', JSON.stringify(cells));
+  const sheets = require('../webapp/sources/sheets.js');
+  ok('and an older sheet gets those columns created on first save',
+     ['Dub start', 'Dub end', 'Edit start', 'Edit end', 'Mix start', 'Mix end']
+       .every(c => sheets.MANAGED_COLUMNS.includes(c)));
+
+  // a book where one engineer records and edits the same title in the same week
+  const eng = book.engineers[0].name, other = book.engineers[1].name;
+  const r = (row_number, project, phase, engineer, s0, e0) =>
+    ({ row_number, project, phase, engineer, start_date: s0, end_date: e0, source: 'plot', note: '', status: '' });
+  const solo = { projects: [], engineers: book.engineers, bookings: [
+    r(2, 'P', 'Dub', eng, '2026-11-02', '2026-11-22'),
+    r(3, 'P', 'Edit', eng, '2026-11-16', '2026-11-29'),
+    r(4, 'Q', 'Dub', other, '2026-11-16', '2026-11-22'),
+  ] };
+  const d = api.depths(A.activeRows(solo.bookings));
+  ok('the overlap counter does not count a dub beside its own edit', d.two === 0 && d.three === 0,
+     JSON.stringify({ two: d.two, three: d.three }));
+
+  // dragging Q's dub onto the engineer holding P is a clash; dragging P's edit week onto
+  // the person dubbing P is not
+  const toEng = actions.reassignWeek(solo, { project: 'Q', phase: 'Dub', week_start: '2026-11-16', to_engineer: eng });
+  ok('a different project in that week is still flagged', toEng.ok &&
+     (toEng.warnings || []).some(w => w.kind === 'double'), JSON.stringify(toEng.warnings));
+  const back = { ...solo, bookings: solo.bookings.map(b => b.row_number === 3 ? { ...b, engineer: other } : b) };
+  const mine = actions.reassignWeek(back, { project: 'P', phase: 'Edit', week_start: '2026-11-16', to_engineer: eng });
+  ok("moving a week of P's edit onto P's dubber is not flagged", mine.ok &&
+     !(mine.warnings || []).some(w => w.kind === 'double'), JSON.stringify(mine.warnings));
+
+  // editing an older project opens with the weeks its bookings already hold
+  const legacy = { projects: [{ project_title: 'Old', deadline: '2026-12-20', dub_weeks: 1, edit_weeks: 1, mix_weeks: 0 }],
+    engineers: book.engineers, bookings: [r(2, 'Old', 'Dub', eng, '2026-11-02', '2026-11-08'),
+                                          r(3, 'Old', 'Edit', eng, '2026-11-09', '2026-11-15')] };
+  const lp = api.bootstrap(legacy).projects[0];
+  ok('an older project without dates is offered its current weeks on the form',
+     lp.dates.dub.from === '2026-11-02' && lp.dates.edit.to === '2026-11-15' && lp.dates.mix.from === '',
+     JSON.stringify(lp.dates));
 }
 
 section('The password gate, for when the URL is public');

@@ -50,3 +50,31 @@ function weeksOf(row) {
   for (let w = a; w <= z; w++) out.push(w);
   return out;
 }
+
+// ---------------------------------------------------------------- jobs per week
+
+// What one engineer is doing in one week, counted as JOBS rather than booking rows.
+//
+// Recording and editing the same project in the same week is one job, not an overlap
+// (Tara, 2026-10-15): with per-phase dates a dub and its edit can run side by side,
+// and the person doing both is working on one title. Mixing alongside either still
+// counts as a second job, and so does anything on a different project.
+function jobKey(row) {
+  return String(row.project || '') + '||' + (String(row.phase || '') === 'Mix' ? 'Mix' : 'RecEdit');
+}
+
+// { 'engineer|week': { jobs: {jobKey: true}, rows: [...] } } for every week a row covers.
+// depthOf(entry) is the number every overlap figure reads.
+function jobsByEngineerWeek(rows) {
+  const per = {};
+  (rows || []).forEach(b => {
+    if (!b || !b.engineer || !b.start_date || !b.end_date) return;
+    const k = jobKey(b);
+    weeksOf(b).forEach(w => {
+      const at = per[b.engineer + '|' + w] = per[b.engineer + '|' + w] || { jobs: {}, rows: [] };
+      at.jobs[k] = true; at.rows.push(b);
+    });
+  });
+  return per;
+}
+function depthOf(entry) { return entry ? Object.keys(entry.jobs).length : 0; }

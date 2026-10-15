@@ -36,13 +36,26 @@ function runAssign(proj, bookingRows, engineerRows) {
   }
   for (const n in eng) eng[n].load = eng[n].busy.size;
 
-  const dlW = widx(proj.deadline);
-  const d = proj.dub_weeks, ed = proj.edit_weeks, m = proj.mix_weeks;
-  const mixw = block(dlW - 1, m);
-  const editEnd = mixw.size ? Math.min(...mixw) - 1 : dlW - 1;
-  const editw = block(editEnd, ed);
-  const dubEnd = editw.size ? Math.min(...editw) - 1 : editEnd;
-  const dubw = block(dubEnd, d);
+  // Phase windows. Per-phase dates win when the project has them (Tara, 2026-10-15):
+  // the weeks are the ones entered, dub and edit may run side by side, and nothing
+  // here moves a date -- the engine only chooses who. A project without dates is an
+  // older row and plots backward from its deadline exactly as before.
+  const span = (a, z) => { const s = new Set();
+    if (a && z) for (let w = widx(a); w <= widx(z); w++) s.add(w); return s; };
+  let dubw, editw, mixw;
+  if (proj.dub_from || proj.edit_from || proj.mix_from) {
+    dubw = span(proj.dub_from, proj.dub_to);
+    editw = span(proj.edit_from, proj.edit_to);
+    mixw = span(proj.mix_from, proj.mix_to);
+  } else {
+    const dlW = widx(proj.deadline);
+    mixw = block(dlW - 1, proj.mix_weeks);
+    const editEnd = mixw.size ? Math.min(...mixw) - 1 : dlW - 1;
+    editw = block(editEnd, proj.edit_weeks);
+    const dubEnd = editw.size ? Math.min(...editw) - 1 : editEnd;
+    dubw = block(dubEnd, proj.dub_weeks);
+  }
+  const d = dubw.size, ed = editw.size, m = mixw.size;
   const recedit = new Set([...dubw, ...editw]);
 
   const gap = (n, ref) => eng[n].last === null ? 1e9 : ref - eng[n].last;
@@ -302,6 +315,7 @@ function runAssign(proj, bookingRows, engineerRows) {
       : [[recOv, new Set(ordered.slice(0, cut))], [recOv2, new Set(ordered.slice(cut))]];
 
     const took = [];
+    const ownDub = {};                 // weeks each named dubber holds on THIS project
     for (const pair of halves) {
       const name = pair[0], wks = pair[1];
       if (!wks.size) continue;
@@ -312,6 +326,7 @@ function runAssign(proj, bookingRows, engineerRows) {
       // silently claim weeks the engineer does not hold. The halves are contiguous
       // today; this makes the branch correct whatever the split turns into.
       for (const r of runsOf(wks)) assignments.push(['Dub', name, r]);
+      ownDub[name] = wks;
       took.push(name + ': ' + wks.size + 'wk');
     }
     notes.push(took.length > 1
@@ -325,8 +340,14 @@ function runAssign(proj, bookingRows, engineerRows) {
       if (!vetPick(edOv, editw, 'the edit', 'an editor', e => e.edit)) edName = 'UNRESOLVED';
       else { edName = edOv; notes.push('Editor assigned by hand.'); }
     } else if (editw.size) {
-      const freeEd = pool.filter(n => free(n, editw));
-      if (freeEd.length) edName = pick(freeEd, Math.min(...editw), isMusic);
+      // A dubber's own weeks on this project do not block them from its edit -- the
+      // same person recording and editing one title is one job (Tara, 2026-10-15) --
+      // and when one of them is free, they are preferred over a fresh pair of hands.
+      const freeEd = pool.filter(n => inter(eng[n].busy, editw)
+        .filter(w => !(ownDub[n] && ownDub[n].has(w))).length === 0);
+      const dubEd = freeEd.filter(n => ownDub[n]);
+      if (dubEd.length) edName = pick(dubEd, Math.min(...editw), isMusic);
+      else if (freeEd.length) edName = pick(freeEd, Math.min(...editw), isMusic);
       else if (pool.length) {
         edName = forcePick(pool, editw);
         notes.push(`FORCED OVERLAP on the edit — ${edName} was already committed ` +
@@ -348,7 +369,7 @@ function runAssign(proj, bookingRows, engineerRows) {
     // one name, both phases
     if (!vetPick(recOv, recedit, 'the dub and the edit', 'a recordist or editor', e => e.record && e.edit)) rec = 'UNRESOLVED';
     else {
-      if (recedit.size) { commit(recOv, recedit, d + ed); assignments.push(['Dub', recOv, dubw], ['Edit', recOv, editw]); }
+      if (recedit.size) { commit(recOv, recedit, recedit.size); assignments.push(['Dub', recOv, dubw], ['Edit', recOv, editw]); }
       rec = recOv; recNote = 'Manually assigned.';
     }
   } else if (manual(edOv)) {
@@ -414,7 +435,7 @@ function runAssign(proj, bookingRows, engineerRows) {
       rec = applySpread(spread, editw).join(' + ');
       recNote = spreadNote(spread, editw);
     } else if (samePick) {
-      commit(samePick, recedit, d + ed); rec = samePick;
+      commit(samePick, recedit, recedit.size); rec = samePick;
       assignments.push(['Dub', samePick, dubw], ['Edit', samePick, editw]);
     } else if (spread) {
       // one dubber plus an editor — the coarse phase split, via the same code
@@ -423,7 +444,7 @@ function runAssign(proj, bookingRows, engineerRows) {
     } else if (splitOk) {
       // shapes spreadDub cannot express: edit-only, or dub-only projects
       if (dubPick === editPick) {
-        commit(dubPick, recedit, d + ed); rec = dubPick;
+        commit(dubPick, recedit, recedit.size); rec = dubPick;
         assignments.push(['Dub', dubPick, dubw], ['Edit', dubPick, editw]);
       } else {
         commit(dubPick, dubw, d); commit(editPick, editw, ed);
@@ -434,7 +455,7 @@ function runAssign(proj, bookingRows, engineerRows) {
     } else {
       const f = forcePick(pool, recedit);
       const ov = inter(eng[f].busy, recedit).length;
-      commit(f, recedit, d + ed); rec = f;
+      commit(f, recedit, recedit.size); rec = f;
       recNote = `FORCED OVERLAP to hit the deadline — ${f} was already committed ${ov} of these weeks elsewhere.` +
         phaseSpan(dubw, editw, ' No engineer was free for') +
         ', and dividing the dub did not cover it either.';

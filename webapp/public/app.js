@@ -869,14 +869,17 @@ function openForm(title) {
     </div>
 
     <div class="fields row2">
-      <div class="f span2"><label>Weeks per phase</label><div class="phases">
-        <div class="p"><input type="number" id="f_dub" min="0" max="52" value="${p ? p.dub : 0}">
-          <div class="hint"><span class="sw" style="background:var(--dub)"></span>Dub</div></div>
-        <div class="p"><input type="number" id="f_edit" min="0" max="52" value="${p ? p.edit : 0}">
-          <div class="hint"><span class="sw" style="background:var(--edit)"></span>Edit</div></div>
-        <div class="p"><input type="number" id="f_mix" min="0" max="52" value="${p ? p.mix : 0}">
-          <div class="hint"><span class="sw" style="background:var(--mix)"></span>Mix</div></div>
-      </div><div class="hint">Zero is valid \u2014 the phase does not exist. Phases plot backward from the deadline.</div></div>
+      <div class="f span2"><label>When each phase runs</label>
+        <table class="phasedates"><tbody>${[['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']].map(([k, label]) => {
+          const d = (p && p.dates && p.dates[k]) || { from: '', to: '' };
+          return `<tr><th><span class="sw" style="background:var(--${k})"></span>${label}</th>` +
+            `<td><input type="date" id="f_${k}_from" aria-label="${label} start" value="${esc(d.from)}"></td>` +
+            `<td class="to">to</td>` +
+            `<td><input type="date" id="f_${k}_to" aria-label="${label} end" value="${esc(d.to)}"></td></tr>`;
+        }).join('')}</tbody></table>
+        <div class="hint">Leave a phase blank if the project does not have it. Dates snap to
+          their Monday–Sunday week. Dub and edit can overlap; mix starts after both, and
+          everything ends by the deadline.</div></div>
       <div class="f span2"><label>Flags</label><div class="checks">
         <label><input type="checkbox" id="f_music"${p && p.music ? ' checked' : ''}> Music</label>
         <label><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
@@ -892,7 +895,7 @@ function openForm(title) {
         <div class="f"><label for="f_rec2">Second recordist</label><select id="f_rec2">${opts(p && p.recordist_pick_2)}</select>
           <div class="hint">Splits the dub between the two, first name taking the earlier weeks.</div></div>
         <div class="f"><label for="f_ed">Editor</label><select id="f_ed">${opts(p && p.editor_pick)}</select>
-          <div class="hint">Auto keeps the edit with the recordist.</div></div>
+          <div class="hint">Auto prefers the recordist, and hands the edit to someone else only when that avoids an overlap.</div></div>
         <div class="f"><label for="f_mixer">Mixer</label><select id="f_mixer">${opts(p && p.mixer_pick)}</select>
           <div class="hint">A manual pick overrides every rule and is flagged.</div></div>
       </div>
@@ -962,7 +965,9 @@ function formValues(p, dryRun) {
     original_title: p ? p.title : '',
     client: $('f_client').value.trim(),
     deadline: $('f_deadline').value,
-    dub: +$('f_dub').value, edit: +$('f_edit').value, mix: +$('f_mix').value,
+    dub_from: $('f_dub_from').value, dub_to: $('f_dub_to').value,
+    edit_from: $('f_edit_from').value, edit_to: $('f_edit_to').value,
+    mix_from: $('f_mix_from').value, mix_to: $('f_mix_to').value,
     mix_level: $('f_level').value,
     music: $('f_music').checked, special: $('f_special').checked, atmos: $('f_atmos').checked,
     recordist: $('f_rec').value, recordist2: $('f_rec2').value,

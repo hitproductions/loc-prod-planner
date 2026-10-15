@@ -23,7 +23,10 @@ const nextRow = book => book.bookings.reduce((n, b) => Math.max(n, b.row_number 
 function reassignWarnings(row, wi, to, rows, engineers) {
   const out = [];
   const t = engineers.find(e => e.name === to) || {};
+  // The same project's dub or edit is not a clash: recording and editing one title in
+  // the same week is one job (A.jobKey).
   const clash = rows.filter(b => b.engineer === to && b !== row &&
+    A.jobKey(b) !== A.jobKey(row) &&
     A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date));
   if (clash.length) {
     out.push({ kind: 'double', text: `${to} already has ` +
@@ -118,6 +121,7 @@ function undoWeekMove(book, payload) {
   }
 
   const clash = rows.filter(b => b.engineer === was && b !== row &&
+    A.jobKey(b) !== A.jobKey(row) &&
     A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date))
     .map(b => `${b.project} / ${b.phase}`);
 
@@ -134,7 +138,8 @@ function saveProject(book, payload) {
   const p = payload || {};
   const raw = {
     project_title: p.title, client: p.client, deadline: p.deadline,
-    dub_weeks: p.dub, edit_weeks: p.edit, mix_weeks: p.mix,
+    dub_from: p.dub_from, dub_to: p.dub_to, edit_from: p.edit_from, edit_to: p.edit_to,
+    mix_from: p.mix_from, mix_to: p.mix_to,
     mix_level_required: p.mix_level,
     music_songs: p.music ? 'Yes' : 'No',
     special_project: p.special ? 'Yes' : 'No',
@@ -144,7 +149,13 @@ function saveProject(book, payload) {
     editor_override: p.editor || 'Auto',
     mixer_override: p.mixer || 'Auto',
   };
+  // Dates are REQUIRED here, on the form, and nowhere else (Tara, 2026-10-15): an older
+  // row with no dates still plots backward from its deadline, but anything saved from
+  // now on states when each phase runs.
+  const filled = ['dub', 'edit', 'mix'].some(k =>
+    String(p[k + '_from'] || '').trim() || String(p[k + '_to'] || '').trim());
   const norm = A.normalizeProject(raw);
+  if (!filled) norm.errors.push('Enter a start and end date for each phase the project has.');
   if (norm.errors.length) return { ok: false, errors: norm.errors };
   const project = norm.project;
 
@@ -339,6 +350,7 @@ const TERM_NAMES = {
   max_consecutive: 'longest unbroken run of booked weeks',
   reserve_weeks: 'weeks spent out of the reserve',
   developing_mix_weeks: 'mix weeks assigned to Developing mixers',
+  split_dub_edit: 'projects whose dub and edit are with different people',
   regular_peak: 'weeks on the busiest engineer',
 };
 
