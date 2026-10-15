@@ -1394,6 +1394,27 @@ section('Per-phase dates on the form, and dub + edit as one job (Tara, 2026-10-1
      JSON.stringify(lp.dates));
 }
 
+
+section('The Re-plan button never plans a closed project (found 2026-10-15)');
+{
+  // The button goes through the worker in solver.js, not actions.replanPreview, and
+  // the worker used to receive every project, cancelled ones included.
+  const { solveReplan } = require('../webapp/solver.js');
+  const book = await freshBook();
+  const eng = book.engineers;
+  const shut = { project_title: 'Shut Show', client: 'X', deadline: '2026-12-20', status: 'Cancelled',
+    dub_weeks: 2, edit_weeks: 1, mix_weeks: 1, mix_level_required: 'Advanced',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No' };
+  const done = { ...shut, project_title: 'Done Show', status: 'Complete' };
+  const withClosed = { ...book, projects: book.projects.concat(shut, done) };
+  const raw = await solveReplan(withClosed, '2026-08-13', { restarts: 5 });
+  const planned = (raw.rows_to_append || []).concat(raw.proposed_rows || [])
+    .filter(b => b.project === 'Shut Show' || b.project === 'Done Show');
+  ok('a cancelled or completed project gets no weeks from a re-plan', planned.length === 0,
+     planned.map(b => b.project + ' ' + b.phase).join(', '));
+  ok('and the open projects are still planned', (raw.proposed_rows || []).length > 0);
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud
