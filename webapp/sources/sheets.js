@@ -22,7 +22,9 @@ const EVENTS_TAB = 'History';
 // which is the exact state cancelling exists to prevent.
 const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended', 'revert'];
 // Columns this app writes that an older sheet may not have. Created on demand.
-const MANAGED_COLUMNS = ['Status', 'Completed'];
+const MANAGED_COLUMNS = ['Status', 'Completed',
+  // Per-phase dates (2026-10-15). Created on the first save, like the two above.
+  'Dub start', 'Dub end', 'Edit start', 'Edit end', 'Mix start', 'Mix end'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
 const HEADER_ROW = { Projects: 2, Bookings: 1, Engineers: 1 };
 
@@ -100,6 +102,9 @@ function projectCells(change) {
     'recordist': o.recordist, 'editor': o.editor, 'mixer': o.mixer,
     'warnings': o.warnings, 'notes': o.notes,
     'status': p.status, 'completed': p.completed,
+    'dub start': p.dub_from || '', 'dub end': p.dub_to || '',
+    'edit start': p.edit_from || '', 'edit end': p.edit_to || '',
+    'mix start': p.mix_from || '', 'mix end': p.mix_to || '',
     'plotted': new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
       .toISOString().slice(0, 10),
   };
@@ -117,7 +122,10 @@ function createSheetsSource(opts) {
   let projectsMeta = null;
 
   async function read() {
-    const ranges = Object.values(TABS).map(t => `ranges=${encodeURIComponent(t + '!A:Z')}`).join('&');
+    // A:AZ, not A:Z. The six phase-date columns (2026-10-15) take the Projects tab to
+    // 30 columns, and A:Z silently cut off the last four: their headers read as
+    // missing, so every save re-added them, and the dates written there never came back.
+    const ranges = Object.values(TABS).map(t => `ranges=${encodeURIComponent(t + '!A:AZ')}`).join('&');
     const res = await auth.api(`spreadsheets/${id}/values:batchGet?${ranges}` +
       '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER');
 
@@ -176,6 +184,11 @@ function createSheetsSource(opts) {
           editor_override: p(r, 'Editor pick') || 'Auto',
           mixer_override: p(r, 'Mixer pick') || 'Auto',
           notes: String(p(r, 'Notes') || '').trim(),
+          // Per-phase dates. Blank on an older row, which then plots backward from its
+          // deadline as it always did.
+          dub_from: isoFrom(p(r, 'Dub start')), dub_to: isoFrom(p(r, 'Dub end')),
+          edit_from: isoFrom(p(r, 'Edit start')), edit_to: isoFrom(p(r, 'Edit end')),
+          mix_from: isoFrom(p(r, 'Mix start')), mix_to: isoFrom(p(r, 'Mix end')),
           // Complete is a LABEL, not a supersede. The bookings stay live, because the
           // work genuinely happened and still occupies those weeks — what changes is
           // that the project stops asking for attention and stops being re-planned.

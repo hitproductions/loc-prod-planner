@@ -307,7 +307,12 @@ section('Shared blocks keep their real phase (Tara, 2026-08-12)');
   // tests how shared rows are LABELLED, not which policy is in force.
   // restarts 0 pins deadline order, which is what these expectations were
   // measured against — the order search would otherwise pick a different plan.
+  //
+  // The same-person preference (split_dub_edit, 2026-10-15) is taken out here: it
+  // reshapes which projects end up shared, and this section needs Grown Ups to be one
+  // of them. The policy itself is tested in its own section.
   const U2 = loadAppsScript({ cap: 0, wholeEdit: true, restarts: 0 });
+  U2.SOLVE_OBJECTIVE.splice(U2.SOLVE_OBJECTIVE.indexOf('split_dub_edit'), 1);
   const batch = U2.plotBatch(projects, [], engineers);
   const book = batch.new_rows.map((b,i)=>({...b, status:'', row_number:i+2}));
   ok('no row is labelled Dub+Edit any more',
@@ -566,6 +571,10 @@ section('The project lock — a frozen project is never touched (Tara, 2026-08-1
     { project:'Frozen', phase:'Dub',  engineer:'Jek',  start_date:'2026-11-02', end_date:'2026-11-08', source:'plot', note:'', status:'', row_number:2 },
     { project:'Frozen', phase:'Edit', engineer:'Jek',  start_date:'2026-11-09', end_date:'2026-11-15', source:'plot', note:'', status:'', row_number:3 },
     { project:'Loose',  phase:'Dub',  engineer:'John', start_date:'2026-11-02', end_date:'2026-11-08', source:'plot', note:'', status:'', row_number:4 },
+    // A hand-placed week on Jek, so an unlocked re-plan has a reason to move Frozen.
+    // It used to move it for balance alone, by splitting the dub from the edit; since
+    // keeping those with one person is preferred (2026-10-15) balance no longer does.
+    { project:'Pinned', phase:'Dub',  engineer:'Jek',  start_date:'2026-11-02', end_date:'2026-11-08', source:'plot', note:'manual', status:'', row_number:5 },
   ];
   const mk = (t, locked) => ({ project_title:t, deadline:'2026-11-16', client:'Netflix',
     dub_weeks:1, edit_weeks: t === 'Frozen' ? 1 : 0, mix_weeks:0,
@@ -1041,10 +1050,11 @@ section('forced_projects counts overlapped weeks, not FORCED notes');
      A.scorePlan(notedButFine, eng).forced_projects === 0,
      A.scorePlan(notedButFine, eng).forced_projects + '');
 
-  // distinct PROJECTS, not rows: three colliding rows of one project is one project
+  // distinct PROJECTS, not rows: three colliding rows of one project is one project.
+  // A dub beside a mix, because a dub beside its own edit is one job, not a collision.
   const manyRows = [bk('P1', 'A', '2026-01-05', '2026-01-11'),
-                    bk('P1', 'A', '2026-01-05', '2026-01-11'),
-                    bk('P1', 'A', '2026-01-05', '2026-01-11')];
+                    { ...bk('P1', 'A', '2026-01-05', '2026-01-11'), phase: 'Mix' },
+                    { ...bk('P1', 'A', '2026-01-05', '2026-01-11'), phase: 'Mix' }];
   ok('it counts projects, not booking rows',
      A.scorePlan(manyRows, eng).forced_projects === 1,
      A.scorePlan(manyRows, eng).forced_projects + '');
@@ -1225,6 +1235,146 @@ section('Advanced-first mixing — assignment, re-plan, and optimizer (2026-10-1
     [{ ...p, atmos_required: 'Yes' }], A.SOLVE_OBJECTIVE);
   ok('the optimizer cannot move Atmos mixing to a Senior without the room',
     atmosMove.rows[0].engineer === 'Dev');
+}
+
+// ---------------------------------------------------------------------------
+section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-10-15)');
+{
+  const R = (name, extra) => ({ name, can_record: 'Yes', can_edit: 'Yes', can_mix: 'No',
+    mix_level: '', music_specialist: 'No', overflow_only: 'No', does_specials: 'No', atmos: 'No', ...extra });
+  const roster = [R('Ana'), R('Ben'), R('Mixy', { can_record: 'No', can_edit: 'No', can_mix: 'Yes', mix_level: 'Advanced' })];
+  // Deadline well after the mix, so backward plotting would land every phase somewhere
+  // else -- a test that the dates are used cannot pass by coinciding with the old rule.
+  const base = { project_title: 'Dated', client: 'X', deadline: '2027-01-17', mix_level_required: 'Advanced',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No' };
+  const dated = { ...base, dub_from: '2026-11-04', dub_to: '2026-11-19',    // Wed..Thu: snaps to Nov 2..22
+    edit_from: '2026-11-16', edit_to: '2026-11-29',                         // overlaps the dub's last week
+    mix_from: '2026-11-30', mix_to: '2026-12-13' };
+
+  // --- entry rules
+  const n = A.normalizeProject(dated);
+  ok('dates snap to their Monday-Sunday weeks',
+     n.project.dub_from === '2026-11-02' && n.project.dub_to === '2026-11-22',
+     n.project.dub_from + '..' + n.project.dub_to);
+  ok('week counts are derived from the dates',
+     n.project.dub_weeks === 3 && n.project.edit_weeks === 2 && n.project.mix_weeks === 2,
+     [n.project.dub_weeks, n.project.edit_weeks, n.project.mix_weeks].join('/'));
+  ok('dub and edit may overlap', n.errors.length === 0, n.errors.join(' | '));
+  const err = (patch, re, label) => {
+    const r = A.normalizeProject({ ...dated, ...patch });
+    ok(label, r.errors.some(e => re.test(e)), r.errors.join(' | ') || 'no error');
+  };
+  err({ edit_from: '2026-10-26' }, /Edit cannot start before the dub/, 'an edit starting before the dub is refused');
+  err({ mix_from: '2026-11-23' }, /Mix must start after the edit/, 'a mix overlapping the edit is refused');
+  err({ deadline: '2026-12-06' }, /end by the deadline/, 'a phase running past the deadline is refused');
+  err({ mix_to: '' }, /Mix needs both a start and an end/, 'a phase with a start and no end is refused');
+  err({ edit_from: '2026-11-29', edit_to: '2026-11-16' }, /Edit starts after it ends/, 'a phase ending before it starts is refused');
+  const noEdit = A.normalizeProject({ ...dated, edit_from: '', edit_to: '' });
+  ok('a blank phase is a phase the project does not have',
+     noEdit.errors.length === 0 && noEdit.project.edit_weeks === 0, noEdit.errors.join(' | '));
+  const legacy = A.normalizeProject({ ...base, dub_weeks: 2, edit_weeks: 1, mix_weeks: 1 });
+  ok('an older row with no dates still normalises from its weeks',
+     legacy.errors.length === 0 && legacy.project.dub_weeks === 2, legacy.errors.join(' | '));
+
+  // --- the engine books exactly the entered weeks
+  const out = A.runAssign(n.project, [], roster);
+  const span = ph => { const rs = out.booking_rows.filter(b => b.phase === ph);
+    return rs.length ? rs.map(b => b.start_date).sort()[0] + '..' + rs.map(b => b.end_date).sort().pop() : ''; };
+  ok('the dub is booked on its dates, not backward from the deadline', span('Dub') === '2026-11-02..2026-11-22', span('Dub'));
+  ok('the edit is booked on its dates', span('Edit') === '2026-11-16..2026-11-29', span('Edit'));
+  ok('the mix is booked on its dates', span('Mix') === '2026-11-30..2026-12-13', span('Mix'));
+  const recEd = out.booking_rows.filter(b => b.phase !== 'Mix').map(b => b.engineer);
+  ok('with someone free for both, one person records and edits (preferred)',
+     new Set(recEd).size === 1, recEd.join(', '));
+  ok('and the week they do both is not a forced overlap', !out.forced, out.record_note);
+
+  // preferred, never required: nobody is free for both, so it splits instead of forcing
+  const busy = [
+    { project: 'Other1', phase: 'Dub', engineer: 'Ana', start_date: '2026-11-23', end_date: '2026-11-29', status: '' },
+    { project: 'Other2', phase: 'Dub', engineer: 'Ben', start_date: '2026-11-02', end_date: '2026-11-08', status: '' },
+  ];
+  const split = A.runAssign(n.project, busy, roster);
+  const who = ph => [...new Set(split.booking_rows.filter(b => b.phase === ph).map(b => b.engineer))].join('+');
+  ok('when keeping them together would cost an overlap, dub and edit go to different people',
+     who('Dub') === 'Ana' && who('Edit') === 'Ben', `dub ${who('Dub')} / edit ${who('Edit')}`);
+  ok('and nothing is forced', !split.forced, split.record_note);
+
+  // --- counting: jobs, not rows
+  const row = (project, phase, engineer, note) =>
+    ({ project, phase, engineer, start_date: '2026-11-16', end_date: '2026-11-22', note: note || '', status: '' });
+  const twoOne = [row('P', 'Dub', 'Ana'), row('P', 'Edit', 'Ana')];
+  ok("one person on a project's dub and edit in the same week is not an overlap",
+     A.scorePlan(twoOne, roster, []).total_double_booked === 0,
+     A.scorePlan(twoOne, roster, []).total_double_booked + '');
+  ok('and Analysis lists no clash for it', A.actualOverlaps_(twoOne).length === 0);
+  ok('the same project’s mix in that week still is',
+     A.scorePlan(twoOne.concat(row('P', 'Mix', 'Ana')), roster, []).total_double_booked === 1);
+  ok('another project in that week still is',
+     A.scorePlan(twoOne.concat(row('Q', 'Dub', 'Ana')), roster, []).total_double_booked === 1);
+  const three = twoOne.concat(row('Q', 'Dub', 'Ana'), row('R', 'Edit', 'Ana'));
+  ok('depth counts jobs: dub+edit of P, plus Q, plus R is three deep, not four',
+     A.scorePlan(three, roster, []).deepest_week === 3, A.scorePlan(three, roster, []).deepest_week + '');
+
+  // --- the preference term
+  const sp = rows => A.scorePlan(rows, roster, []).split_dub_edit;
+  ok('dub and edit with different people counts as a split', sp([row('P', 'Dub', 'Ana'), row('P', 'Edit', 'Ben')]) === 1);
+  ok('a divided dub whose editor records part of it is not a split',
+     sp([row('P', 'Dub', 'Ana'), row('P', 'Dub', 'Ben'), row('P', 'Edit', 'Ben')]) === 0);
+  ok('a hand-picked split is not counted against the plan',
+     sp([row('P', 'Dub', 'Ana', 'manual'), row('P', 'Edit', 'Ben', 'manual')]) === 0);
+  const ix = k => A.SOLVE_OBJECTIVE.indexOf(k);
+  ok('the preference ranks below every overlap term, so it never costs an overlap',
+     ['three_deep_weeks', 'total_double_booked', 'forced_projects', 'reserve_weeks']
+       .every(k => ix(k) < ix('split_dub_edit')), A.SOLVE_OBJECTIVE.join(','));
+  ok('and above workload balancing, so balance alone does not split them',
+     ix('split_dub_edit') < ix('regular_spread'));
+
+  // --- re-plan honours the dates too
+  const rp = A.replanBook([n.project], [], roster, '2026-10-15');
+  const rpSpan = ph => { const rs = rp.proposed_rows.filter(b => b.project === 'Dated' && b.phase === ph);
+    return rs.length ? rs.map(b => b.start_date).sort()[0] + '..' + rs.map(b => b.end_date).sort().pop() : ''; };
+  ok('re-plan books the entered dub weeks', rpSpan('Dub') === '2026-11-02..2026-11-22', rpSpan('Dub'));
+  ok('re-plan books the entered edit weeks', rpSpan('Edit') === '2026-11-16..2026-11-29', rpSpan('Edit'));
+
+  // --- swap pass: moving a dub onto its own editor's week is allowed
+  const ed = { project: 'P', phase: 'Edit', engineer: 'Ana', start_date: '2026-11-16', end_date: '2026-11-22', note: '', status: '' };
+  const dubOnBen = { project: 'P', phase: 'Dub', engineer: 'Ben', start_date: '2026-11-16', end_date: '2026-11-22', note: '', status: '' };
+  const moved = A.improveBySwaps_([dubOnBen], [ed], roster, [{ ...base, project_title: 'P' }], A.SOLVE_OBJECTIVE);
+  ok('the optimiser can hand a dub to the person editing the same project that week',
+     moved.rows[0].engineer === 'Ana', moved.rows[0].engineer);
+}
+
+// ---------------------------------------------------------------------------
+section('A divided dub comes in blocks, not week-by-week back and forth (Tara, 2026-10-15)');
+{
+  const R = (name, extra) => ({ name, can_record: 'Yes', can_edit: 'Yes', can_mix: 'No', mix_level: '',
+    music_specialist: 'No', overflow_only: 'No', does_specials: 'No', atmos: 'No', ...extra });
+  const bk = (project, engineer, s0, e0) => ({ project, phase: 'Dub', engineer, start_date: s0, end_date: e0, status: '', note: '' });
+  const proj = (title, extra) => A.normalizeProject({ project_title: title, client: 'X', deadline: '2026-12-20',
+    mix_level_required: 'Advanced', music_songs: 'No', special_project: 'No', atmos_required: 'No',
+    dub_from: '2026-11-02', dub_to: '2026-11-22', edit_from: '2026-11-23', edit_to: '2026-11-29', ...extra }).project;
+  const dubSeq = out => out.booking_rows.filter(b => b.phase === 'Dub')
+    .flatMap(b => { const o = []; for (let w = A.widx(b.start_date); w <= A.widx(b.end_date); w++) o.push([w, b.engineer]); return o; })
+    .sort((a, b) => a[0] - b[0]).map(x => x[1]);
+
+  // Ana is busy in the dub's middle week; Ben is busy in the edit week and heavily
+  // loaded elsewhere, so a lightest-person-each-week rule picks Ana, Ben, Ana.
+  const roster = [R('Ana'), R('Ben')];
+  const book = [bk('Other', 'Ana', '2026-11-09', '2026-11-15'), bk('Other2', 'Ben', '2026-11-23', '2026-11-29'),
+                bk('Heavy', 'Ben', '2027-01-04', '2027-02-28')];
+  const seq = dubSeq(A.runAssign(proj('Blocky'), book, roster));
+  const blocks = seq.filter((n, i) => i === 0 || n !== seq[i - 1]);
+  ok('the dub is still covered every week', seq.length === 3, seq.join(', '));
+  ok('nobody hands the dub back to someone who already had it', blocks.length === new Set(blocks).size, seq.join(', '));
+  ok('so there is at most one hand-over', blocks.length <= 2, seq.join(', '));
+
+  // Music rank still beats keeping the dub: the second choice gives it back as soon as
+  // the first choice is free.
+  const mroster = [R('Daryl', { music_specialist: '1' }), R('Josiah', { music_specialist: '2' })];
+  const mbook = [bk('Other', 'Daryl', '2026-11-02', '2026-11-08'), bk('Other2', 'Josiah', '2026-11-23', '2026-11-29')];
+  const mseq = dubSeq(A.runAssign(proj('Songs', { music_songs: 'Yes' }), mbook, mroster));
+  ok('a music dub returns to the first-choice specialist once they are free',
+     mseq.join(',') === 'Josiah,Daryl,Daryl', mseq.join(', '));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

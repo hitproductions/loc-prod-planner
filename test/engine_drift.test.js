@@ -67,16 +67,23 @@ const APPROVED_HUNKS = {
 // can go to different engineers. There are now three picks, one per role.
 //
 // Everything OUTSIDE these regions is still byte-compared, which is what matters:
-// the week arithmetic, the roster build, the backward phase plotting (rule 2 —
-// verified 0/72 against real data), the eligibility pools (rule 7 client
+// the week arithmetic, the roster build, the eligibility pools (rule 7 client
 // routing), and the entire mix pool-and-force ladder below the fallback fix
-// (rules 5 and 8).
+// (rules 5 and 8). The backward phase plotting (rule 2 — verified 0/72 against real
+// data) moved inside the phase-window regions on 2026-10-15, when per-phase dates took
+// precedence; it is unchanged there and still runs for projects without dates.
 const REWRITTEN = {
   // replan.js is a SECOND implementation of the same rules, so the two sharing
   // changes have to land here as well or a re-plan silently undoes what the plot
   // decided: leaving pair-only search here reverted N-way shares straight back
   // into forced overlaps.
   'engine/replan.js': [
+    {
+      what: 'phase windows — per-phase dates win, backward plotting for older rows (Tara, 2026-10-15)',
+      refStart:  '    const d = num(p.dub_weeks), ed = num(p.edit_weeks), m = num(p.mix_weeks);',
+      liveStart: '    // Phase windows -- mirrors assign.js.',
+      end:       '    const isMusic = yes(p.music_songs);',
+    },
     {
       what: 'the share emitter — real phase per week, N engineers instead of two',
       refStart:  '            const shared = tryShare(pool, reWks);',
@@ -91,6 +98,14 @@ const REWRITTEN = {
     },
   ],
   'engine/assign.js': [
+    {
+      // The backward plotting below the dates branch is still the original arithmetic,
+      // kept for projects entered before dates existed.
+      what: 'phase windows — per-phase dates win, backward plotting for older rows (Tara, 2026-10-15)',
+      refStart:  '  const dlW = widx(proj.deadline);',
+      liveStart: '  // Phase windows. Per-phase dates win when the project has them',
+      end:       '  const recedit = new Set([...dubw, ...editw]);',
+    },
     {
       what: 'the mix assignment — Advanced-first, Developing fallback (Tara, 2026-10-14)',
       refStart:  "    const needAdv = String(proj.mix_level_required).trim() === 'Advanced';",

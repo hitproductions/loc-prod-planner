@@ -23,7 +23,10 @@ const nextRow = book => book.bookings.reduce((n, b) => Math.max(n, b.row_number 
 function reassignWarnings(row, wi, to, rows, engineers) {
   const out = [];
   const t = engineers.find(e => e.name === to) || {};
+  // The same project's dub or edit is not a clash: recording and editing one title in
+  // the same week is one job (A.jobKey).
   const clash = rows.filter(b => b.engineer === to && b !== row &&
+    A.jobKey(b) !== A.jobKey(row) &&
     A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date));
   if (clash.length) {
     out.push({ kind: 'double', text: `${to} already has ` +
@@ -118,6 +121,7 @@ function undoWeekMove(book, payload) {
   }
 
   const clash = rows.filter(b => b.engineer === was && b !== row &&
+    A.jobKey(b) !== A.jobKey(row) &&
     A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date))
     .map(b => `${b.project} / ${b.phase}`);
 
@@ -134,7 +138,8 @@ function saveProject(book, payload) {
   const p = payload || {};
   const raw = {
     project_title: p.title, client: p.client, deadline: p.deadline,
-    dub_weeks: p.dub, edit_weeks: p.edit, mix_weeks: p.mix,
+    dub_from: p.dub_from, dub_to: p.dub_to, edit_from: p.edit_from, edit_to: p.edit_to,
+    mix_from: p.mix_from, mix_to: p.mix_to,
     mix_level_required: p.mix_level,
     music_songs: p.music ? 'Yes' : 'No',
     special_project: p.special ? 'Yes' : 'No',
@@ -144,7 +149,18 @@ function saveProject(book, payload) {
     editor_override: p.editor || 'Auto',
     mixer_override: p.mixer || 'Auto',
   };
+  // Dates are REQUIRED here, on the form, and nowhere else (Tara, 2026-10-15): an older
+  // row with no dates still plots backward from its deadline, but anything saved from
+  // now on states when each phase runs.
+  const filled = ['dub', 'edit', 'mix'].some(k =>
+    String(p[k + '_from'] || '').trim() || String(p[k + '_to'] || '').trim());
   const norm = A.normalizeProject(raw);
+  if (!filled) {
+    // One message, not two: with no dates there are no weeks either, and "at least one
+    // phase must have weeks" only restates this less usefully.
+    norm.errors = norm.errors.filter(e => !/At least one phase must have weeks/.test(e));
+    norm.errors.push('Enter a start and end date for each phase the project has.');
+  }
   if (norm.errors.length) return { ok: false, errors: norm.errors };
   const project = norm.project;
 
@@ -339,6 +355,7 @@ const TERM_NAMES = {
   max_consecutive: 'longest unbroken run of booked weeks',
   reserve_weeks: 'weeks spent out of the reserve',
   developing_mix_weeks: 'mix weeks assigned to Developing mixers',
+  split_dub_edit: 'projects whose dub and edit are with different people',
   regular_peak: 'weeks on the busiest engineer',
 };
 
@@ -357,13 +374,40 @@ function whyBetter(before, after) {
 // Shapes a replanBook result into the preview payload. Split out so the search can run
 // wherever it likes — inline, or on a worker thread with a far deeper search — without
 // two places deciding what a preview looks like.
-function shapeReplan(book, rows, r) {
+// Engineer-weeks holding two or more JOBS from `fromW` on, keyed engineer|week. A
+// project's dub beside its own edit is one job (A.jobKey), so it never appears here.
+function overlapWeeks(rows, fromW) {
+  const per = A.jobsByEngineerWeek(rows), out = {};
+  Object.keys(per).forEach(k => {
+    if (A.depthOf(per[k]) < 2) return;
+    const cut = k.lastIndexOf('|'), w = Number(k.slice(cut + 1));
+    if (w < fromW) return;
+    const rs = per[k].rows;
+    const label = b => b.project + (b.phase === 'Mix' &&
+      rs.some(x => x.project === b.project && x.phase !== 'Mix') ? ' (mix)' : '');
+    out[k] = { engineer: k.slice(0, cut), week: w, label: A.weekLabel(w),
+               projects: [...new Set(rs.map(label))] };
+  });
+  return out;
+}
+
+function shapeReplan(book, rows, r, todayISO) {
   let why = null;
+  // Which overlaps the plan clears and which it leaves or creates, from this week on.
+  // The page has always had a table for this; the web app never filled it, so every
+  // preview said "Overlaps are unchanged" whatever the plan did (found 2026-10-15).
+  const fromW = A.widx(todayISO ||
+    new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
+  let overlaps_after = [], overlaps_resolved = [];
   if (!r.no_improvement) {
     const gone = new Set(r.rows_to_supersede || []);
     const proposed = rows.filter(b => !gone.has(b.row_number)).concat(r.rows_to_append || []);
     why = whyBetter(A.scorePlan(rows, book.engineers, book.projects),
                     A.scorePlan(proposed, book.engineers, book.projects));
+    const before = overlapWeeks(rows, fromW), after = overlapWeeks(proposed, fromW);
+    const order = (a, b) => a.week - b.week || a.engineer.localeCompare(b.engineer);
+    overlaps_after = Object.keys(after).map(k => ({ ...after[k], isNew: !before[k] })).sort(order);
+    overlaps_resolved = Object.keys(before).filter(k => !after[k]).map(k => before[k]).sort(order);
   }
 
   return {
@@ -372,8 +416,8 @@ function shapeReplan(book, rows, r) {
     change_count: r.change_count || 0,
     changes: r.changes || [],
     dubs_divided: r.dubs_divided || 0,
-    overlaps_after: r.overlaps_after || [],
-    overlaps_resolved: r.overlaps_resolved || [],
+    overlaps_after,
+    overlaps_resolved,
     why,
     change: r.no_improvement ? null
       : { supersede: r.rows_to_supersede || [], append: r.rows_to_append || [] },
@@ -383,7 +427,7 @@ function shapeReplan(book, rows, r) {
 function replanPreview(book, todayISO) {
   const rows = live(book);
   return shapeReplan(book, rows,
-    A.replanBook(forReplan(book.projects), rows, book.engineers, todayISO));
+    A.replanBook(forReplan(book.projects), rows, book.engineers, todayISO), todayISO);
 }
 
 // A completed or cancelled project is frozen to the engine. It already has the

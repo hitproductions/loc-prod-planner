@@ -57,11 +57,15 @@ var P_COL = {
   // reads these; this app only needs to create them, so that Set up sheets does not
   // wipe a column it has never heard of. Nothing here reads STATUS or COMPLETED.
   STATUS: 23, COMPLETED: 24,
+  // Per-phase dates (Tara, 2026-10-15). Appended after Completed for the same reason:
+  // the web app creates them on first save, and nothing before them moves. Each date
+  // snaps to its Monday-Sunday week; a phase the project does not have stays blank.
+  DUB_START: 25, DUB_END: 26, EDIT_START: 27, EDIT_END: 28, MIX_START: 29, MIX_END: 30,
 };
 var P_INPUT_LAST  = P_COL.MIX_PICK;      // columns 1..12 are the user's
 var P_OUTPUT_FIRST = P_COL.DUB_W;        // 13..21 belong to the engine
 var P_OUTPUT_LAST  = P_COL.PLOTTED;
-var P_LAST = P_COL.COMPLETED;
+var P_LAST = P_COL.MIX_END;
 var P_HEADER_ROW = 2;                    // row 1 is the banner
 var P_FIRST_DATA_ROW = 3;
 var P_ROWS = 300;                        // validated/formatted depth
@@ -73,6 +77,7 @@ var P_HEADERS = [
   'Dub wks', 'Edit wks', 'Mix wks',
   'Recordist', 'Editor', 'Mixer', 'Warnings', 'Notes', 'Plotted', 'Locked',
   'Status', 'Completed',
+  'Dub start', 'Dub end', 'Edit start', 'Edit end', 'Mix start', 'Mix end',
 ];
 
 // ---- Bookings tab -----------------------------------------------------------
@@ -177,6 +182,9 @@ var SOLVE_OBJECTIVE = [
   'forced_projects',         // then fewest projects compromised
   'reserve_weeks',           // use a regular fallback before spending the reserve
   'developing_mix_weeks',    // Advanced-first mixing, before balancing total workload
+  'split_dub_edit',          // keep a project's dub and edit with the same person where
+                             // nothing above is lost by it -- preferred, never required
+                             // (Tara, 2026-10-15)
   'regular_spread',          // then flattest load across the regular pool
   'max_consecutive',         // then prefer handing off, all else equal
   'regular_peak',            // then the lowest peak in the regular pool

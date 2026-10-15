@@ -65,9 +65,50 @@ function normalizeProject(raw) {
     p.deadline = dl;
   }
 
-  // phases: single "3/1/2" cell wins if present
+  // Per-phase dates (Tara, 2026-10-15). When a project carries them, they ARE its
+  // phases: each date snaps to its Monday-Sunday week, the week counts are derived
+  // from them, and the engine books exactly those weeks instead of working backward
+  // from the deadline. Dub and edit may run side by side; the mix comes after both.
+  // A row with no dates at all is an older project and still plots backward -- the
+  // form is what makes the dates required for new work.
   let phasesParsed = false;
-  if (p.phases != null && String(p.phases).trim() !== '') {
+  const PHASE_KEYS = [['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']];
+  const txt = v => String(v == null ? '' : v).trim().slice(0, 10);
+  const isDay = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+  const dated = PHASE_KEYS.some(([k]) => txt(p[k + '_from']) || txt(p[k + '_to']));
+  if (dated) {
+    const wk = {};
+    let datesOk = true;
+    for (const [k, label] of PHASE_KEYS) {
+      const a = txt(p[k + '_from']), z = txt(p[k + '_to']);
+      if (!a && !z) { p[k + '_from'] = ''; p[k + '_to'] = ''; p[k + '_weeks'] = 0; continue; }
+      if (!isDay(a) || !isDay(z)) {
+        errors.push(`${label} needs both a start and an end date.`); datesOk = false; continue;
+      }
+      const s0 = widx(a), e0 = widx(z);
+      if (s0 > e0) { errors.push(`${label} starts after it ends.`); datesOk = false; continue; }
+      p[k + '_from'] = weekStart(s0); p[k + '_to'] = weekEnd(e0); p[k + '_weeks'] = e0 - s0 + 1;
+      wk[k] = [s0, e0];
+    }
+    if (wk.dub && wk.edit && wk.edit[0] < wk.dub[0])
+      errors.push('Edit cannot start before the dub starts.');
+    if (wk.mix && wk.edit && wk.mix[0] <= wk.edit[1])
+      errors.push('Mix must start after the edit ends.');
+    if (wk.mix && wk.dub && wk.mix[0] <= wk.dub[1])
+      errors.push('Mix must start after the dub ends.');
+    if (p.deadline === dl && /^\d{4}-/.test(dl)) {
+      const last = Math.max(...Object.keys(wk).map(k => wk[k][1]));
+      if (Object.keys(wk).length && last > widx(dl))
+        errors.push('Every phase must end by the deadline.');
+    }
+    if (datesOk) phasesParsed = true;
+    p.phases = '';
+  }
+
+  // phases: single "3/1/2" cell wins if present
+  if (dated) {
+    // weeks already derived from the dates above
+  } else if (p.phases != null && String(p.phases).trim() !== '') {
     const parsed = parsePhases(p.phases);
     if (!parsed) errors.push('Phases must read like 3/1/2 (dub/edit/mix, whole weeks).');
     else { [p.dub_weeks, p.edit_weeks, p.mix_weeks] = parsed; phasesParsed = true; }
@@ -188,12 +229,28 @@ function scorePlan(book, engineerRows, projectRows) {
     const e = roster[b.engineer];
     return sum + (e && String(e.mix_level).trim() === 'Developing' ? weeksOf(b).length : 0);
   }, 0);
+  // weeks[engineer][week] = how many JOBS that week. One person recording and editing
+  // the same project in the same week is one job, not an overlap (see jobKey).
   const weeks = {};
+  const perWeek = jobsByEngineerWeek(book);
+  Object.keys(perWeek).forEach(k => {
+    const cut = k.lastIndexOf('|'), n = k.slice(0, cut), w = Number(k.slice(cut + 1));
+    (weeks[n] = weeks[n] || {})[w] = depthOf(perWeek[k]);
+  });
+  // Projects whose edit sits with someone who records none of its dub. Preferred
+  // against, never forbidden: ranked below every overlap term, so the search splits
+  // dub from edit only when keeping them together would cost an overlap or the reserve.
+  const recBy = {};
   for (const b of book) {
-    if (!b || !b.engineer || !b.start_date || !b.end_date) continue;
-    if (!weeks[b.engineer]) weeks[b.engineer] = {};
-    for (const w of weeksOf(b)) weeks[b.engineer][w] = (weeks[b.engineer][w] || 0) + 1;
+    if (!b || !b.engineer || !b.project || /manual/i.test(b.note || '')) continue;
+    const r = recBy[b.project] = recBy[b.project] || { dub: {}, edit: {} };
+    if (b.phase === 'Dub' || b.phase === 'Dub+Edit') r.dub[b.engineer] = 1;
+    if (b.phase === 'Edit' || b.phase === 'Dub+Edit') r.edit[b.engineer] = 1;
   }
+  const splitDubEdit = Object.keys(recBy).filter(t => {
+    const r = recBy[t], eds = Object.keys(r.edit);
+    return Object.keys(r.dub).length && eds.length && !eds.some(n => r.dub[n]);
+  }).length;
   const load = n => Object.keys(weeks[n] || {}).length;
   const dbl  = n => Object.keys(weeks[n] || {}).filter(w => weeks[n][w] > 1).length;
   // Three at once is not "more of two at once", it is a different thing. Two bookings
@@ -276,6 +333,7 @@ function scorePlan(book, engineerRows, projectRows) {
     regular_spread: regLoads.length ? Math.max.apply(null, regLoads) - Math.min.apply(null, regLoads) : 0,
     reserve_weeks: reserve.reduce((a, n) => a + load(n), 0),
     developing_mix_weeks: developingMixWeeks,
+    split_dub_edit: splitDubEdit,
     regular_peak: regLoads.length ? Math.max.apply(null, regLoads) : 0,
     regular_sd: Math.round(sd * 100) / 100,
 
@@ -463,21 +521,17 @@ function improveBySwaps_(rows, baseBook, engineerRows, projectRows, objective, o
   let bestScore = scorePlan(baseBook.concat(best), engineerRows, projectRows);
   let swaps = 0;
 
-  // weeks each engineer holds, counting the fixed base book plus the current trial
-  const occupancy = trial => {
-    const occ = {};
-    baseBook.concat(trial).forEach(b => {
-      if (!b || !b.engineer || !b.start_date || !b.end_date) return;
-      for (const w of weeksOf(b)) (occ[b.engineer] = occ[b.engineer] || {})[w] = (occ[b.engineer][w] || 0) + 1;
-    });
-    return occ;
-  };
+  // the rows each engineer holds per week, fixed base book plus the current trial
+  const occupancy = trial => jobsByEngineerWeek(baseBook.concat(trial));
+  // Free = nothing else that week, where "else" excludes the row being vacated and
+  // anything that is the SAME JOB as the row arriving: recording and editing one
+  // project in the same week is one job (see jobKey).
   const freeFor = (occ, name, row, ignore) => {
-    const o = occ[name] || {};
+    const mine = jobKey(row);
     for (const w of weeksOf(row)) {
-      let n = o[w] || 0;
-      if (ignore && ignore.engineer === name && weeksOf(ignore).indexOf(w) !== -1) n--;
-      if (n > 0) return false;
+      const at = occ[name + '|' + w];
+      if (!at) continue;
+      if (at.rows.some(r => r !== ignore && jobKey(r) !== mine)) return false;
     }
     return true;
   };
@@ -562,10 +616,13 @@ function divideDubsIfBetter_(rows, fixedBook, engineerRows, projectRows, objecti
   let bestScore = scorePlan(fixedBook.concat(best), engineerRows, projectRows);
   let divided = 0;
 
-  const occupancy = trial => {
+  // Busy weeks per engineer, ignoring this project's own edit: a dubber who also holds
+  // its edit that week is doing one job, so the edit does not block a dub week.
+  const occupancy = (trial, title) => {
     const occ = {};
     fixedBook.concat(trial).forEach(b => {
       if (!b || !b.engineer || !b.start_date || !b.end_date) return;
+      if (b.project === title && b.phase !== 'Mix') return;
       for (const w of weeksOf(b)) (occ[b.engineer] = occ[b.engineer] || {})[w] = 1;
     });
     return occ;
@@ -591,7 +648,7 @@ function divideDubsIfBetter_(rows, fixedBook, engineerRows, projectRows, objecti
       idxs.forEach(i => weeksOf(best[i]).forEach(w => weeks.push(w)));
       if (weeks.length < 2) continue;                       // nothing to divide
       weeks.sort((a, b) => a - b);
-      const occ = occupancy(best);
+      const occ = occupancy(best, title);
 
       for (const y of names) {
         if (y === owner || !swapEligible_(eng[y], 'Dub', proj)) continue;
@@ -763,6 +820,22 @@ function replanOnce(projectRows, bookingRows, engineerRows, todayISO, keepOrder)
   const supersededSet = {};
   rows_to_supersede.forEach(n => { supersededSet[n] = true; });
   const survives = active.filter(b => !supersededSet[b.row_number]);
+
+  // WHO MOVES, measured on the book an apply actually produces. The engine's own
+  // `changes` is its first draft: the swap and divide passes above can rework it, and
+  // the preview listed the draft while Apply wrote the reworked rows -- a dub shown
+  // going to one person arrived split between two others (found 2026-10-15).
+  const holders = list => { const m = {};
+    for (const b of list) for (const ph of (b.phase === 'Dub+Edit' ? ['Dub', 'Edit'] : [b.phase])) {
+      const k = b.project + '||' + ph; (m[k] = m[k] || {})[b.engineer] = true; }
+    return m; };
+  const was = holders(active), will = holders(survives.concat(rows_to_append));
+  const names = o => Object.keys(o || {}).sort().join(' + ') || '(none)';
+  const changes = [];
+  Object.keys(Object.assign({}, was, will)).sort().forEach(k => {
+    const from = names(was[k]), to = names(will[k]);
+    if (from !== to) { const cut = k.indexOf('||'); changes.push({ project: k.slice(0, cut), phase: k.slice(cut + 2), from, to }); }
+  });
   const forced_after_rows = survives.filter(isForced).length + forced_new_rows;
   const forced_kept_rows = survives.filter(isForced).length - forced_locked_rows;
 
@@ -780,6 +853,7 @@ function replanOnce(projectRows, bookingRows, engineerRows, todayISO, keepOrder)
 
   return {
     ...r,
+    changes, change_count: changes.length,
     rows_to_append,
     rows_to_supersede,
     duplicates_suppressed: dropped.length,

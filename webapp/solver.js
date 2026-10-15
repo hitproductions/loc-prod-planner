@@ -37,7 +37,11 @@ function solveReplan(book, todayISO, opts) {
   return new Promise((resolve, reject) => {
     const w = new Worker(path.join(__dirname, 'solver.js'), {
       workerData: {
-        projects: book.projects,
+        // Closed projects are left out of PLANNING, exactly as actions.forReplan does
+        // for the in-thread path. This worker is the path the Re-plan button takes, and
+        // it was handed every project: a cancelled one, having no rows, was planned from
+        // scratch and Apply would have put it back (found 2026-10-15 on the test sheet).
+        projects: require('./actions.js').forReplan(book.projects),
         bookings: book.bookings,
         engineers: book.engineers,
         todayISO, restarts,

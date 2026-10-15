@@ -16,32 +16,24 @@ const todayLocal = () =>
 // recording while its edit starts — and three is overflow that wants reassigning.
 // Counted from the weeks, never from a FORCED note: the note records what the engine
 // decided at the time, and misses any overlap a later project created on top of it.
+//
+// Depth counts JOBS, not rows: one person recording and editing the same project in the
+// same week is one job (A.jobKey), so a dub beside its own edit is never an overlap.
 function depths(rows) {
+  const jobs = A.jobsByEngineerWeek(rows);
   const per = {};
-  rows.forEach(b => {
-    if (!b.engineer || !b.start_date || !b.end_date) return;
-    for (let w = A.widx(b.start_date); w <= A.widx(b.end_date); w++) {
-      const k = b.engineer + '|' + w;
-      per[k] = (per[k] || 0) + 1;
-    }
-  });
+  Object.keys(jobs).forEach(k => { per[k] = A.depthOf(jobs[k]); });
   let two = 0, three = 0;
   Object.keys(per).forEach(k => { if (per[k] === 2) two++; else if (per[k] > 2) three++; });
   return { two, three, per };
 }
 
 function projectDepth(rows) {
-  const per = {};
-  rows.forEach(b => {
-    if (!b.engineer || !b.start_date || !b.end_date) return;
-    for (let w = A.widx(b.start_date); w <= A.widx(b.end_date); w++) {
-      const k = b.engineer + '|' + w; (per[k] = per[k] || []).push(b);
-    }
-  });
+  const per = A.jobsByEngineerWeek(rows);
   const out = {};
   Object.keys(per).forEach(k => {
-    const n = per[k].length;
-    if (n > 1) per[k].forEach(b => { if (n > (out[b.project] || 0)) out[b.project] = n; });
+    const n = A.depthOf(per[k]);
+    if (n > 1) per[k].rows.forEach(b => { if (n > (out[b.project] || 0)) out[b.project] = n; });
   });
   return out;
 }
@@ -64,6 +56,25 @@ function orphans(book) {
   return Object.keys(counts).sort().map(t => ({ project: t, rows: counts[t] }));
 }
 
+// Each phase's first and last day, for the form. The project's own dates when it has
+// them; otherwise -- an older row -- where its live bookings actually sit, so editing
+// it opens with the weeks it already has rather than blank boxes.
+function phaseDates(p, rows) {
+  const out = {};
+  [['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']].forEach(([k, ph]) => {
+    if (p.dub_from || p.edit_from || p.mix_from) {
+      out[k] = { from: p[k + '_from'] || '', to: p[k + '_to'] || '' };
+      return;
+    }
+    const mine = rows.filter(b => b.project === p.project_title &&
+      (b.phase === ph || (b.phase === 'Dub+Edit' && ph !== 'Mix')));
+    out[k] = mine.length
+      ? { from: mine.map(b => b.start_date).sort()[0], to: mine.map(b => b.end_date).sort().pop() }
+      : { from: '', to: '' };
+  });
+  return out;
+}
+
 function bootstrap(book) {
   const rows = live(book);
   const d = depths(rows);
@@ -78,6 +89,7 @@ function bootstrap(book) {
     projects: book.projects.map(p => ({
       title: p.project_title, client: p.client, deadline: p.deadline,
       dub: p.dub_weeks, edit: p.edit_weeks, mix: p.mix_weeks,
+      dates: phaseDates(p, rows),
       mix_level: p.mix_level_required,
       music: yes(p.music_songs), special: yes(p.special_project), atmos: yes(p.atmos_required),
       status: p.status || '', completed: p.completed || '',
@@ -250,11 +262,12 @@ function analysis(book, opts) {
   const byWeek = {};
   overlaps.forEach(o => {
     const k = o.engineer + '|' + o.start;
-    (byWeek[k] = byWeek[k] || { engineer: o.engineer, start: o.start, work: [] })
+    (byWeek[k] = byWeek[k] || { engineer: o.engineer, start: o.start, work: [], depth: o.depth })
       .work.push(`${o.project} (${o.phase})`);
   });
+  // depth is the JOB count from actualOverlaps_, not the number of rows listed: a dub
+  // and its own edit are two rows but one job.
   const collisions = Object.values(byWeek)
-    .map(c => ({ ...c, depth: c.work.length }))
     .sort((a, b) => a.start.localeCompare(b.start) || a.engineer.localeCompare(b.engineer));
 
   return {

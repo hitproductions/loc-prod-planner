@@ -32,6 +32,7 @@ const EXPORTS = [
   'runAssign', 'replan', 'computeStats',
   // weeks
   'widx', 'weekStart', 'weekEnd', 'weekLabel', 'weekDayRange', 'monthLabel', 'quarterOf', 'weeksOf',
+  'jobKey', 'jobsByEngineerWeek', 'depthOf',
   // wrapper
   'activeRows', 'normalizeProject', 'parsePhases', 'validateBook',
   'assertValidBook', 'plot', 'plotBatch', 'replanBook', 'stats', 'PHASES', 'LEVELS',

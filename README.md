@@ -129,6 +129,25 @@ specialist ranking and Atmos room requirements still apply. Re-plan follows the
 same preference, with avoiding overlaps and reserve use ahead of level preference,
 and level preference ahead of balancing total workload.
 
+### Phase dates (since 15 Oct 2026)
+
+Every project saved from the form states **when each phase runs**: a start and end date
+for Dub, Edit and Mix. Leave a phase blank if the project doesn't have it. Dates snap to
+their Monday–Sunday week. Dub and edit may overlap; the mix starts after both, and
+everything ends by the deadline. The planner never moves these dates — plotting and
+re-plan only choose **who**. Older projects saved before dates existed have none, and
+still plot backward from their deadline.
+
+The dates live in six columns at the end of the Projects tab (**Dub start** … **Mix
+end**). The app creates them on its first save to a sheet that lacks them.
+
+**One person recording and editing the same project in the same week is one job, not an
+overlap.** It gets no outline, no warning, and doesn't count in Analysis. Mixing beside
+either, or anything on another project, still counts. Keeping a project's dub and edit
+with the same person is **preferred, never required**: it ranks below every overlap and
+reserve rule, and above balancing total workload, so they are split only when keeping
+them together would cost an overlap or the reserve.
+
 ### Freezing a project
 
 The **Lock** button on each Projects row. A locked project is left completely alone

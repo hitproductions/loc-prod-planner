@@ -168,21 +168,17 @@ function freeCapacityByQuarter(series) {
 // Every (project, phase, engineer, week) where that engineer holds two bookings at
 // once — the real thing the FORCED note only claims to describe. One entry per
 // colliding booking per week, so the Analysis list names both sides of a clash.
+//
+// Depth counts JOBS (jobKey): one person recording and editing the same project in the
+// same week is one job, so that alone is never listed as a clash.
 function actualOverlaps_(bookingRows) {
-  var per = {};
-  (bookingRows || []).forEach(function (b) {
-    if (!b || !b.engineer || !b.start_date || !b.end_date) return;
-    weeksOf(b).forEach(function (w) {
-      var k = b.engineer + '|' + w;
-      (per[k] = per[k] || []).push(b);
-    });
-  });
+  var per = jobsByEngineerWeek(bookingRows);
   var out = [];
   Object.keys(per).forEach(function (k) {
-    if (per[k].length < 2) return;
-    var w = Number(k.split('|')[1]);
-    var depth = per[k].length;
-    per[k].forEach(function (b) {
+    var depth = depthOf(per[k]);
+    if (depth < 2) return;
+    var w = Number(k.slice(k.lastIndexOf('|') + 1));
+    per[k].rows.forEach(function (b) {
       out.push({ project: b.project, phase: b.phase, engineer: b.engineer,
                  start: weekStart(w), depth: depth });
     });

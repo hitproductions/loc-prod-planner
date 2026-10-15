@@ -167,13 +167,23 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
 
   for (const p of projects) {
     const title = p.project_title;
-    const d = num(p.dub_weeks), ed = num(p.edit_weeks), m = num(p.mix_weeks);
-    const dlW = widx(p.deadline);
-    const mixw = block(dlW - 1, m);
-    const editEnd = mixw.size ? Math.min(...mixw) - 1 : dlW - 1;
-    const editw = block(editEnd, ed);
-    const dubEnd = editw.size ? Math.min(...editw) - 1 : editEnd;
-    const dubw = block(dubEnd, d);
+    // Phase windows -- mirrors assign.js. Per-phase dates win when the project has
+    // them (Tara, 2026-10-15); an older row without dates plots backward as before.
+    const span = (a, z) => { const s = new Set();
+      if (a && z) for (let w = widx(a); w <= widx(z); w++) s.add(w); return s; };
+    let dubw, editw, mixw;
+    if (p.dub_from || p.edit_from || p.mix_from) {
+      dubw = span(p.dub_from, p.dub_to);
+      editw = span(p.edit_from, p.edit_to);
+      mixw = span(p.mix_from, p.mix_to);
+    } else {
+      const dlW = widx(p.deadline);
+      mixw = block(dlW - 1, num(p.mix_weeks));
+      const editEnd = mixw.size ? Math.min(...mixw) - 1 : dlW - 1;
+      editw = block(editEnd, num(p.edit_weeks));
+      const dubEnd = editw.size ? Math.min(...editw) - 1 : editEnd;
+      dubw = block(dubEnd, num(p.dub_weeks));
+    }
     const isMusic = yes(p.music_songs);
     const isSpecial = yes(p.special_project);
     const needAdv = String(p.mix_level_required).trim() !== 'Developing';
