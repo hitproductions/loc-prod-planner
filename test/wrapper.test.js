@@ -1344,5 +1344,38 @@ section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-1
      moved.rows[0].engineer === 'Ana', moved.rows[0].engineer);
 }
 
+// ---------------------------------------------------------------------------
+section('A divided dub comes in blocks, not week-by-week back and forth (Tara, 2026-10-15)');
+{
+  const R = (name, extra) => ({ name, can_record: 'Yes', can_edit: 'Yes', can_mix: 'No', mix_level: '',
+    music_specialist: 'No', overflow_only: 'No', does_specials: 'No', atmos: 'No', ...extra });
+  const bk = (project, engineer, s0, e0) => ({ project, phase: 'Dub', engineer, start_date: s0, end_date: e0, status: '', note: '' });
+  const proj = (title, extra) => A.normalizeProject({ project_title: title, client: 'X', deadline: '2026-12-20',
+    mix_level_required: 'Advanced', music_songs: 'No', special_project: 'No', atmos_required: 'No',
+    dub_from: '2026-11-02', dub_to: '2026-11-22', edit_from: '2026-11-23', edit_to: '2026-11-29', ...extra }).project;
+  const dubSeq = out => out.booking_rows.filter(b => b.phase === 'Dub')
+    .flatMap(b => { const o = []; for (let w = A.widx(b.start_date); w <= A.widx(b.end_date); w++) o.push([w, b.engineer]); return o; })
+    .sort((a, b) => a[0] - b[0]).map(x => x[1]);
+
+  // Ana is busy in the dub's middle week; Ben is busy in the edit week and heavily
+  // loaded elsewhere, so a lightest-person-each-week rule picks Ana, Ben, Ana.
+  const roster = [R('Ana'), R('Ben')];
+  const book = [bk('Other', 'Ana', '2026-11-09', '2026-11-15'), bk('Other2', 'Ben', '2026-11-23', '2026-11-29'),
+                bk('Heavy', 'Ben', '2027-01-04', '2027-02-28')];
+  const seq = dubSeq(A.runAssign(proj('Blocky'), book, roster));
+  const blocks = seq.filter((n, i) => i === 0 || n !== seq[i - 1]);
+  ok('the dub is still covered every week', seq.length === 3, seq.join(', '));
+  ok('nobody hands the dub back to someone who already had it', blocks.length === new Set(blocks).size, seq.join(', '));
+  ok('so there is at most one hand-over', blocks.length <= 2, seq.join(', '));
+
+  // Music rank still beats keeping the dub: the second choice gives it back as soon as
+  // the first choice is free.
+  const mroster = [R('Daryl', { music_specialist: '1' }), R('Josiah', { music_specialist: '2' })];
+  const mbook = [bk('Other', 'Daryl', '2026-11-02', '2026-11-08'), bk('Other2', 'Josiah', '2026-11-23', '2026-11-29')];
+  const mseq = dubSeq(A.runAssign(proj('Songs', { music_songs: 'Yes' }), mbook, mroster));
+  ok('a music dub returns to the first-choice specialist once they are free',
+     mseq.join(',') === 'Josiah,Daryl,Daryl', mseq.join(', '));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

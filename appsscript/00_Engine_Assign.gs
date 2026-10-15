@@ -155,7 +155,17 @@ function runAssign(proj, bookingRows, engineerRows) {
     const projected = n => eng[n].load + (dubBy[n] ? dubBy[n].size : 0) +
       (n === editWho ? editWks.size : 0);
 
-    for (const w of [...dubWks].sort((a, b) => a - b)) {
+    // Weeks are dealt in BLOCKS, not re-decided one at a time (Tara, 2026-10-15). Picking
+    // the lightest free person every week handed out Kyle, Jek, Kyle -- each a broken run
+    // nobody can plan around. Now whoever has the dub keeps it while they are free, and a
+    // hand-over goes to whoever can carry it furthest without another break. The edit
+    // holder is preferred, since one person on a title's dub and edit is preferred too.
+    const order = [...dubWks].sort((a, b) => a - b);
+    const runFrom = (n, i) => { let k = 0;
+      while (i + k < order.length && !eng[n].busy.has(order[i + k])) k++; return k; };
+    let prev = null;
+    for (let i = 0; i < order.length; i++) {
+      const w = order[i];
       let able = pool.filter(n => !eng[n].busy.has(w));
       if (!able.length) return null;
       // once the cap is reached, only people already on this project may continue
@@ -164,10 +174,18 @@ function runAssign(proj, bookingRows, engineerRows) {
         able = able.filter(n => inUse.indexOf(n) !== -1);
         if (!able.length) return null;
       }
-      const who = able.slice().sort((a, b) =>
-        (rankOf(a) - rankOf(b)) || (projected(a) - projected(b)) || a.localeCompare(b))[0];
+      // Music rank still comes first: a second-choice specialist who started the dub
+      // hands it back as soon as the first choice is free (Daryl 1, Josiah 2).
+      const bestRank = Math.min(...able.map(rankOf));
+      const who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank) ? prev
+        : able.slice().sort((a, b) =>
+            (rankOf(a) - rankOf(b)) ||
+            ((b === editWho) - (a === editWho)) ||
+            (runFrom(b, i) - runFrom(a, i)) ||
+            (projected(a) - projected(b)) || a.localeCompare(b))[0];
       if (!dubBy[who]) dubBy[who] = new Set();
       dubBy[who].add(w);
+      prev = who;
     }
     return { editWho, editBy, dubBy };
   };
