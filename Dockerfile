@@ -12,9 +12,14 @@ COPY --chown=node:node . /app
 USER node
 
 # The editing instance. Override PORT/PLANNER_READONLY per service (see compose).
+# TZ: "today", this week's row, history timestamps and the Plotted date all read the
+# server's local clock. Cloud Run runs in UTC, so before 8am Manila the planner thought
+# it was still yesterday and History was eight hours behind (found 2026-10-15). Node
+# resolves the zone from its bundled ICU, so alpine needs no tzdata for this.
 ENV PORT=8127 \
     PLANNER_SOURCE=sheets \
-    NODE_ENV=production
+    NODE_ENV=production \
+    TZ=Asia/Manila
 EXPOSE 8127
 
 # The app answers /api/health with the store's state, which is a real readiness signal:

@@ -197,7 +197,7 @@ async function previewReplan(book, p) {
   // anyone else looking at it while this one is thinking.
   const rows = actions.live(book);
   const raw = await solveReplan(book, p.today || TODAY());
-  const r = actions.shapeReplan(book, rows, raw);
+  const r = actions.shapeReplan(book, rows, raw, p.today || TODAY());
   if (r.change) {
     STASH = { version: store.version(), change: r.change, at: Date.now() };
     r.token = String(STASH.version);

@@ -1415,6 +1415,52 @@ section('The Re-plan button never plans a closed project (found 2026-10-15)');
   ok('and the open projects are still planned', (raw.proposed_rows || []).length > 0);
 }
 
+
+section('The re-plan preview describes what Apply writes (found 2026-10-15)');
+{
+  // The swap and divide passes rework the engine's first draft. The preview used to list
+  // the draft, so Apply could write a different arrangement from the one shown.
+  const book = await freshBook();
+  const rows = actions.live(book);
+  const today = '2026-07-01';
+  const raw = A.replanBook(actions.forReplan(book.projects), rows, book.engineers, today);
+  ok('precondition: on this book the later passes do rework the draft',
+     (raw.swaps || 0) + (raw.dubs_divided || 0) > 0, `swaps ${raw.swaps}, divided ${raw.dubs_divided}`);
+  const shown = actions.shapeReplan(book, rows, raw, today);
+  const after = actions.live(apply(book, shown.change));
+  const who = list => { const m = {};
+    list.forEach(b => (b.phase === 'Dub+Edit' ? ['Dub', 'Edit'] : [b.phase]).forEach(ph => {
+      const k = b.project + '||' + ph; (m[k] = m[k] || new Set()).add(b.engineer); }));
+    return m; };
+  const was = who(rows), now = who(after);
+  const names = set => [...(set || [])].sort().join(' + ') || '(none)';
+  const real = Object.keys({ ...was, ...now }).filter(k => names(was[k]) !== names(now[k]));
+  const listed = new Set(shown.changes.map(c => c.project + '||' + c.phase));
+  ok('every assignment Apply changes is in the preview list',
+     real.every(k => listed.has(k)), real.filter(k => !listed.has(k)).join(', '));
+  ok('and the list names nothing Apply leaves alone',
+     shown.changes.every(c => real.includes(c.project + '||' + c.phase)),
+     shown.changes.filter(c => !real.includes(c.project + '||' + c.phase)).map(c => c.project + ' ' + c.phase).join(', '));
+  ok('and each change says who it ends with',
+     shown.changes.every(c => c.to === names(now[c.project + '||' + c.phase])),
+     JSON.stringify(shown.changes.find(c => c.to !== names(now[c.project + '||' + c.phase]))));
+  ok('the count matches the list', shown.change_count === shown.changes.length);
+
+  // The overlap table: filled from the rows, so it reports what the plan clears.
+  const fromW = A.widx(today);
+  const overlapsNow = Object.entries(api.depths(rows).per).filter(([k, n]) => n > 1 && +k.split('|').pop() >= fromW).length;
+  ok('the summary lists the overlaps that exist now and are cleared or kept',
+     shown.overlaps_resolved.length + shown.overlaps_after.filter(o => !o.isNew).length === overlapsNow,
+     `resolved ${shown.overlaps_resolved.length}, kept ${shown.overlaps_after.filter(o => !o.isNew).length}, now ${overlapsNow}`);
+  const overlapsAfter = Object.entries(api.depths(after).per).filter(([k, n]) => n > 1 && +k.split('|').pop() >= fromW).length;
+  ok('and every overlap left after Apply', shown.overlaps_after.length === overlapsAfter,
+     `${shown.overlaps_after.length} listed, ${overlapsAfter} after`);
+
+  const noDates = actions.saveProject(book, { title: 'Dateless', client: 'X', deadline: '2026-12-20', mix_level: 'Advanced' });
+  ok('a save with no dates gives one clear message, not two',
+     noDates.errors.length === 1 && /start and end date/.test(noDates.errors[0]), JSON.stringify(noDates.errors));
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud

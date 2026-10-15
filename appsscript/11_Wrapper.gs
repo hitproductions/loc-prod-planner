@@ -820,6 +820,22 @@ function replanOnce(projectRows, bookingRows, engineerRows, todayISO, keepOrder)
   const supersededSet = {};
   rows_to_supersede.forEach(n => { supersededSet[n] = true; });
   const survives = active.filter(b => !supersededSet[b.row_number]);
+
+  // WHO MOVES, measured on the book an apply actually produces. The engine's own
+  // `changes` is its first draft: the swap and divide passes above can rework it, and
+  // the preview listed the draft while Apply wrote the reworked rows -- a dub shown
+  // going to one person arrived split between two others (found 2026-10-15).
+  const holders = list => { const m = {};
+    for (const b of list) for (const ph of (b.phase === 'Dub+Edit' ? ['Dub', 'Edit'] : [b.phase])) {
+      const k = b.project + '||' + ph; (m[k] = m[k] || {})[b.engineer] = true; }
+    return m; };
+  const was = holders(active), will = holders(survives.concat(rows_to_append));
+  const names = o => Object.keys(o || {}).sort().join(' + ') || '(none)';
+  const changes = [];
+  Object.keys(Object.assign({}, was, will)).sort().forEach(k => {
+    const from = names(was[k]), to = names(will[k]);
+    if (from !== to) { const cut = k.indexOf('||'); changes.push({ project: k.slice(0, cut), phase: k.slice(cut + 2), from, to }); }
+  });
   const forced_after_rows = survives.filter(isForced).length + forced_new_rows;
   const forced_kept_rows = survives.filter(isForced).length - forced_locked_rows;
 
@@ -837,6 +853,7 @@ function replanOnce(projectRows, bookingRows, engineerRows, todayISO, keepOrder)
 
   return {
     ...r,
+    changes, change_count: changes.length,
     rows_to_append,
     rows_to_supersede,
     duplicates_suppressed: dropped.length,
