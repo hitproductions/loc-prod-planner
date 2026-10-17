@@ -1461,6 +1461,83 @@ section('The re-plan preview describes what Apply writes (found 2026-10-15)');
      noDates.errors.length === 1 && /start and end date/.test(noDates.errors[0]), JSON.stringify(noDates.errors));
 }
 
+
+section('Review fixes, 2026-10-17: completed projects, History, old rows, dates');
+{
+  const { solveReplan } = require('../webapp/solver.js');
+  const book = await freshBook();
+  const eng = book.engineers;
+
+  // --- a COMPLETED project's future weeks must survive a re-plan, by either path
+  const open = book.projects.find(p => !p.status);
+  const done = { ...book, projects: book.projects.map(p => p === open ? { ...p, status: 'Complete' } : p) };
+  const mine = A.activeRows(done.bookings).filter(b => b.project === open.project_title);
+  const today = '2026-07-01';
+  ok('precondition: the project has live weeks still ahead of today',
+     mine.some(b => A.widx(b.start_date) > A.widx(today)), mine.length + ' rows');
+  // What the button hands the planner. Judged on the INPUT because re-plan declines to
+  // change anything it cannot improve, so its output looks right either way.
+  const { inputFor } = require('../webapp/solver.js');
+  const handed = inputFor(done, today, 5);
+  const handedOpen = handed.projects.find(p => p.project_title === open.project_title);
+  ok('the button hands a completed project over frozen, not dropped', !!handedOpen && handedOpen.locked === true,
+     JSON.stringify(handedOpen && { locked: handedOpen.locked, status: handedOpen.status }));
+  const viaWorker = await solveReplan(done, today, { restarts: 5 });
+  const touchedWorker = (viaWorker.rows_to_supersede || []).filter(n => mine.some(b => b.row_number === n))
+    .concat((viaWorker.rows_to_append || []).filter(b => b.project === open.project_title));
+  ok('the Re-plan button leaves a completed project’s rows alone', touchedWorker.length === 0,
+     touchedWorker.length + ' touched');
+  const viaPreview = actions.replanPreview(done, today);
+  ok('and so does the preview', !(viaPreview.changes || []).some(c => c.project === open.project_title),
+     JSON.stringify((viaPreview.changes || []).filter(c => c.project === open.project_title)));
+  ok('while its engineers stay booked for those weeks, so nothing is planned on top',
+     actions.forReplan(done.projects, A.activeRows(done.bookings)).find(p => p.project_title === open.project_title).locked === true);
+  const cancelled = { ...book, projects: book.projects.map(p => p === open ? { ...p, status: 'Cancelled' } : p),
+    bookings: book.bookings.map(b => b.project === open.project_title ? { ...b, status: 'superseded' } : b) };
+  const rc = await solveReplan(cancelled, today, { restarts: 5 });
+  ok('a cancelled project (no rows left) is still not planned',
+     !(rc.rows_to_append || []).some(b => b.project === open.project_title));
+  ok('and the button does not hand it over at all',
+     !inputFor(cancelled, today, 5).projects.some(p => p.project_title === open.project_title));
+
+  // --- History counts jobs
+  const history = require('../webapp/history.js');
+  const r2 = (n, project, phase, engineer) => ({ row_number: n, project, phase, engineer, start_date: '2026-11-16', end_date: '2026-11-22', source: 'plot', note: '', status: '' });
+  const rowsH = [r2(2, 'P', 'Dub', eng[0].name), r2(3, 'P', 'Edit', eng[0].name), r2(4, 'Q', 'Dub', eng[1].name)];
+  const evs = [{ id: 1, action: 'save-project', summary: 'x', superseded: '', appended: '2,3,4' }];
+  const d = history.diffEvent(rowsH, evs, 0);
+  ok('History does not count a dub beside its own edit as an overlap', d.overlaps.after === 0, JSON.stringify(d.overlaps));
+  const rowsH2 = rowsH.concat(r2(5, 'Z', 'Dub', eng[0].name));
+  const d2 = history.diffEvent(rowsH2, [{ ...evs[0], appended: '2,3,4,5' }], 0);
+  ok('but another project in that week still is', d2.overlaps.after === 1, JSON.stringify(d2.overlaps));
+
+  // --- an old combined Dub+Edit row opens with its phases split, not both stretched
+  const legacy = (dub, edit) => ({ projects: [{ project_title: 'Leg', client: 'X', deadline: '2026-12-20', dub_weeks: dub, edit_weeks: edit, mix_weeks: 0 }],
+    engineers: eng, bookings: [{ row_number: 2, project: 'Leg', phase: 'Dub+Edit', engineer: eng[0].name,
+      start_date: '2026-11-02', end_date: '2026-11-22', source: 'plot', note: '', status: '' }] });
+  const ld = api.bootstrap(legacy(2, 1)).projects[0].dates;
+  ok('the dub takes its own weeks first', ld.dub.from === '2026-11-02' && ld.dub.to === '2026-11-15', JSON.stringify(ld.dub));
+  ok('and the edit takes the rest, so a plain re-save changes nothing', ld.edit.from === '2026-11-16' && ld.edit.to === '2026-11-22', JSON.stringify(ld.edit));
+  const lb = api.bootstrap(legacy(1, 1)).projects[0].dates;
+  ok('if the week counts do not add up it leaves the boxes empty rather than guess', lb.dub.from === '' && lb.edit.from === '', JSON.stringify(lb));
+
+  // --- a text date in the sheet keeps its day on a server east of UTC
+  const sheetsMod = require('../webapp/sources/sheets.js');
+  const oldTZ = process.env.TZ;
+  process.env.TZ = 'Asia/Manila';
+  const manila = [sheetsMod.isoFrom('10/26/2026'), sheetsMod.isoFrom('2026-10-26'), sheetsMod.isoFrom(46321)];
+  process.env.TZ = oldTZ === undefined ? '' : oldTZ; if (oldTZ === undefined) delete process.env.TZ;
+  ok('a text date read on Manila time keeps its day', manila[0] === '2026-10-26', manila[0]);
+  ok('an ISO date is untouched', manila[1] === '2026-10-26');
+
+  // --- the preview names projects it left alone
+  const odd = { ...book, projects: book.projects.map(p => p === open ? { ...p, dub_from: '2026-11-02' } : p) };
+  const prev = actions.replanPreview(odd, today);
+  ok('a project whose dates do not check out is reported on the preview',
+     (prev.skipped || []).some(x => x.project === open.project_title), JSON.stringify(prev.skipped));
+  ok('and its rows are not touched', !(prev.changes || []).some(c => c.project === open.project_title));
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud

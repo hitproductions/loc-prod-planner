@@ -1377,5 +1377,65 @@ section('A divided dub comes in blocks, not week-by-week back and forth (Tara, 2
      mseq.join(',') === 'Josiah,Daryl,Daryl', mseq.join(', '));
 }
 
+// ---------------------------------------------------------------------------
+section('Review fixes, 2026-10-17: stray dates, date limits, dub dealing that cannot fail');
+{
+  const R = (name, extra) => ({ name, can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced',
+    music_specialist: 'No', overflow_only: 'No', does_specials: 'No', atmos: 'No', ...extra });
+  const roster = [R('Ana'), R('Ben')];
+  const row = (n, project, phase, engineer, s0, e0) =>
+    ({ row_number: n, project, phase, engineer, start_date: s0, end_date: e0, source: 'plot', note: '', status: '' });
+  const proj = (t, extra) => ({ project_title: t, client: 'X', deadline: '2026-12-20', mix_level_required: 'Advanced',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No', dub_weeks: 1, edit_weeks: 1, mix_weeks: 1, ...extra });
+  const book = [row(2, 'Old', 'Dub', 'Ana', '2026-11-02', '2026-11-08'), row(3, 'Old', 'Edit', 'Ana', '2026-11-09', '2026-11-15'),
+                row(4, 'Old', 'Mix', 'Ben', '2026-11-16', '2026-11-22')];
+
+  // --- a lone date typed into the sheet must not make re-plan erase the project
+  const stray = A.replanBook([proj('Old', { mix_from: '2026-11-16' })], book, roster, '2026-10-12');
+  ok('a project with only one date typed keeps all its bookings through a re-plan',
+     stray.rows_to_supersede.length === 0 && stray.rows_to_append.length === 0,
+     `${stray.rows_to_supersede.length} superseded, ${stray.rows_to_append.length} appended`);
+  ok('and re-plan says it was left alone, and why',
+     (stray.skipped || []).length === 1 && stray.skipped[0].project === 'Old' && stray.skipped[0].errors.length > 0,
+     JSON.stringify(stray.skipped));
+  const text = A.replanBook([proj('Old', { dub_from: 'TBC', dub_to: 'TBC' })], book, roster, '2026-10-12');
+  ok('text in a date cell is handled the same way', text.rows_to_supersede.length === 0 && (text.skipped || []).length === 1,
+     JSON.stringify(text.skipped));
+  const ghost = A.replanBook([proj('No Rows', { dub_from: '2026-11-02' })], book, roster, '2026-10-12');
+  ok('a bad-dated project with no rows is not planned from guesses',
+     ghost.rows_to_append.every(b => b.project !== 'No Rows'), JSON.stringify(ghost.rows_to_append.map(b => b.project)));
+  const good = A.replanBook([proj('Old', { dub_from: '2026-11-02', dub_to: '2026-11-08', edit_from: '2026-11-09', edit_to: '2026-11-15',
+    mix_from: '2026-11-16', mix_to: '2026-11-22' })], book, roster, '2026-10-12');
+  ok('a properly dated project is still planned normally', (good.skipped || []).length === 0);
+
+  // --- date limits and real calendar days
+  const base = { project_title: 'D', client: 'X', deadline: '2026-12-20', mix_level_required: 'Advanced',
+    dub_from: '2026-11-02', dub_to: '2026-11-22' };
+  const errs = (patch, today) => A.normalizeProject({ ...base, ...patch }, today).errors.join(' | ');
+  ok('a year-0001 date is refused when the clock is given', /three years/.test(errs({ dub_from: '0001-01-01' }, '2026-10-17')),
+     errs({ dub_from: '0001-01-01' }, '2026-10-17'));
+  ok('so is one far in the future', /three years/.test(errs({ dub_to: '2099-01-01' }, '2026-10-17')));
+  ok('a date within three years is fine', errs({ dub_to: '2026-11-29' }, '2026-10-17') === '');
+  ok('without a clock nothing is limited (the sheet code and engine tests pass none)',
+     !/three years/.test(errs({ dub_from: '2010-01-04', dub_to: '2010-01-10' })));
+  ok('2026-02-30 is not a date and is refused, not rolled into March', /real dates/.test(errs({ dub_to: '2026-02-30' })),
+     errs({ dub_to: '2026-02-30' }));
+  ok('a normal leap day is accepted', errs({ dub_from: '2028-02-28', dub_to: '2028-02-29', deadline: '2028-03-20' }) === '');
+
+  // --- the dub dealing never forces what the old week-by-week deal could cover
+  const R2 = n => ({ name: n, can_record: 'Yes', can_edit: 'Yes', can_mix: 'No', mix_level: '', music_specialist: 'No',
+    overflow_only: 'No', does_specials: 'No', atmos: 'No' });
+  const wk = i => new Date(Date.UTC(2026, 10, 2) + i * 7 * 86400000).toISOString().slice(0, 10);
+  const we = i => new Date(Date.UTC(2026, 10, 2) + (i * 7 + 6) * 86400000).toISOString().slice(0, 10);
+  const busy = (who, weeks) => weeks.map(w => ({ project: 'x' + who + w, phase: 'Dub', engineer: who, start_date: wk(w), end_date: we(w), status: '', note: '' }));
+  // dub weeks 0-3, edit week 4. E is the only one free to edit, and free in week 0; A busy 2-4; B busy 0,1,4.
+  const tough = [].concat(busy('A', [2, 3, 4]), busy('B', [0, 1, 4]), busy('E', [1, 2, 3]));
+  const tp = A.normalizeProject({ project_title: 'T', client: 'X', deadline: '2027-01-31', mix_level_required: 'Advanced',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No', dub_from: wk(0), dub_to: we(3), edit_from: wk(4), edit_to: we(4) }).project;
+  const tout = A.runAssign({ ...tp, divide_dub: true }, tough, ['A', 'B', 'E'].map(R2));
+  ok('preferring the editor must not cost the dub its cover (the reviewer’s case)', !tout.forced,
+     tout.booking_rows.map(b => b.phase[0] + ':' + b.engineer).join(' ') + ' ' + tout.record_note);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

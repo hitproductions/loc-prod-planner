@@ -150,43 +150,61 @@ function runAssign(proj, bookingRows, engineerRows) {
     // is a separate assignment and is deliberately NOT counted: including them
     // meant a cap of 2 left room for only one dubber, which silently prevented
     // the dub division this function exists to do.
-    const dubBy = {};
-    const used = () => Object.keys(dubBy).filter(n => dubBy[n].size);
-    const projected = n => eng[n].load + (dubBy[n] ? dubBy[n].size : 0) +
-      (n === editWho ? editWks.size : 0);
-
-    // Weeks are dealt in BLOCKS, not re-decided one at a time (Tara, 2026-10-15). Picking
-    // the lightest free person every week handed out Kyle, Jek, Kyle -- each a broken run
-    // nobody can plan around. Now whoever has the dub keeps it while they are free, and a
-    // hand-over goes to whoever can carry it furthest without another break. The edit
-    // holder is preferred, since one person on a title's dub and edit is preferred too.
     const order = [...dubWks].sort((a, b) => a - b);
     const runFrom = (n, i) => { let k = 0;
       while (i + k < order.length && !eng[n].busy.has(order[i + k])) k++; return k; };
-    let prev = null;
-    for (let i = 0; i < order.length; i++) {
-      const w = order[i];
-      let able = pool.filter(n => !eng[n].busy.has(w));
-      if (!able.length) return null;
-      // once the cap is reached, only people already on this project may continue
-      if (used().length >= cap) {
-        const inUse = used();
-        able = able.filter(n => inUse.indexOf(n) !== -1);
+
+    // Deals the dub once. `blocks` is the preferred way (Tara, 2026-10-15): weeks go out
+    // in BLOCKS, not re-decided one at a time. Picking the lightest free person every
+    // week handed out Kyle, Jek, Kyle -- each a broken run nobody can plan around -- so
+    // whoever has the dub keeps it while free, and a hand-over goes to whoever can carry
+    // it furthest, then to the edit holder (one person on a title's dub and edit is
+    // preferred too). The edit holder is only a tie-break behind run length: ranked
+    // first, it spent the cap on a one-week run and left a later week uncoverable.
+    //
+    // With blocks off it is the original week-by-week deal. It is the FALLBACK: block
+    // dealing is greedy, so there are books it cannot cover that the old deal could,
+    // and a better-looking plan must never turn into a forced overlap (review, 2026-10-17).
+    const deal = blocks => {
+      const dubBy = {};
+      const used = () => Object.keys(dubBy).filter(n => dubBy[n].size);
+      const projected = n => eng[n].load + (dubBy[n] ? dubBy[n].size : 0) +
+        (n === editWho ? editWks.size : 0);
+      let prev = null;
+      for (let i = 0; i < order.length; i++) {
+        const w = order[i];
+        let able = pool.filter(n => !eng[n].busy.has(w));
         if (!able.length) return null;
+        // once the cap is reached, only people already on this project may continue
+        if (used().length >= cap) {
+          const inUse = used();
+          able = able.filter(n => inUse.indexOf(n) !== -1);
+          if (!able.length) return null;
+        }
+        let who;
+        if (blocks) {
+          // Music rank still comes first: a second-choice specialist who started the
+          // dub hands it back as soon as the first choice is free (Daryl 1, Josiah 2).
+          const bestRank = Math.min(...able.map(rankOf));
+          who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank) ? prev
+            : able.slice().sort((a, b) =>
+                (rankOf(a) - rankOf(b)) ||
+                (runFrom(b, i) - runFrom(a, i)) ||
+                ((b === editWho) - (a === editWho)) ||
+                (projected(a) - projected(b)) || a.localeCompare(b))[0];
+        } else {
+          who = able.slice().sort((a, b) =>
+            (rankOf(a) - rankOf(b)) || (projected(a) - projected(b)) || a.localeCompare(b))[0];
+        }
+        if (!dubBy[who]) dubBy[who] = new Set();
+        dubBy[who].add(w);
+        prev = who;
       }
-      // Music rank still comes first: a second-choice specialist who started the dub
-      // hands it back as soon as the first choice is free (Daryl 1, Josiah 2).
-      const bestRank = Math.min(...able.map(rankOf));
-      const who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank) ? prev
-        : able.slice().sort((a, b) =>
-            (rankOf(a) - rankOf(b)) ||
-            ((b === editWho) - (a === editWho)) ||
-            (runFrom(b, i) - runFrom(a, i)) ||
-            (projected(a) - projected(b)) || a.localeCompare(b))[0];
-      if (!dubBy[who]) dubBy[who] = new Set();
-      dubBy[who].add(w);
-      prev = who;
-    }
+      return dubBy;
+    };
+
+    const dubBy = deal(true) || deal(false);
+    if (!dubBy) return null;
     return { editWho, editBy, dubBy };
   };
 

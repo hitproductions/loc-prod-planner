@@ -66,8 +66,25 @@ function phaseDates(p, rows) {
       out[k] = { from: p[k + '_from'] || '', to: p[k + '_to'] || '' };
       return;
     }
-    const mine = rows.filter(b => b.project === p.project_title &&
-      (b.phase === ph || (b.phase === 'Dub+Edit' && ph !== 'Mix')));
+    const mine = rows.filter(b => b.project === p.project_title && b.phase === ph);
+    // An older combined Dub+Edit row covers BOTH phases in one range. Filling both boxes
+    // with that whole range made a plain re-save stretch each phase across the other's
+    // weeks (found by review, 2026-10-17), so split it by the project's own week counts,
+    // dub first. If those do not add up to the range, leave the boxes for a person to fill.
+    if (!mine.length && ph !== 'Mix') {
+      const combo = rows.filter(b => b.project === p.project_title && b.phase === 'Dub+Edit');
+      if (combo.length) {
+        const first = A.widx(combo.map(b => b.start_date).sort()[0]);
+        const last = A.widx(combo.map(b => b.end_date).sort().pop());
+        const d = Number(p.dub_weeks) || 0, e = Number(p.edit_weeks) || 0;
+        if (d + e === last - first + 1) {
+          out[k] = ph === 'Dub'
+            ? (d ? { from: A.weekStart(first), to: A.weekEnd(first + d - 1) } : { from: '', to: '' })
+            : (e ? { from: A.weekStart(first + d), to: A.weekEnd(last) } : { from: '', to: '' });
+          return;
+        }
+      }
+    }
     out[k] = mine.length
       ? { from: mine.map(b => b.start_date).sort()[0], to: mine.map(b => b.end_date).sort().pop() }
       : { from: '', to: '' };

@@ -35,7 +35,12 @@ function isoFrom(v) {
   const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   const d = new Date(s);
-  return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
+  if (isNaN(d.getTime())) return s;
+  // Local calendar day, not UTC: a text date like "10/26/2026" parses as local midnight,
+  // and toISOString() on that is the PREVIOUS day anywhere east of UTC -- Manila, now that
+  // the server runs on Manila time. A Monday start then snapped to the week before.
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 }
 
 const norm = h => String(h == null ? '' : h).trim().toLowerCase();
