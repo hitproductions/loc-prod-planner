@@ -1,9 +1,12 @@
-# IT handoff: update the local planner (15 Oct 2026)
+# IT handoff: update the local planner (17 Oct 2026)
 
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
-Update the server copy to the latest **`main`** (code from pull request #2, merge `57153f1`; this note was added after it). It is
-already tested and running on the Cloud Run copy.
+Update the server copy to **`main` at `ebd72aa` or later** (merge of pull request #3, which
+includes #2). Both are tested and already running on the Cloud Run copy.
+
+**Take #3, not just #2.** #2 alone has bugs that can erase a completed project's
+bookings on a re-plan. `git log --oneline -1` should show `ebd72aa` or something newer.
 
 ## What to do
 
@@ -23,6 +26,10 @@ already tested and running on the Cloud Run copy.
 3. **Time zone.** The Dockerfile now sets `TZ=Asia/Manila`. If the server runs Node
    outside Docker, add `TZ=Asia/Manila` to its environment. Without it, "today", the
    current-week row and History timestamps follow the server clock.
+
+4. **Update every running copy together** (editing and read-only, and the Cloud Run
+   copy if it is still pointed at the same sheet). An old-version copy that saves a
+   dated project leaves the dates stale.
 
 Nothing else changes: no new settings, no new credentials, same sheet, same
 sign-in, same ports and paths.
