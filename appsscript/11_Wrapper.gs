@@ -50,7 +50,19 @@ function intOrNull(v) {
 
 // Returns { project, errors[] }. Errors are strings destined for the row's
 // error cell — never a popup (HANDOFF §7).
-function normalizeProject(raw) {
+// A date a person typed must be a REAL calendar day. Date.parse is forgiving: it reads
+// 2026-02-30 as 2 March, so a mistyped day quietly moved a phase instead of being refused.
+function realDay_(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
+
+// todayISO is optional. Given one (the web app does), phase dates more than three years
+// either side of it are refused: the grid is as wide as the data, so a typo like year
+// 0001 made it about 105,000 weeks wide and effectively stopped the app for everyone.
+// Callers that pass none (the engine tests, the sheet's own code) are not limited.
+function normalizeProject(raw, todayISO) {
   const errors = [];
   const p = { ...raw };
 
@@ -74,7 +86,8 @@ function normalizeProject(raw) {
   let phasesParsed = false;
   const PHASE_KEYS = [['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']];
   const txt = v => String(v == null ? '' : v).trim().slice(0, 10);
-  const isDay = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+  const isDay = s => realDay_(s);
+  const nearToday = s => !todayISO || Math.abs(widx(s) - widx(todayISO)) <= 156;
   const dated = PHASE_KEYS.some(([k]) => txt(p[k + '_from']) || txt(p[k + '_to']));
   if (dated) {
     const wk = {};
@@ -83,7 +96,10 @@ function normalizeProject(raw) {
       const a = txt(p[k + '_from']), z = txt(p[k + '_to']);
       if (!a && !z) { p[k + '_from'] = ''; p[k + '_to'] = ''; p[k + '_weeks'] = 0; continue; }
       if (!isDay(a) || !isDay(z)) {
-        errors.push(`${label} needs both a start and an end date.`); datesOk = false; continue;
+        errors.push(`${label} needs both a start and an end date, as real dates.`); datesOk = false; continue;
+      }
+      if (!nearToday(a) || !nearToday(z)) {
+        errors.push(`${label} dates are more than three years from today -- check the year.`); datesOk = false; continue;
       }
       const s0 = widx(a), e0 = widx(z);
       if (s0 > e0) { errors.push(`${label} starts after it ends.`); datesOk = false; continue; }
@@ -679,6 +695,39 @@ function divideDubsIfBetter_(rows, fixedBook, engineerRows, projectRows, objecti
   return { rows: best, divided };
 }
 
+// Projects read from the sheet are not trusted to have sensible phase dates: anyone can
+// type into a cell. A project with ANY date typed gets the same checks as the form
+// (normalizeProject), and the planner works from the snapped, derived values.
+//
+// One that fails is never planned from guesses. Re-plan reads a half-filled set of dates
+// as a project with no weeks, so a lone Mix start typed into an older row made it
+// supersede all three of its bookings and add nothing back (found by review,
+// 2026-10-17). It is left exactly as it is instead -- frozen if it has rows, ignored if
+// it has none -- and reported, so someone can fix the cells.
+function prepProjectsForReplan_(projects, active) {
+  const held = {};
+  (active || []).forEach(b => { held[b.project] = true; });
+  const out = [], skipped = [];
+  (projects || []).forEach(p => {
+    const dated = ['dub', 'edit', 'mix'].some(k =>
+      String(p[k + '_from'] == null ? '' : p[k + '_from']).trim() ||
+      String(p[k + '_to'] == null ? '' : p[k + '_to']).trim());
+    if (!dated) { out.push(p); return; }
+    const n = normalizeProject(p);
+    if (!n.errors.length) {
+      const q = n.project, d = {};
+      ['dub', 'edit', 'mix'].forEach(k => {
+        d[k + '_from'] = q[k + '_from']; d[k + '_to'] = q[k + '_to']; d[k + '_weeks'] = q[k + '_weeks'];
+      });
+      out.push({ ...p, ...d });
+      return;
+    }
+    skipped.push({ project: p.project_title, errors: n.errors });
+    if (held[p.project_title]) out.push({ ...p, locked: true });
+  });
+  return { projects: out, skipped };
+}
+
 // Batch entry (HANDOFF §7, acceptance criterion 10). Projects are assigned in
 // whichever order solves best; the phase windows themselves always come from
 // each project's own deadline, so no date depends on the ordering.
@@ -890,8 +939,9 @@ function replanBook(projectRows, bookingRows, engineerRows, todayISO, opts) {
   const seed = o.seed !== undefined ? o.seed
     : ((typeof SOLVE_SEED === 'number') ? SOLVE_SEED : 1);
 
-  const usable = (projectRows || []).filter(p => p && p.project_title && p.deadline);
   const active = activeRows(bookingRows);
+  const prep = prepProjectsForReplan_((projectRows || []).filter(p => p && p.project_title && p.deadline), active);
+  const usable = prep.projects;
 
   // What the live book looks like after applying a given result.
   const resultingBook = res => {
@@ -942,13 +992,13 @@ function replanBook(projectRows, bookingRows, engineerRows, todayISO, opts) {
     return Object.assign({}, best, {
       rows_to_supersede: [], rows_to_append: [], changes: [], change_count: 0,
       forced_after_rows: forcedRowsIn_(active), forced_new_rows: 0,
-      no_improvement: true,
+      no_improvement: true, skipped: prep.skipped,
       solve: { candidates_tried: tried, improved: false, score: currentScore, baseline },
     });
   }
 
   return Object.assign({}, best, {
-    no_improvement: false,
+    no_improvement: false, skipped: prep.skipped,
     solve: {
       candidates_tried: tried,
       improved: planIsBetter(bestScore, baseline, objective),

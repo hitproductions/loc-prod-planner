@@ -803,6 +803,14 @@ function replanBody(r) {
       : ' Overlaps are unchanged.') +
     '</div>';
 
+  // Projects whose typed dates do not check out are left exactly as they are. Said
+  // here, because the alternative is a project that quietly never moves.
+  if ((r.skipped || []).length) {
+    h += '<div class="msg">' + r.skipped.length + ' project' + (r.skipped.length === 1 ? ' was' : 's were') +
+      ' left alone because the dates on its row do not check out: ' +
+      r.skipped.map(x => '<b>' + esc(x.project) + '</b> (' + esc(x.errors.join(' ')) + ')').join('; ') + '</div>';
+  }
+
   if (after.length || resolved.length) {
     h += '<h3 style="margin-top:22px;font-size:13px;text-transform:uppercase;' +
       'letter-spacing:.07em">Who would be holding more than one, week by week</h3>' +

@@ -148,6 +148,11 @@ with the same person is **preferred, never required**: it ranks below every over
 reserve rule, and above balancing total workload, so they are split only when keeping
 them together would cost an overlap or the reserve.
 
+Dates are checked when typed into the form **and** when read from the sheet. A project
+whose dates don't check out (a lone start date, text in a date cell, a day that doesn't
+exist) is **left exactly as it is** by a re-plan and listed on the preview, rather than
+planned from guesses. Dates more than three years from today are refused on the form.
+
 ### Freezing a project
 
 The **Lock** button on each Projects row. A locked project is left completely alone

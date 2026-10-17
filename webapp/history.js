@@ -50,11 +50,12 @@ function diffEvent(bookings, events, index) {
   });
   Object.keys(beforeBy).forEach(k => { if (!afterBy[k]) removed.push(beforeBy[k]); });
 
+  // Engineer-weeks holding two or more JOBS. A project's dub beside its own edit is one
+  // job (A.jobKey), so it is no overlap here either -- this counter was left counting
+  // rows after the rest of the app moved to jobs (found by review, 2026-10-17).
   const over = rows => {
-    const per = {};
-    rows.forEach(b => { for (let w = A.widx(b.start_date); w <= A.widx(b.end_date); w++) {
-      const k = b.engineer + '|' + w; per[k] = (per[k] || 0) + 1; } });
-    return Object.values(per).filter(n => n > 1).length;
+    const per = A.jobsByEngineerWeek(rows);
+    return Object.values(per).filter(e => A.depthOf(e) > 1).length;
   };
 
   return {

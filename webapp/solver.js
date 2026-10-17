@@ -30,22 +30,32 @@ if (!isMainThread) {
   }
 }
 
+// What the worker is handed. Pulled out so a test can look at it: re-plan declines to
+// change anything when it cannot improve the book, so judging this path by its OUTPUT
+// passes whether or not the projects were prepared correctly.
+//
+// Closed projects are prepared exactly as actions.forReplan does for the in-thread path:
+// a cancelled one (no rows) is left out, a completed one is kept but frozen so its weeks
+// stay put. Handing the worker every project planned a cancelled one from scratch and
+// Apply would have put it back; dropping a completed one superseded its future weeks
+// with nothing to replace them (found 2026-10-15 and 2026-10-17).
+function inputFor(book, todayISO, restarts) {
+  const actions = require('./actions.js');
+  return {
+    projects: actions.forReplan(book.projects, actions.live(book)),
+    bookings: book.bookings,
+    engineers: book.engineers,
+    todayISO, restarts,
+  };
+}
+
 // Resolves with replanBook's result. Rejects if the worker dies, so a caller never
 // waits forever on a thread that has gone.
 function solveReplan(book, todayISO, opts) {
   const restarts = (opts && opts.restarts) || DEFAULT_RESTARTS;
   return new Promise((resolve, reject) => {
     const w = new Worker(path.join(__dirname, 'solver.js'), {
-      workerData: {
-        // Closed projects are left out of PLANNING, exactly as actions.forReplan does
-        // for the in-thread path. This worker is the path the Re-plan button takes, and
-        // it was handed every project: a cancelled one, having no rows, was planned from
-        // scratch and Apply would have put it back (found 2026-10-15 on the test sheet).
-        projects: require('./actions.js').forReplan(book.projects),
-        bookings: book.bookings,
-        engineers: book.engineers,
-        todayISO, restarts,
-      },
+      workerData: inputFor(book, todayISO, restarts),
     });
     let settled = false;
     const done = fn => (...a) => { if (!settled) { settled = true; fn(...a); } };
@@ -56,4 +66,4 @@ function solveReplan(book, todayISO, opts) {
   });
 }
 
-module.exports = { solveReplan, DEFAULT_RESTARTS };
+module.exports = { solveReplan, inputFor, DEFAULT_RESTARTS };

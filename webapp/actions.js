@@ -154,7 +154,8 @@ function saveProject(book, payload) {
   // now on states when each phase runs.
   const filled = ['dub', 'edit', 'mix'].some(k =>
     String(p[k + '_from'] || '').trim() || String(p[k + '_to'] || '').trim());
-  const norm = A.normalizeProject(raw);
+  const norm = A.normalizeProject(raw,
+    new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   if (!filled) {
     // One message, not two: with no dates there are no weeks either, and "at least one
     // phase must have weeks" only restates this less usefully.
@@ -419,6 +420,7 @@ function shapeReplan(book, rows, r, todayISO) {
     overlaps_after,
     overlaps_resolved,
     why,
+    skipped: r.skipped || [],
     change: r.no_improvement ? null
       : { supersede: r.rows_to_supersede || [], append: r.rows_to_append || [] },
   };
@@ -427,24 +429,24 @@ function shapeReplan(book, rows, r, todayISO) {
 function replanPreview(book, todayISO) {
   const rows = live(book);
   return shapeReplan(book, rows,
-    A.replanBook(forReplan(book.projects), rows, book.engineers, todayISO), todayISO);
+    A.replanBook(forReplan(book.projects, rows), rows, book.engineers, todayISO), todayISO);
 }
 
-// A completed or cancelled project is frozen to the engine. It already has the
-// mechanism — `locked` — so this reuses it rather than teaching replanBook a second
-// idea of "do not touch". Re-planning finished work would move names on a job that
-// has already been delivered.
-function forReplan(projects) {
-  // A closed project is not PLANNED at all. Marking it locked was not enough: `locked`
-  // stops the engine moving a project's existing rows, and a cancelled project has
-  // none -- so the engine planned it from scratch and the very next re-plan put back
-  // the weeks that cancelling had just freed. Verified: 4 rows re-appended for a
-  // project that had been cancelled.
-  //
-  // Their bookings are NOT removed from the book here -- a completed project's weeks
-  // stay occupied and immovable, because the work happened. Only the planning list
-  // loses them.
-  return (projects || []).filter(p => !p.status);
+// A completed or cancelled project must not be PLANNED, and must not lose its weeks.
+//
+// Two different cases, which one filter could not serve:
+//   - a CANCELLED project has no live rows. Left in the list it is planned from scratch
+//     and the next re-plan puts back the weeks that cancelling freed. Dropped.
+//   - a COMPLETED project has live rows, and its future weeks are movable by the engine's
+//     own rules (only rows already under way or hand-placed are pinned). Dropped from the
+//     list, those rows were superseded with nothing to replace them -- a re-plan erased
+//     finished work (found by review, 2026-10-17). So a closed project that still has
+//     rows stays in the list, frozen: its rows are kept exactly as they are and still
+//     occupy their engineers.
+function forReplan(projects, liveRows) {
+  const held = new Set((liveRows || []).map(b => b.project));
+  return (projects || []).filter(p => !p.status || held.has(p.project_title))
+    .map(p => p.status ? { ...p, locked: true } : p);
 }
 
 module.exports = { TERM_NAMES, reassignWeek, undoWeekMove, saveProject, setStatus, setLock,
