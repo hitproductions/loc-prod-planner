@@ -133,7 +133,8 @@ and level preference ahead of balancing total workload.
 
 Every project saved from the form states **when each phase runs**: a start and end date
 for Dub, Edit and Mix. Leave a phase blank if the project doesn't have it. Dates snap to
-their Monday–Sunday week. Dub and edit may overlap; the mix starts after both, and
+their Monday–Sunday week. Dub and edit may overlap, and the mix may run alongside the
+edit; the mix starts after the dub ends (and not before the edit starts), and
 everything ends by the deadline. The planner never moves these dates — plotting and
 re-plan only choose **who**. Older projects saved before dates existed have none, and
 still plot backward from their deadline.

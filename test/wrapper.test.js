@@ -1265,7 +1265,14 @@ section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-1
     ok(label, r.errors.some(e => re.test(e)), r.errors.join(' | ') || 'no error');
   };
   err({ edit_from: '2026-10-26' }, /Edit cannot start before the dub/, 'an edit starting before the dub is refused');
-  err({ mix_from: '2026-11-23' }, /Mix must start after the edit/, 'a mix overlapping the edit is refused');
+  ok('a mix starting while the edit is still running is accepted (Tara, 2026-10-20)',
+     A.normalizeProject({ ...dated, mix_from: '2026-11-23' }).errors.length === 0,
+     A.normalizeProject({ ...dated, mix_from: '2026-11-23' }).errors.join(' | '));
+  ok('and a mix starting the same week as the edit ends',
+     A.normalizeProject({ ...dated, mix_from: '2026-11-23', edit_to: '2026-11-29' }).errors.length === 0);
+  err({ mix_from: '2026-11-09' }, /Mix must start after the dub ends/, 'a mix starting before the dub ends is still refused');
+  err({ edit_from: '2026-11-16', mix_from: '2026-11-09', dub_to: '2026-11-08', dub_from: '2026-11-02' },
+      /Mix cannot start before the edit starts/, 'a mix starting before the edit starts is refused');
   err({ deadline: '2026-12-06' }, /end by the deadline/, 'a phase running past the deadline is refused');
   err({ mix_to: '' }, /Mix needs both a start and an end/, 'a phase with a start and no end is refused');
   err({ edit_from: '2026-11-29', edit_to: '2026-11-16' }, /Edit starts after it ends/, 'a phase ending before it starts is refused');
@@ -1328,6 +1335,19 @@ section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-1
        .every(k => ix(k) < ix('split_dub_edit')), A.SOLVE_OBJECTIVE.join(','));
   ok('and above workload balancing, so balance alone does not split them',
      ix('split_dub_edit') < ix('regular_spread'));
+
+  // --- a mix beside the edit is booked on those weeks, with someone free to do it
+  const alongside = A.normalizeProject({ ...dated, mix_from: '2026-11-23', mix_to: '2026-12-06' }).project;
+  const aout = A.runAssign(alongside, [], roster);
+  const aspan = ph => { const rs = aout.booking_rows.filter(b => b.phase === ph);
+    return rs.map(b => b.start_date).sort()[0] + '..' + rs.map(b => b.end_date).sort().pop(); };
+  ok('the mix is booked on its own dates, overlapping the edit', aspan('Mix') === '2026-11-23..2026-12-06' && aspan('Edit') === '2026-11-16..2026-11-29',
+     aspan('Edit') + ' / ' + aspan('Mix'));
+  const editor = aout.booking_rows.find(b => b.phase === 'Edit').engineer;
+  const mixer = aout.booking_rows.find(b => b.phase === 'Mix').engineer;
+  ok('and the person editing is not also asked to mix those same weeks', editor !== mixer, editor + ' / ' + mixer);
+  ok('so the overlapping weeks are not an overlap for anyone', A.scorePlan(aout.booking_rows, roster, []).total_double_booked === 0,
+     A.scorePlan(aout.booking_rows, roster, []).total_double_booked + '');
 
   // --- re-plan honours the dates too
   const rp = A.replanBook([n.project], [], roster, '2026-10-15');
