@@ -1538,6 +1538,26 @@ section('Review fixes, 2026-10-17: completed projects, History, old rows, dates'
   ok('and its rows are not touched', !(prev.changes || []).some(c => c.project === open.project_title));
 }
 
+
+section('Every phase may overlap every other, through the real save path (Tara, 2026-10-21)');
+{
+  const book = await freshBook();
+  const same = { title: 'All Together', client: 'X', deadline: '2027-01-17', mix_level: 'Advanced', dry_run: true,
+    dub_from: '2026-11-02', dub_to: '2026-11-22', edit_from: '2026-11-02', edit_to: '2026-11-22',
+    mix_from: '2026-11-02', mix_to: '2026-11-22' };
+  const r = actions.saveProject(book, same);
+  ok('dub, edit and mix over the same three weeks are accepted', r.ok, JSON.stringify(r.errors));
+  const phases = new Set((r.rows || []).map(x => x.phase));
+  ok('and each phase is booked', ['Dub', 'Edit', 'Mix'].every(p => phases.has(p)), [...phases].join(','));
+  const mixer = (r.rows || []).filter(x => x.phase === 'Mix').map(x => x.engineer);
+  const rec = (r.rows || []).filter(x => x.phase !== 'Mix').map(x => x.engineer);
+  ok('with the mix on someone who is not also recording or editing those weeks', mixer.every(m => !rec.includes(m)),
+     rec.join(',') + ' / ' + mixer.join(','));
+  const bad = actions.saveProject(book, { ...same, edit_from: '2026-10-26' });
+  ok('an edit starting before the dub starts is still refused', !bad.ok && bad.errors.some(e => /Edit cannot start before the dub/.test(e)),
+     JSON.stringify(bad.errors));
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud

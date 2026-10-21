@@ -886,8 +886,8 @@ function openForm(title) {
             `<td><input type="date" id="f_${k}_to" aria-label="${label} end" value="${esc(d.to)}"></td></tr>`;
         }).join('')}</tbody></table>
         <div class="hint">Leave a phase blank if the project does not have it. Dates snap to
-          their Monday–Sunday week. Dub and edit can overlap, and the mix can run alongside the
-          edit; the mix starts after the dub ends, and everything ends by the deadline.</div></div>
+          their Monday–Sunday week. Any phase can overlap another; a phase just cannot start before
+          the one it follows has started. Everything ends by the deadline.</div></div>
       <div class="f span2"><label>Flags</label><div class="checks">
         <label><input type="checkbox" id="f_music"${p && p.music ? ' checked' : ''}> Music</label>
         <label><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
