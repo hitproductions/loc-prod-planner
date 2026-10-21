@@ -1270,7 +1270,18 @@ section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-1
      A.normalizeProject({ ...dated, mix_from: '2026-11-23' }).errors.join(' | '));
   ok('and a mix starting the same week as the edit ends',
      A.normalizeProject({ ...dated, mix_from: '2026-11-23', edit_to: '2026-11-29' }).errors.length === 0);
-  err({ mix_from: '2026-11-09' }, /Mix must start after the dub ends/, 'a mix starting before the dub ends is still refused');
+  ok('a mix starting while the dub is still running is accepted (Tara, 2026-10-21)',
+     A.normalizeProject({ ...dated, mix_from: '2026-11-16' }).errors.length === 0,
+     A.normalizeProject({ ...dated, mix_from: '2026-11-16' }).errors.join(' | '));
+  ok('all three phases can run the same weeks',
+     A.normalizeProject({ ...dated, dub_from: '2026-11-02', dub_to: '2026-11-29', edit_from: '2026-11-02', edit_to: '2026-11-29',
+       mix_from: '2026-11-02', mix_to: '2026-11-29' }).errors.length === 0);
+  ok('a mix and dub with no edit can overlap too',
+     A.normalizeProject({ ...dated, edit_from: '', edit_to: '', mix_from: '2026-11-09', mix_to: '2026-11-29' }).errors.length === 0);
+  err({ edit_from: '2026-11-02', dub_from: '2026-11-09', dub_to: '2026-11-29', mix_from: '2026-11-16', mix_to: '2026-11-29' },
+      /Edit cannot start before the dub/, 'an edit starting before the dub starts is still refused');
+  err({ edit_from: '', edit_to: '', mix_from: '2026-10-26', mix_to: '2026-11-29' },
+      /Mix cannot start before the dub starts/, 'with no edit, a mix starting before the dub starts is refused');
   err({ edit_from: '2026-11-16', mix_from: '2026-11-09', dub_to: '2026-11-08', dub_from: '2026-11-02' },
       /Mix cannot start before the edit starts/, 'a mix starting before the edit starts is refused');
   err({ deadline: '2026-12-06' }, /end by the deadline/, 'a phase running past the deadline is refused');
@@ -1348,6 +1359,18 @@ section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-1
   ok('and the person editing is not also asked to mix those same weeks', editor !== mixer, editor + ' / ' + mixer);
   ok('so the overlapping weeks are not an overlap for anyone', A.scorePlan(aout.booking_rows, roster, []).total_double_booked === 0,
      A.scorePlan(aout.booking_rows, roster, []).total_double_booked + '');
+
+  // --- all three phases running the same weeks: each goes to someone free, nobody doubles up
+  const R3 = n => ({ name: n, can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced', music_specialist: 'No',
+    overflow_only: 'No', does_specials: 'No', atmos: 'No' });
+  const r3 = ['Ana', 'Ben', 'Cy'].map(R3);
+  const all3 = A.normalizeProject({ ...base, dub_from: '2026-11-02', dub_to: '2026-11-15', edit_from: '2026-11-02', edit_to: '2026-11-15',
+    mix_from: '2026-11-02', mix_to: '2026-11-15' }).project;
+  const o3 = A.runAssign(all3, [], r3);
+  const who3 = ph => o3.booking_rows.filter(b => b.phase === ph).map(b => b.engineer).join(',');
+  ok('a dub, edit and mix over the same weeks are all booked', ['Dub', 'Edit', 'Mix'].every(ph => who3(ph)), JSON.stringify(o3.booking_rows.map(b => b.phase + ':' + b.engineer)));
+  ok('the mix goes to someone other than whoever is dubbing and editing', who3('Mix') !== who3('Dub') && who3('Mix') !== who3('Edit'), who3('Dub') + ' / ' + who3('Edit') + ' / ' + who3('Mix'));
+  ok('and nothing is forced or double-booked', !o3.forced && A.scorePlan(o3.booking_rows, r3, []).total_double_booked === 0, o3.record_note + o3.mix_note);
 
   // --- re-plan honours the dates too
   const rp = A.replanBook([n.project], [], roster, '2026-10-15');

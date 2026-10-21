@@ -108,14 +108,15 @@ function normalizeProject(raw, todayISO) {
     }
     if (wk.dub && wk.edit && wk.edit[0] < wk.dub[0])
       errors.push('Edit cannot start before the dub starts.');
-    // The mix may run alongside the edit (Tara, 2026-10-20) but not before it has begun,
-    // and still only after the dub is finished. Whoever mixes is a different job from
-    // whoever edits, so the engine books them separately: the editor is busy in those
-    // weeks and the mix goes to someone free.
+    // Every phase may overlap every other (Tara, 2026-10-20/21): dub with edit, edit with
+    // mix, and the mix with the dub. The only ordering kept is that a phase cannot BEGIN
+    // before the one it works on has begun -- you cannot edit or mix what has not started
+    // being recorded. Each phase is its own job in the engine, so whoever is busy in the
+    // overlapping weeks stays busy and the next phase goes to someone free.
     if (wk.mix && wk.edit && wk.mix[0] < wk.edit[0])
       errors.push('Mix cannot start before the edit starts.');
-    if (wk.mix && wk.dub && wk.mix[0] <= wk.dub[1])
-      errors.push('Mix must start after the dub ends.');
+    if (wk.mix && wk.dub && !wk.edit && wk.mix[0] < wk.dub[0])
+      errors.push('Mix cannot start before the dub starts.');
     if (p.deadline === dl && /^\d{4}-/.test(dl)) {
       const last = Math.max(...Object.keys(wk).map(k => wk[k][1]));
       if (Object.keys(wk).length && last > widx(dl))

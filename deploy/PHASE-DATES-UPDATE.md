@@ -1,14 +1,14 @@
-# IT handoff: update the local planner (20 Oct 2026)
+# IT handoff: update the local planner (21 Oct 2026)
 
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
-Update the server copy to **`main` at `9c50376` or later** (merge of pull request #4, which
-includes #2 and #3). All are tested.
+Update the server copy to the latest **`main`**, which must include **pull request #5**
+("Allow all phases to overlap"; it includes #2, #3 and #4). `git log --oneline -5` should
+list it. All are tested.
 
-**Take #4, not just #2 or #3.** #2 alone has bugs that can erase a completed project's
-bookings on a re-plan (fixed in #3). #4 lets the mix run alongside the edit; without it
-the Add project form refuses that. `git log --oneline -1` should show `9c50376` or
-something newer.
+**Take the latest, not just #2.** #2 alone has bugs that can erase a completed project's
+bookings on a re-plan (fixed in #3). The Add project form's date rules changed in #4 and
+#5: any phase may overlap any other, so an older copy refuses entries the new one accepts.
 
 ## What to do
 
@@ -45,7 +45,8 @@ the **Projects** tab: `Dub start`, `Dub end`, `Edit start`, `Edit end`, `Mix sta
 ## Check after the update
 
 - The **Add project** form shows a start and end date for Dub, Edit and Mix, instead
-  of weeks per phase, and accepts a mix that starts while the edit is still running.
+  of weeks per phase, and accepts overlapping phases (for example a mix that starts while the
+  edit or dub is still running).
 - Saving a project adds the six columns to the Projects tab (first save only).
 - A new **History** entry shows the correct Manila time.
 
