@@ -141,14 +141,14 @@ function cellBands(c, label, dragAttrs, rich, deep) {
     const sameJob = rich && prev && prev.p === it.p && prev.ph !== 'Mix' && it.ph !== 'Mix';
     const body = rich
       ? `<span class="bk-n">${esc(text)}</span>` +
-        (meta || tag ? `<span class="bk-m">${esc(meta)}${tag}</span>` : '')
+        (tag ? `<span class="bk-m">${tag}</span>` : '')
       : `<span class="bk-l">${esc(text)}</span>`;
     const paint = rich ? `--ph:${PHASE_BG[it.ph] || 'var(--line)'};--ph-pale:${PHASE_PALE[it.ph] || 'var(--line)'}`
       : `background:${PHASE_BG[it.ph] || 'transparent'}`;
     return `<span class="bk${rich ? ' rich ' + String(it.ph || '').toLowerCase() : ''}${sameJob ? ' samejob' : ''}" style="${paint}"` +
       (dragAttrs ? dragAttrs(it) : '') +
       (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"'
-        : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + metaFull)}"` : '')) +
+        : (rich ? ` title="${esc(metaFull ? text + ' \u00b7 ' + metaFull : text)}"` : '')) +
       `>${body}</span>`;
   }).join('') + '</div>';
 }
