@@ -747,3 +747,21 @@ table.sched:not(.byeng) tbody tr.lanes td.now::after, table.sched:not(.byeng) tb
 table.sched:not(.byeng) tbody tr.lanes td.now::after{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
 table.sched:not(.byeng) tbody tr.lanes td.duewk::after{box-shadow:inset -2px 0 0 var(--red)}
 table.sched:not(.byeng) tbody tr.lanes td.duewk.now::after{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+
+/* Aligned dividers, left-aligned text, less height (Tara, 2026-10-28).
+   Bookings used to share leftover height, so the dashed line fell wherever the text ended and
+   differed from cell to cell. Now each booking in a multi-booking week is exactly 60px, so
+   the divider sits at the same height across the whole row. A lone booking fills its cell.
+   The table centres text by default; the bookings are forced back to the left. */
+table.sched.byeng tbody td, table.sched.byeng tbody th{height:60px}
+table.sched.byeng td.cell{height:1px}
+table.sched.byeng .stack{min-height:60px}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){
+  text-align:left; align-items:flex-start; box-sizing:border-box; padding:5px 12px 5px 20px; overflow:hidden}
+table.sched.byeng .stack .bk.rich:not(:only-child){flex:0 0 60px; height:60px}
+table.sched.byeng .stack .bk.rich:only-child{flex:1 1 auto; min-height:60px}
+table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{text-align:left; line-height:1.2}
+table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-m{
+  text-align:left; line-height:1.2; margin-top:2px}
+table.sched.byeng .stack .bk.rich + .bk.rich, table.sched.byeng .stack .bk.rich + .bk.rich.samejob{
+  border-top:2px dashed #8a8a8a; padding-top:5px}
