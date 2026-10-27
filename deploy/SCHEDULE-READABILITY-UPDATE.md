@@ -3,7 +3,7 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the commit titled
-**"Hover: darker tint only, no black frame or markers"** (`fc8fd4a`), which also brings in everything after
+**"Report: Work done by month (booked weeks in the month they happened) separate from Completed by month"** (`208b268`), which also brings in everything after
 the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars with a thin seam between lanes, roomier Engineers cells, dashed dividers between bookings, no Dub/Edit/Mix word on Engineers cells since the rail colour shows it), the Inter font, the
 new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
 should list it. All of it is tested.
@@ -60,7 +60,7 @@ No existing column moves and no data changes.
 - **Schedule → Engineers**: week dates are black and readable; this week has a red bar and
   the words "This week"; show names wrap to two lines instead of being cut off; a 2 or 3 at
   once tag names the jobs when you hover over it. Only 3 at once is tinted.
-- **Report**: below the selected month there is now a **Month by month** table: projects, booked weeks, late ones and weeks per engineer for every month with completed work.
+- **Report**: below the selected month are two separate tables. **Work done by month** counts booked weeks in the month they actually happened (finished or not, future weeks excluded) with weeks per engineer. **Completed by month** counts projects in the month they were marked complete, with their booked weeks and late ones.
 - Hovering a week shades the whole column a darker grey and lightens its header (no frame). Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
 - The colour key above the schedule shows Dub, Edit, Mix, By hand and (in Projects) Due.
 - Dragging a week to another engineer still works, in the Engineers view.
