@@ -85,7 +85,7 @@ if (TEST_ID === LIVE_ID) {
   {
     let book = await src().read();
     const before = book.bookings.length;
-    const r = actions.saveProject(book, { title: 'Test Delta', client: 'Netflix',
+    const r = actions.saveProject(book, { title: 'Test Delta', series: 'Test Show', client: 'Netflix',
       deadline: '2026-12-11', ...datesFor('2026-12-11', 2, 1, 1), mix_level: 'Advanced' });
     ok('the save is accepted', r.ok === true, JSON.stringify(r).slice(0, 120));
 
@@ -112,6 +112,9 @@ if (TEST_ID === LIVE_ID) {
     const want = datesFor('2026-12-11', 2, 1, 1);
     const got = { dub_from: p.dub_from, dub_to: p.dub_to, edit_from: p.edit_from,
                   edit_to: p.edit_to, mix_from: p.mix_from, mix_to: p.mix_to };
+    // The Series column is created on first save and has to survive a round trip: written by
+    // the app, read back by the app, and a person can also type into it by hand.
+    ok('the series round-tripped through the sheet', p.series === 'Test Show', JSON.stringify(p.series));
     ok('all six phase dates round-tripped, including the columns past Z',
        Object.keys(got).every(k => got[k] === want[k]), JSON.stringify(got));
     ok('the engine can place every booking it wrote',

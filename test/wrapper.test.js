@@ -1480,5 +1480,78 @@ section('Review fixes, 2026-10-17: stray dates, date limits, dub dealing that ca
      tout.booking_rows.map(b => b.phase[0] + ':' + b.engineer).join(' ') + ' ' + tout.record_note);
 }
 
+// ---------------------------------------------------------------------------
+section('Series continuity: the people who did a phase before are preferred (Tara, 2026-10-27)');
+{
+  const R = (name, extra) => ({ name, can_record: 'Yes', can_edit: 'Yes', can_mix: 'Yes', mix_level: 'Advanced',
+    music_specialist: 'No', overflow_only: 'No', does_specials: 'No', atmos: 'No', ...extra });
+  const roster = [R('Ana'), R('Ben'), R('Kyle'), R('Via', { can_record: 'No', can_edit: 'No' })];
+  const wk = i => new Date(Date.UTC(2026, 10, 2) + i * 7 * 86400000).toISOString().slice(0, 10);
+  const we = i => new Date(Date.UTC(2026, 10, 2) + (i * 7 + 6) * 86400000).toISOString().slice(0, 10);
+  const row = (n, project, phase, engineer, a, z) => ({ row_number: n, project, phase, engineer, start_date: wk(a), end_date: we(z), source: 'plot', note: '', status: '' });
+  const proj = (t, series, deadlineW, extra) => ({ project_title: t, series, client: 'X', deadline: we(deadlineW), mix_level_required: 'Advanced',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No', dub_weeks: 1, edit_weeks: 1, mix_weeks: 1, ...extra });
+  const S1 = [row(2, 'Show S1', 'Dub', 'Kyle', 0, 1), row(3, 'Show S1', 'Edit', 'Kyle', 2, 2), row(4, 'Show S1', 'Mix', 'Via', 3, 3)];
+  const P1 = proj('Show S1', 'Show', 3);
+
+  // --- the score
+  const sc = (book, projects) => A.scorePlan(book, roster, projects).series_continuity;
+  const mk = (dub, edit, mix) => [row(10, 'Show S2', 'Dub', dub, 10, 11), row(11, 'Show S2', 'Edit', edit, 12, 12), row(12, 'Show S2', 'Mix', mix, 13, 13)];
+  const P2 = proj('Show S2', 'show', 13);          // different capitals: still the same series
+  ok('the same people as last time break nothing', sc(S1.concat(mk('Kyle', 'Kyle', 'Via')), [P1, P2]) === 0);
+  ok('a new person on every phase breaks all three', sc(S1.concat(mk('Ana', 'Ana', 'Ben')), [P1, P2]) === 3,
+     sc(S1.concat(mk('Ana', 'Ana', 'Ben')), [P1, P2]) + '');
+  ok('it is counted per phase: only the dub changed hands', sc(S1.concat(mk('Ana', 'Kyle', 'Via')), [P1, P2]) === 1);
+  ok('anyone who did the phase before will do', sc(S1.concat([row(20, 'Show S1', 'Dub', 'Ana', 5, 5)]).concat(mk('Ana', 'Kyle', 'Via')), [P1, P2]) === 0);
+  ok('with no series nothing is counted', sc(S1.concat(mk('Ana', 'Ana', 'Ben')), [{ ...P1, series: '' }, { ...P2, series: '' }]) === 0);
+  ok('the first project of a series has nothing to continue', sc(S1, [P1]) === 0);
+  const idx = k => A.SOLVE_OBJECTIVE.indexOf(k);
+  ok('it ranks below every overlap and reserve term, so it never costs one',
+     ['reserve_double_booked', 'three_deep_weeks', 'total_double_booked', 'forced_projects', 'reserve_weeks'].every(k => idx(k) < idx('series_continuity')));
+  ok('and above workload balancing', idx('series_continuity') < idx('regular_spread'));
+
+  // --- one new project, per phase
+  const placed = (extra, book) => { const p2 = proj('Show S2', 'Show', 13, extra);
+    const out = A.runAssign(A.normalizeProject({ ...p2, dub_from: wk(10), dub_to: we(11), edit_from: wk(12), edit_to: we(12), mix_from: wk(13), mix_to: we(13) }).project, book || S1, roster);
+    return out.booking_rows; };
+  const who = (rows, ph) => [...new Set(rows.filter(b => b.phase === ph).map(b => b.engineer))].join('+');
+  // Put Ben ahead of Kyle for the dub on the greedy pick by loading Kyle, so only the series can bring Kyle back.
+  const loaded = S1.concat([row(30, 'Other', 'Dub', 'Kyle', 4, 9), row(31, 'Other', 'Edit', 'Kyle', 4, 9)]);
+  const rows0 = placed({}, loaded);
+  const stage = A.continuityPass_(rows0, loaded, roster, [P1, proj('Show S2', 'Show', 13)]);
+  ok('precondition: left alone, the planner does not pick Kyle for the dub', who(rows0, 'Dub') !== 'Kyle', who(rows0, 'Dub'));
+  ok('the dub goes to whoever dubbed the series before, when they are free', who(stage.rows, 'Dub') === 'Kyle', who(stage.rows, 'Dub') + ' / moved ' + stage.moved);
+  ok('and the edit goes with it (dub and edit stay together)', who(stage.rows, 'Edit') === 'Kyle', who(stage.rows, 'Edit'));
+  ok('the mix goes to whoever mixed it before', who(stage.rows, 'Mix') === 'Via', who(stage.rows, 'Mix'));
+
+  // not when they are busy: a preference, never an overlap
+  const busy = loaded.concat([row(40, 'Elsewhere', 'Dub', 'Kyle', 10, 11), row(41, 'Elsewhere', 'Edit', 'Kyle', 12, 12)]);
+  const rowsB = placed({}, busy);
+  const stageB = A.continuityPass_(rowsB, busy, roster, [P1, proj('Show S2', 'Show', 13), proj('Elsewhere', '', 12), proj('Other', '', 9)]);
+  ok('when the earlier person is busy those weeks, the dub and edit stay where they were',
+     who(stageB.rows, 'Dub') === who(rowsB, 'Dub') && who(stageB.rows, 'Edit') === who(rowsB, 'Edit') && who(stageB.rows, 'Dub') !== 'Kyle',
+     'dub ' + who(rowsB, 'Dub') + ' -> ' + who(stageB.rows, 'Dub') + ', edit ' + who(rowsB, 'Edit') + ' -> ' + who(stageB.rows, 'Edit'));
+  ok('while the mix, whose earlier person is free, still goes to them', who(stageB.rows, 'Mix') === 'Via', who(stageB.rows, 'Mix'));
+  ok('and so no overlap was created', A.scorePlan(busy.concat(stageB.rows), roster, []).total_double_booked === A.scorePlan(busy.concat(rowsB), roster, []).total_double_booked);
+
+  // manual picks are never moved
+  const manualRows = rows0.map(b => b.phase === 'Dub' ? { ...b, note: 'manual' } : b);
+  const stageM = A.continuityPass_(manualRows, loaded, roster, [P1, proj('Show S2', 'Show', 13)]);
+  ok('a hand-picked phase is left alone', who(stageM.rows, 'Dub') === who(manualRows, 'Dub'), who(stageM.rows, 'Dub'));
+
+  // no series, no change
+  const stageN = A.continuityPass_(rows0, loaded, roster, [{ ...P1, series: '' }, proj('Show S2', '', 13)]);
+  ok('a project with no series is planned exactly as before', JSON.stringify(stageN.rows) === JSON.stringify(rows0) && stageN.moved === 0);
+
+  // --- re-plan reaches it too (through the existing swap pass and the objective term)
+  const frozenS1 = S1;
+  const proj2 = proj('Show S2', 'Show', 13, { dub_from: wk(10), dub_to: we(11), edit_from: wk(12), edit_to: we(12), mix_from: wk(13), mix_to: we(13) });
+  const planned = rows0.map((b, i) => ({ ...b, row_number: 100 + i, status: '' }));
+  const rp = A.replanBook([{ ...P1, status: 'Complete' }, proj2], frozenS1.concat(planned, [row(30, 'Other', 'Dub', 'Kyle', 4, 9), row(31, 'Other', 'Edit', 'Kyle', 4, 9)]), roster, '2026-10-12', { restarts: 0 });
+  const finalRows = frozenS1.concat(planned).filter(b => !rp.rows_to_supersede.includes(b.row_number)).concat(rp.rows_to_append);
+  ok('a re-plan keeps or restores the series’ people too', sc(finalRows.concat([row(30, 'Other', 'Dub', 'Kyle', 4, 9)]), [P1, proj2]) <= sc(frozenS1.concat(planned), [P1, proj2]),
+     sc(finalRows, [P1, proj2]) + ' vs ' + sc(frozenS1.concat(planned), [P1, proj2]));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

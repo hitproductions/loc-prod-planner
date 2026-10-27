@@ -118,6 +118,7 @@ function bootstrap(book, opts) {
       .filter(Boolean))].sort(),
     projects: book.projects.map(p => ({
       title: p.project_title, client: p.client, deadline: p.deadline,
+      series: p.series || '',
       dub: p.dub_weeks, edit: p.edit_weeks, mix: p.mix_weeks,
       dates: phaseDates(p, rows),
       mix_level: p.mix_level_required,
@@ -138,6 +139,9 @@ function bootstrap(book, opts) {
     // asked, because nothing else in the app can show them -- they are absent from the
     // Projects list by definition.
     orphans: orphans(book),
+    // Every series in use, spelled as first written, for the form to suggest.
+    series: [...new Map(book.projects.map(p => String(p.series || '').trim().replace(/\s+/g, ' '))
+      .filter(Boolean).map(x => [x.toLowerCase(), x])).values()].sort((a, b) => a.localeCompare(b)),
     today_week: A.weekStart(fromW),
     counts: { projects: book.projects.filter(p => !p.status).length,
               done: book.projects.filter(p => p.status === 'Complete').length,

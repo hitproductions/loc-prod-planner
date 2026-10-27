@@ -154,6 +154,9 @@ function saveProject(book, payload) {
     music_songs: p.music ? 'Yes' : 'No',
     special_project: p.special ? 'Yes' : 'No',
     atmos_required: p.atmos ? 'Yes' : 'No',
+    // The show it belongs to, spelled as the series already is if it exists (case and
+    // spacing ignored), so one show never becomes two series that split its history.
+    series: T.canonSeries(p.series, (book.projects || []).map(x => x.series)),
     recordist_override: p.recordist || 'Auto',
     recordist_override_2: p.recordist2 || 'Auto',
     editor_override: p.editor || 'Auto',
@@ -183,6 +186,22 @@ function saveProject(book, payload) {
   const rest = rows.filter(b => !titles.includes(b.project));
   const out = A.runAssign(project, rest, book.engineers);
 
+  // Series continuity (Tara, 2026-10-27): keep the people who did each phase on earlier
+  // projects of the same series, where that costs nothing ranked above it. A preference only.
+  // With no series, or no history, the rows are returned untouched.
+  if (project.series && out.booking_rows && out.booking_rows.length) {
+    const others = (book.projects || []).filter(x => !titles.includes(x.project_title));
+    const pass = A.continuityPass_(out.booking_rows, rest, book.engineers, others.concat(project));
+    if (pass.moved) {
+      out.booking_rows = pass.rows;
+      const names = ph => [...new Set(pass.rows.filter(b => b.phase === ph).map(b => b.engineer))].join(' + ') || '\u2014';
+      out.dubber = names('Dub'); out.editor = names('Edit'); out.mixer = names('Mix');
+      out.recordist = out.dubber === out.editor || out.editor === '\u2014' ? out.dubber
+        : out.dubber === '\u2014' ? out.editor : `${out.dubber} (dub) / ${out.editor} (edit)`;
+    }
+    out.continued = pass.moved;
+  }
+
   // What a rollback needs to put the Projects row back. Without it, undoing a RENAME
   // revived the old title's bookings and left the row under the new name — bookings
   // with no project row, which is the definition of a ghost. Verified: the app reported
@@ -202,6 +221,7 @@ function saveProject(book, payload) {
     title: project.project_title,
     // Set when the title asked for was taken, so the page can say what it was saved as.
     renamed: title !== wanted ? { from: wanted, to: title } : null,
+    series: project.series || '',
     revert,
     recordist: out.recordist, dubber: out.dubber || out.recordist,
     editor: out.editor || out.recordist, mixer: out.mixer,
@@ -308,6 +328,29 @@ function setLock(book, payload) {
   };
 }
 
+// Set a project's series WITHOUT re-plotting it. Saving the form re-plots, which could move
+// people on a project that is already scheduled just to record which show it belongs to; this
+// writes the one Series cell, exactly as a lock writes one cell.
+function setSeries(book, payload) {
+  const p = payload || {};
+  const title = String(p.title || '').trim();
+  if (!title) return { ok: false, error: 'No project named.' };
+  const project = (book.projects || []).find(x => x.project_title === title);
+  if (!project) return { ok: false, error: `No project called "${title}".` };
+  // Matched against every project's series, its own included: asking for the spelling it
+  // already has in other capitals is "already", not a change.
+  const series = T.canonSeries(p.series, (book.projects || []).map(x => x.series));
+  if ((project.series || '') === series) {
+    return { ok: false, error: series ? `${title} is already in ${series}.` : `${title} has no series.` };
+  }
+  return {
+    ok: true, title, series,
+    revert: { title, fields: ['series'], values: { series: project.series || '' } },
+    change: { supersede: [], append: [], fields: ['series'],
+              project: { ...project, series }, original_title: title },
+  };
+}
+
 // Clear ghosts: supersede the bookings of projects that no longer have a row.
 //
 // This had no home anywhere. The Apps Script MENU item was removed in v77 on the
@@ -368,6 +411,7 @@ const TERM_NAMES = {
   reserve_weeks: 'weeks spent out of the reserve',
   developing_mix_weeks: 'mix weeks assigned to Developing mixers',
   split_dub_edit: 'projects whose dub and edit are with different people',
+  series_continuity: 'phases done by someone new to their series',
   regular_peak: 'weeks on the busiest engineer',
 };
 
@@ -460,6 +504,6 @@ function forReplan(projects, liveRows) {
     .map(p => p.status ? { ...p, locked: true } : p);
 }
 
-module.exports = { TERM_NAMES, reassignWeek, undoWeekMove, saveProject, setStatus, setLock,
+module.exports = { TERM_NAMES, reassignWeek, undoWeekMove, saveProject, setStatus, setLock, setSeries,
                    clearOrphans, replanPreview,
                    shapeReplan, reassignWarnings, whyBetter, live, forReplan };

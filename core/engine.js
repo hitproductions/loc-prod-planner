@@ -27,7 +27,7 @@ const GS_ORDER = [
 
 // Everything the tests reach for. Anything not listed simply isn't exposed.
 const EXPORTS = [
-  'improveBySwaps_', 'actualOverlaps_', 'SOLVE_OBJECTIVE',
+  'improveBySwaps_', 'continuityPass_', 'seriesKey_', 'actualOverlaps_', 'SOLVE_OBJECTIVE',
   // engine (ported as-is)
   'runAssign', 'replan', 'computeStats',
   // weeks

@@ -28,6 +28,16 @@
     return w;
   }
 
-  const api = { clean, key, uniqueTitle };
+  // A series is matched without regard to case or spacing too, so "harbor lights" joins
+  // "Harbor Lights" rather than starting a second series that would split its history. The
+  // first spelling in use wins.
+  function canonSeries(typed, existing) {
+    const t = clean(typed);
+    if (!t) return '';
+    const hit = (existing || []).map(clean).find(e => e && key(e) === key(t));
+    return hit || t;
+  }
+
+  const api = { clean, key, uniqueTitle, canonSeries };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PlannerTitles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

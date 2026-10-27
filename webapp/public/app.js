@@ -368,14 +368,14 @@ function renderProjects() {
       flags += `<span class="chip">completed ${esc(p.completed || '')}</span>`;
     }
     const cls = [p.status ? 'dim' : '', p.locked ? 'locked' : ''].filter(Boolean).join(' ');
-    const q = [p.title, p.client, who('Dub'), who('Edit'), who('Mix'), p.deadline,
+    const q = [p.title, p.series, p.client, who('Dub'), who('Edit'), who('Mix'), p.deadline,
       p.status, p.music ? 'music' : '', p.special ? 'special' : '', p.atmos ? 'atmos' : '',
       p.locked ? 'locked' : ''].join(' ').toLowerCase();
     const hide = SEARCH.trim() && !matchesAll(q, SEARCH);
     h += `<tr data-title="${esc(p.title)}" data-q="${esc(q)}"${hide ? ' hidden' : ''}` +
       `${cls ? ` class="${cls}"` : ''}>` +
       `<td>${esc(p.deadline)}</td>` +
-      `<td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
+      `<td><b>${esc(p.title)}</b>${p.series ? `<div class="muted-inline">${esc(p.series)}</div>` : ''}</td><td>${esc(p.client)}</td>` +
       `<td>${runsCell(p)}</td><td>${esc(who('Dub'))}</td><td>${esc(who('Mix'))}</td>` +
       `<td>${flags}</td>` +
       // A frozen project has to be obvious while scanning a long list, which a chip
@@ -563,7 +563,7 @@ async function loadHistory(index) {
 let HF = { q: '', kind: '' };
 const KIND = {
   'save-project': 'Saved a project', 'reassign': 'Moved a week', 'undo': 'Undid a move',
-  'set-status': 'Completed, cancelled or reopened', 'set-lock': 'Locked or unlocked',
+  'set-status': 'Completed, cancelled or reopened', 'set-lock': 'Locked or unlocked', 'set-series': 'Series set',
   'replan-apply': 'Re-plan applied', 'rollback': 'Rolled back', 'clear-ghosts': 'Cleared ghosts',
 };
 const kindLabel = a => KIND[a] || a;
@@ -1105,6 +1105,65 @@ function wireDates() {
   drawDates();
 }
 
+// ---------------------------------------------------------------- series
+// A series connects the seasons and episode batches of one show, so the planner can keep the
+// same people on it: whoever did a phase on an earlier project is preferred for that phase on
+// the next. Everything below shows that history; the preference itself is in the planner.
+const SERIES_KEY = x => String(x == null ? '' : x).trim().replace(/\s+/g, ' ').toLowerCase();
+const PHASE_NAMES = ['Dub', 'Edit', 'Mix'];
+
+// The other projects in a series, earliest deadline first, each with who did which phase.
+// Cancelled/removed ones are skipped: they have no bookings and never happened.
+function seriesMembers(series, selfTitle) {
+  const k = SERIES_KEY(series);
+  if (!k) return [];
+  return BOOT.projects.filter(q => q.title !== selfTitle && SERIES_KEY(q.series) === k && q.status !== 'Cancelled')
+    .map(q => ({ title: q.title, deadline: q.deadline, status: q.status,
+      who: PHASE_NAMES.map(ph => [ph, [...new Set(q.rows.filter(r => r.phase === ph).map(r => r.engineer))]]) }))
+    .sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)) || a.title.localeCompare(b.title));
+}
+
+// Who did each phase on the projects that came BEFORE this one (by deadline).
+function seriesHistory(series, selfTitle, deadlineIso) {
+  const out = { Dub: new Set(), Edit: new Set(), Mix: new Set() };
+  seriesMembers(series, selfTitle).filter(m => !deadlineIso || String(m.deadline) < deadlineIso)
+    .forEach(m => m.who.forEach(([ph, names]) => names.forEach(n => out[ph].add(n))));
+  return out;
+}
+
+function wireSeries(p) {
+  const box = $('f_series'), area = $('serArea');
+  const draw = () => {
+    const members = seriesMembers(box.value, p && p.title);
+    const typed = box.value.trim();
+    let h = '';
+    if (typed && !members.length) h = '<span class="sertag">New series</span>';
+    else if (members.length) {
+      const shown = members.slice(-4);
+      h = (members.length > shown.length ? `<div class="sermore">+ ${members.length - shown.length} earlier</div>` : '') +
+        shown.map(m => `<div class="serline"><span class="sername" title="${esc(m.title)}">${esc(m.title)}</span>` +
+          `<span class="serdue">due ${esc(shortDate(m.deadline))}</span>` +
+          m.who.map(([ph, names]) => names.length
+            ? `<span class="serchip ${ph.toLowerCase()}">${ph} ${esc(names.join(' + '))}</span>` : '').join('') + '</div>').join('');
+    }
+    // Editing a scheduled project: the series can be saved on its own. Saving the form would
+    // re-plot it, which could move people just to record which show it belongs to.
+    if (p && typed !== (p.series || '')) h += '<button type="button" class="btn small" id="f_serset">Save series only</button>';
+    area.innerHTML = h;
+    const set = $('f_serset');
+    if (set) set.addEventListener('click', async () => {
+      set.disabled = true;
+      const r = await post('/api/set-series', { title: p.title, series: typed });
+      if (!r.ok) { set.disabled = false; $('f_out').innerHTML = `<div class="msg">${esc(r.error)}</div>`; return; }
+      BOOT = r.boot; SCHED = r.schedule || SCHED;
+      $('formHost').innerHTML = '';
+      paint();
+    });
+  };
+  box.addEventListener('input', draw);
+  draw();
+}
+
 // A title that is already taken is numbered by the server ("Harbor Lights (2)"). Said here as
 // it is typed, with the same rule (titles.js), so the result is never a surprise.
 function wireTitle(p) {
@@ -1144,6 +1203,14 @@ function openForm(title) {
         <label title="Special work routes to the specials engineer"><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
         <label title="The mix needs the Atmos room"><input type="checkbox" id="f_atmos"${p && p.atmos ? ' checked' : ''}> Atmos</label>
       </div></div>
+    </div>
+
+    <div class="seriesrow">
+      <div class="f"><label for="f_series">Series</label>
+        <input type="text" id="f_series" list="seriesList" placeholder="optional" autocomplete="off"
+          value="${p ? esc(p.series || '') : ''}">
+        <datalist id="seriesList">${(BOOT.series || []).map(x => `<option>${esc(x)}</option>`).join('')}</datalist></div>
+      <div id="serArea" class="serarea"></div>
     </div>
 
     <div class="phases2">
@@ -1190,6 +1257,7 @@ function openForm(title) {
     <div id="f_out"></div></div>`;
   wireDates();
   wireTitle(p);
+  wireSeries(p);
 
   $('formHost').scrollIntoView({ block: 'nearest' });
   $('f_check').addEventListener('click', () => submitForm(p, true));
@@ -1249,11 +1317,22 @@ function formValues(p, dryRun) {
     edit_from: iso('f_edit_from'), edit_to: iso('f_edit_to'),
     mix_from: iso('f_mix_from'), mix_to: iso('f_mix_to'),
     mix_level: $('f_level').value,
+    series: $('f_series').value.trim(),
     music: $('f_music').checked, special: $('f_special').checked, atmos: $('f_atmos').checked,
     recordist: $('f_rec').value, recordist2: $('f_rec2').value,
     editor: $('f_ed').value, mixer: $('f_mixer').value,
     dry_run: dryRun,
   };
+}
+
+// "Continues" / "new to series" beside an engineer, when the project has a series with history
+// for that phase. Judged on the projects that come before this one.
+function continuesTag(r, x) {
+  if (!r.series) return '';
+  const hist = seriesHistory(r.series, (r.renamed && r.renamed.from) || r.title, r.project && r.project.deadline);
+  const past = hist[x.phase === 'Edit' ? 'Edit' : x.phase === 'Mix' ? 'Mix' : 'Dub'];
+  if (!past || !past.size) return '';
+  return past.has(x.engineer) ? ' <span class="chip ok">continues</span>' : ' <span class="chip">new to series</span>';
 }
 
 async function submitForm(p, dryRun) {
@@ -1283,7 +1362,7 @@ async function submitForm(p, dryRun) {
     h += '<table class="projects" style="margin-top:10px"><thead><tr><th>Phase</th>' +
       '<th>Engineer</th><th>From</th><th>To</th></tr></thead><tbody>' +
       r.rows.map(x => `<tr><td><span class="sw" style="background:${PHASE_BG[x.phase] || 'transparent'}"></span>` +
-        `${esc(x.phase)}</td><td>${esc(x.engineer)}</td><td>${esc(x.start)}</td>` +
+        `${esc(x.phase)}</td><td>${esc(x.engineer)}${continuesTag(r, x)}</td><td>${esc(x.start)}</td>` +
         `<td>${esc(x.end)}</td></tr>`).join('') + '</tbody></table>';
   }
   if (deep > 2) h += '<div class="msg">THREE AT ONCE \u2014 someone now holds three bookings in ' +

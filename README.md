@@ -37,6 +37,27 @@ saved with a number instead: **Harbor Lights (2)**. The form says so as you type
 Check availability and the saved result say it again. The existing project is never touched.
 Closed and removed projects keep their titles too.
 
+### Series: keeping the same people on a show
+
+A **series** connects the seasons and episode batches of one show ("Harbor Lights S1",
+"Harbor Lights S2", "Eps 1-2", "Eps 3-4"). Put the show's name in the **Series** box when
+adding a project — it suggests the series already in use, and "harbor lights" and "Harbor
+Lights" are the same series. It can also be typed straight into the **Series** column on the
+Projects tab.
+
+Under the box, the other projects in that series are listed with **who did each phase**
+(Dub Kyle · Edit Kyle · Mix Via). The planner **prefers** those people: whoever did a phase on
+an earlier project is preferred for the same phase on the next. It is a preference, nothing
+more — it never costs an overlap, uses the reserve, or overrides a hand-picked name, and if
+the person is busy the work goes elsewhere. After **Check availability**, each engineer is
+tagged *continues* or *new to series*. Re-plan keeps the same preference.
+
+To put an already-scheduled project in a series without re-planning it, type the series and
+press **Save series only**.
+
+The history is only what's in the sheet. A season done before the sheet began has no record;
+add it as a past project and mark it complete if you want it counted.
+
 ### When each phase runs
 
 One line per phase: a start, an end, and the weeks that works out to ("3 wks · 2 Nov –

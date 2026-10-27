@@ -166,6 +166,9 @@ function normalizeProject(raw, todayISO) {
     p.mix_level_required = lvl;
   }
 
+  // The show it belongs to, tidied; blank is simply no series.
+  p.series = String(p.series == null ? '' : p.series).trim().replace(/\s+/g, ' ');
+
   // manual picks (rule 11). Columns missing from HANDOFF §4 — see addendum §3.
   p.recordist_override = String(p.recordist_override || '').trim() || 'Auto';
   p.recordist_override_2 = String(p.recordist_override_2 || '').trim() || 'Auto';
@@ -236,6 +239,9 @@ function engineerRoles(engineerRows) {
   return { regular, reserve };
 }
 
+// A series is matched without regard to case or spacing.
+function seriesKey_(s) { return String(s == null ? '' : s).trim().replace(/\s+/g, ' ').toLowerCase(); }
+
 // Every figure here counts distinct booked weeks, so it reconciles with the grid.
 function scorePlan(book, engineerRows, projectRows) {
   const { regular, reserve } = engineerRoles(engineerRows);
@@ -252,6 +258,40 @@ function scorePlan(book, engineerRows, projectRows) {
   }, 0);
   // weeks[engineer][week] = how many JOBS that week. One person recording and editing
   // the same project in the same week is one job, not an overlap (see jobKey).
+  // Series continuity: within a series, in deadline order, a project's phase has "broken"
+  // continuity when it has people, an earlier project in the series did that phase, and
+  // none of those people is on it. One count per project-phase. A series with one project,
+  // or a project with no series, contributes nothing.
+  const seriesBreaks = (() => {
+    const bySeries = {};
+    (projectRows || []).forEach(p => {
+      const k = seriesKey_(p && p.series);
+      if (k && p.project_title) (bySeries[k] = bySeries[k] || []).push(p);
+    });
+    const held = {};
+    for (const b of book) {
+      if (!b || !b.project || !b.engineer || !b.phase) continue;
+      const phs = b.phase === 'Mix' ? ['Mix'] : b.phase === 'Edit' ? ['Edit'] : b.phase === 'Dub' ? ['Dub'] : ['Dub', 'Edit'];
+      phs.forEach(ph => { const h = held[b.project] = held[b.project] || {};
+        (h[ph] = h[ph] || {})[b.engineer] = true; });
+    }
+    let n = 0;
+    Object.keys(bySeries).forEach(k => {
+      const list = bySeries[k].slice().sort((a, b) =>
+        String(a.deadline).localeCompare(String(b.deadline)) || String(a.project_title).localeCompare(String(b.project_title)));
+      const seen = { Dub: {}, Edit: {}, Mix: {} };
+      list.forEach(p => {
+        const h = held[p.project_title] || {};
+        ['Dub', 'Edit', 'Mix'].forEach(ph => {
+          const now = Object.keys(h[ph] || {});
+          if (!now.length) return;
+          if (Object.keys(seen[ph]).length && !now.some(e => seen[ph][e])) n++;
+          now.forEach(e => { seen[ph][e] = true; });
+        });
+      });
+    });
+    return n;
+  })();
   const weeks = {};
   const perWeek = jobsByEngineerWeek(book);
   Object.keys(perWeek).forEach(k => {
@@ -355,6 +395,7 @@ function scorePlan(book, engineerRows, projectRows) {
     reserve_weeks: reserve.reduce((a, n) => a + load(n), 0),
     developing_mix_weeks: developingMixWeeks,
     split_dub_edit: splitDubEdit,
+    series_continuity: seriesBreaks,
     regular_peak: regLoads.length ? Math.max.apply(null, regLoads) : 0,
     regular_sd: Math.round(sd * 100) / 100,
 
@@ -512,6 +553,92 @@ function swapEligible_(e, phase, proj) {
   if (phase === 'Edit' && !yes(e.can_edit)) return false;
   // record/edit routing: special work to the specials engineer, everything else away
   return isSpecial ? yes(e.does_specials) : !yes(e.does_specials);
+}
+
+// SERIES CONTINUITY FOR ONE NEW PROJECT (Tara, 2026-10-27).
+//
+// A single plot has no search around it, so nothing weighs who worked the series before. This
+// is the narrow version of improveBySwaps_ for it: for each phase, try the people who did that
+// phase on an earlier project in the series, and take the move only if
+//   - they are eligible and completely free for it (never an overlap, never the reserve), and
+//   - every objective term ranked ABOVE series_continuity is unchanged, and
+//   - series_continuity itself gets strictly better.
+// So it is a preference that gives way to everything above it, and does not touch the terms
+// below it (balancing). A project's dub and edit are also tried TOGETHER on one person, since
+// moving only one would split them, which ranks above and would refuse it.
+// Manual picks are never moved. No series, or no history, and it returns the rows untouched.
+function continuityPass_(rows, baseBook, engineerRows, projectRows) {
+  const objective = (typeof SOLVE_OBJECTIVE !== 'undefined') ? SOLVE_OBJECTIVE : null;
+  const at = objective ? objective.indexOf('series_continuity') : -1;
+  if (at < 0 || !rows.length) return { rows, moved: 0 };
+  const above = objective.slice(0, at);
+  const eng = {}; (engineerRows || []).forEach(e => { if (e && e.name) eng[e.name] = e; });
+  const P = {}; (projectRows || []).forEach(p => { if (p && p.project_title) P[p.project_title] = p; });
+
+  // Who did each phase on EARLIER projects of the same series, from the live book.
+  const historyFor = title => {
+    const me = P[title]; const k = me && seriesKey_(me.series);
+    const out = { Dub: {}, Edit: {}, Mix: {} };
+    if (!k) return out;
+    const early = {};
+    Object.keys(P).forEach(t => { const q = P[t];
+      if (t !== title && seriesKey_(q.series) === k &&
+          (String(q.deadline).localeCompare(String(me.deadline)) || t.localeCompare(title)) < 0) early[t] = true; });
+    baseBook.forEach(b => { if (!b || !early[b.project] || !b.engineer) return;
+      (b.phase === 'Mix' ? ['Mix'] : b.phase === 'Edit' ? ['Edit'] : b.phase === 'Dub' ? ['Dub'] : ['Dub', 'Edit'])
+        .forEach(ph => { out[ph][b.engineer] = (out[ph][b.engineer] || 0) + 1; }); });
+    return out;
+  };
+
+  let best = rows.map(r => ({ ...r }));
+  let bestScore = scorePlan(baseBook.concat(best), engineerRows, projectRows);
+  if (!bestScore.series_continuity) return { rows: best, moved: 0 };
+  let moved = 0;
+
+  // Is `name` free for every row in `group`, ignoring the group's own current rows and anything
+  // that is the same job as the row arriving (see jobKey)?
+  const freeForGroup = (name, group, current) => {
+    const occ = jobsByEngineerWeek(baseBook.concat(current));
+    return group.every(row => {
+      const mine = jobKey(row);
+      return weeksOf(row).every(w => {
+        const e = occ[name + '|' + w];
+        return !e || !e.rows.some(r => !group.includes(r) && jobKey(r) !== mine);
+      });
+    });
+  };
+  const tryMove = (group, name) => {
+    if (!group.length || group.some(r => r.engineer === name)) return false;
+    if (!group.every(r => swapEligible_(eng[name], r.phase, P[r.project]))) return false;
+    if (!freeForGroup(name, group, best)) return false;
+    const idx = new Set(group.map(r => best.indexOf(r)));
+    const trial = best.map((r, i) => idx.has(i) ? { ...r, engineer: name } : r);
+    const sc = scorePlan(baseBook.concat(trial), engineerRows, projectRows);
+    if (!above.every(t => sc[t] === bestScore[t])) return false;
+    if (!(sc.series_continuity < bestScore.series_continuity)) return false;
+    best = trial; bestScore = sc; moved++; return true;
+  };
+
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false;
+    const titles = [...new Set(best.map(r => r.project))];
+    for (const title of titles) {
+      const hist = historyFor(title);
+      const mine = best.filter(r => r.project === title && !/manual/i.test(r.note || ''));
+      // dub and edit together on one person who did either before
+      const recEdit = mine.filter(r => r.phase === 'Dub' || r.phase === 'Edit');
+      const together = new Set(Object.keys(hist.Dub).concat(Object.keys(hist.Edit)));
+      for (const name of together) { if (recEdit.length > 1 && tryMove(best.filter(r => recEdit.includes(r)), name)) { changed = true; break; } }
+      // then each phase's rows on their own
+      for (const ph of ['Dub', 'Edit', 'Mix']) {
+        const group = best.filter(r => r.project === title && r.phase === ph && !/manual/i.test(r.note || ''));
+        const people = Object.keys(hist[ph]).sort((a, b) => hist[ph][b] - hist[ph][a] || a.localeCompare(b));
+        for (const name of people) { if (tryMove(group, name)) { changed = true; break; } }
+      }
+    }
+    if (!changed) break;
+  }
+  return { rows: best, moved };
 }
 
 // What the greedy pass cannot see.

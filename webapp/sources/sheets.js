@@ -24,7 +24,9 @@ const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended', 'rev
 // Columns this app writes that an older sheet may not have. Created on demand.
 const MANAGED_COLUMNS = ['Status', 'Completed',
   // Per-phase dates (2026-10-15). Created on the first save, like the two above.
-  'Dub start', 'Dub end', 'Edit start', 'Edit end', 'Mix start', 'Mix end'];
+  'Dub start', 'Dub end', 'Edit start', 'Edit end', 'Mix start', 'Mix end',
+  // The show a project belongs to (2026-10-27).
+  'Series'];
 // Row 1 of Projects is a banner, not headers. The other two start at row 1.
 const HEADER_ROW = { Projects: 2, Bookings: 1, Engineers: 1 };
 
@@ -78,7 +80,7 @@ function mapper(headers) {
 // business round-tripping, and a save based on a stale read would overwrite a lock
 // somebody set in the spreadsheet meanwhile.
 // Field name -> Projects column header, for the changes that write only part of a row.
-const FIELD_COLUMN = { locked: 'locked', status: 'status', completed: 'completed' };
+const FIELD_COLUMN = { locked: 'locked', status: 'status', completed: 'completed', series: 'series' };
 
 function projectCells(change) {
   const p = change.project;
@@ -107,6 +109,7 @@ function projectCells(change) {
     'recordist': o.recordist, 'editor': o.editor, 'mixer': o.mixer,
     'warnings': o.warnings, 'notes': o.notes,
     'status': p.status, 'completed': p.completed,
+    'series': p.series || '',
     'dub start': p.dub_from || '', 'dub end': p.dub_to || '',
     'edit start': p.edit_from || '', 'edit end': p.edit_to || '',
     'mix start': p.mix_from || '', 'mix end': p.mix_to || '',
@@ -189,6 +192,8 @@ function createSheetsSource(opts) {
           editor_override: p(r, 'Editor pick') || 'Auto',
           mixer_override: p(r, 'Mixer pick') || 'Auto',
           notes: String(p(r, 'Notes') || '').trim(),
+          // The show this belongs to. Blank on an older row, which simply has no series.
+          series: String(p(r, 'Series') || '').trim().replace(/\s+/g, ' '),
           // Per-phase dates. Blank on an older row, which then plots backward from its
           // deadline as it always did.
           dub_from: isoFrom(p(r, 'Dub start')), dub_to: isoFrom(p(r, 'Dub end')),
