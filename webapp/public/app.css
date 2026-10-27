@@ -739,3 +739,11 @@ table.sched.byeng td.cell{height:1px}
 table.sched.byeng .stack{min-height:56px}
 table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){padding:8px 12px 8px 20px}
 table.sched.byeng .stack .bk.rich + .bk.rich.samejob{padding-top:8px}
+
+/* Flush bars covered the red this-week and Due lines, so those cells had different edges from
+   their neighbours. The lines are now drawn above the bars (Tara, 2026-10-28). */
+table.sched:not(.byeng) tbody tr.lanes td.now::after, table.sched:not(.byeng) tbody tr.lanes td.duewk::after{
+  content:""; position:absolute; inset:0; z-index:2; pointer-events:none}
+table.sched:not(.byeng) tbody tr.lanes td.now::after{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.lanes td.duewk::after{box-shadow:inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.lanes td.duewk.now::after{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
