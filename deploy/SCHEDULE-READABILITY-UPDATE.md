@@ -1,0 +1,71 @@
+# IT handoff: update the local planner (28 Oct 2026)
+
+Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
+
+Update the server copy to the latest **`main`**. It must include the commit titled
+**"Schedule: Due never sits on a bar …"** (`a1e78f1`), which also brings in everything after
+the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign, the Inter font, the
+new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
+should list it. All of it is tested.
+
+**Take the latest, not an older step.** Before `ea88165`, saving any project failed with
+*"Sheets API 400: Range (Projects!AE2) exceeds grid limits"* once the Projects tab was 30
+columns wide, which the live sheet is. An older copy will keep failing that way.
+
+## What to do
+
+1. On the server checkout, check for local changes, then pull:
+
+   ```bash
+   git status --short
+   git fetch origin
+   git merge --ff-only origin/main
+   ```
+
+   If the server has local commits, merge `origin/main` and resolve as usual.
+
+2. **Rebuild and restart** both services (editing and read-only), the same way you
+   deploy now. The Dockerfile did not change this time, but the app files did, so rebuild the
+   image rather than only restarting the old one.
+
+3. **Update every running copy together** (editing and read-only, and the Cloud Run
+   copy if it is still pointed at the same sheet). The Cloud Run editing copy is already on
+   this version.
+
+4. If the server deploys with `deploy/redeploy.sh`, it now also runs
+   `test/sheets_grid.test.js` before rebuilding. It needs no credentials and no network.
+
+Nothing else changes: no new settings, no new credentials, same sheet, same
+sign-in, same ports and paths. New static files are served alongside `app.js`: the font
+folder `webapp/public/fonts/` (Inter, three `.woff2` files, served as `font/woff2`, plus its
+licence). If a reverse proxy lists files explicitly, add them.
+
+## What to expect on the sheet
+
+The first save after the update may add more columns to the right edge of the **Projects**
+tab, so the `Series` column fits. This is automatic. Do not add or delete columns by hand.
+No existing column moves and no data changes.
+
+## Check after the update
+
+- The whole app uses the **Inter** font, on Mac and Windows alike.
+- **Add project → the calendar button** opens a small calendar under the date box. It closes
+  when a day is picked, on Escape, or on a click outside it. It no longer stays stuck open.
+- Saving a project with a **Series** works (it used to fail with the grid-limits error).
+- **Schedule → Projects**: each booking is its own bar. When a project has bookings side by
+  side, the row grows and the bars stack instead of sharing one box. Project names are regular
+  weight; engineer names on bars are bold. A **3 at once** tag marks the busy week on that
+  person's bar. **Due** sits in its deadline week, or inside the bar if a bar runs into it.
+  Finished projects are folded under **Show N finished projects** at the bottom.
+- **Schedule → Engineers**: week dates are black and readable; this week has a red bar and
+  the words "This week"; show names wrap to two lines instead of being cut off; a 2 or 3 at
+  once tag names the jobs when you hover over it. Only 3 at once is tinted.
+- The colour key above the schedule shows Dub, Edit, Mix, By hand and (in Projects) Due.
+- Dragging a week to another engineer still works, in the Engineers view.
+
+## If something goes wrong
+
+Note the commit the server is on before pulling (`git rev-parse HEAD`). To roll back,
+check that commit out again and restart. Columns the update added to the Projects tab can
+stay; the older version ignores them, but an older version will fail to save projects with a
+series (see above).
