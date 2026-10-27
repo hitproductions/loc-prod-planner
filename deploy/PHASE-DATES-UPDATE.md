@@ -49,7 +49,7 @@ the **Projects** tab: `Dub start`, `Dub end`, `Edit start`, `Edit end`, `Mix sta
   of weeks per phase, and accepts overlapping phases (for example a mix that starts while the
   edit or dub is still running).
 - The schedule opens on this week, with the weeks before it dimmed.
-- The Projects list has a search box and a *Runs* column, and shows soonest deadlines first.
+- The Projects list has a search box and a *Dates* column, and shows soonest deadlines first.
 - Saving a project adds the six columns to the Projects tab (first save only).
 - A new **History** entry shows the correct Manila time.
 

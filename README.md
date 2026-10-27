@@ -114,8 +114,8 @@ The **search box** narrows the list as you type. Every word has to appear somewh
 row, in any order: `kyle nov` finds Kyle's November work. It looks at the title, client,
 engineers, deadline and flags.
 
-The **Runs** column shows when a project runs, first day to last ("2 Nov – 6 Dec · 5 wks"),
-with a coloured square for each phase it has. Hover for each phase's own dates.
+The **Dates** column shows when a project's work happens, first day to last ("2 Nov – 6 Dec"
+and the weeks that spans). Hover for each phase's own dates.
 
 **History** can be narrowed the same way: a box for any word (a project, an engineer) and a
 menu for the kind of change.

@@ -273,9 +273,9 @@ function shortDate(iso, withYear) {
     (withYear || (thisYear && d.getUTCFullYear() !== thisYear) ? ' ' + d.getUTCFullYear() : '');
 }
 
-// What a project runs, in place of the old 2/1/1: the span from its first day to its last,
-// the phases it has, and each phase's own dates on hover. Since phases have dates, week
-// counts said less than the dates they came from.
+// The project's dates, in place of the old 2/1/1: its first day to its last, the weeks that
+// is, and each phase's own dates on hover. Since phases have dates, week counts said less
+// than the dates they came from.
 function runsCell(p) {
   const ds = ['dub', 'edit', 'mix'].map(k => [k, p.dates && p.dates[k]]).filter(([, d]) => d && d.from && d.to);
   if (!ds.length) return '<span class="muted-inline">\u2014</span>';
@@ -283,7 +283,6 @@ function runsCell(p) {
   const weeks = Math.round((new Date(to + 'T00:00:00Z') - new Date(from + 'T00:00:00Z')) / 86400000 + 1) / 7;
   const tip = ds.map(([k, d]) => k[0].toUpperCase() + k.slice(1) + ' ' + shortDate(d.from) + ' \u2013 ' + shortDate(d.to)).join(' \u00b7 ');
   return `<span class="runs" title="${esc(tip)}">` +
-    ds.map(([k]) => `<i class="sw" style="background:var(--${k})"></i>`).join('') +
     `${esc(shortDate(from))} \u2013 ${esc(shortDate(to))}</span>` +
     `<span class="muted-inline"> \u00b7 ${Math.round(weeks)} wk${Math.round(weeks) === 1 ? '' : 's'}</span>`;
 }
@@ -344,7 +343,7 @@ function renderProjects() {
     '<div id="formHost"></div>';
 
   h += '<table class="projects"><thead><tr><th>Deadline</th><th>Project</th><th>Client</th>' +
-    '<th>Runs</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th></tr></thead><tbody>';
+    '<th>Dates</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th></tr></thead><tbody>';
   let divided = false;
   ps.forEach(p => {
     if (SORT === 'deadline' && !divided && passed(p)) {
