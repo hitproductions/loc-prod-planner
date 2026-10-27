@@ -152,7 +152,7 @@ function scheduleKey() {
   return '<div class="legend key">' +
     sw('background:var(--dub)', 'Dub') + sw('background:var(--edit)', 'Edit') + sw('background:var(--mix)', 'Mix') +
     (MODE === 'engineer'
-      ? sw('background:var(--tint2);border-color:var(--ink2)', '2 at once', 'Someone holds two jobs this week') +
+      ? sw('background:var(--bg1);border-color:var(--ink2)', '2 at once', 'Someone holds two jobs this week \u2014 tagged, not tinted') +
         sw('background:var(--tint3);border-color:var(--red)', '3 at once', 'Three jobs in one week \u2014 move one')
       : sw('border:2px solid var(--warn);background:transparent', '2 at once', 'Someone holds two jobs this week') +
         sw('border:2px solid var(--red);background:transparent', '3 at once', 'Three jobs in one week \u2014 move one')) +

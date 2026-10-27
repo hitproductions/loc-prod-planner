@@ -10,7 +10,7 @@
   --ink2:#1B4F80;
   /* Engineers grid rules: the week line is the stronger one, the line between two bookings
      in one week the lighter. Tints mark an overlapped week without a frame. */
-  --rule:#A9AAAB; --hair:#E6E5E1; --tint2:#EAF1F8; --tint3:#FDE9E4;
+  --rule:#A9AAAB; --hair:#C2C3C1; --tint3:#FDE9E4;
   /* Sequential ramp for the heatmap: one hue, lightness stepping down evenly, so
      "darker = busier" is readable without telling two colours apart. */
   --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
@@ -492,7 +492,9 @@ table.sched.byeng .stack{position:static; inset:auto; gap:0; height:100%; min-he
 table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){
   flex:1 0 auto; display:block; position:relative; background:transparent; border:0;
   padding:6px 8px 6px 14px; font-size:12px; white-space:normal}
-table.sched.byeng .stack .bk.rich + .bk.rich{border-top:1px solid var(--hair)}
+/* Two bookings in one week: a clear dashed line, so they read as two, while staying lighter
+   and different in kind from the solid week rule. */
+table.sched.byeng .stack .bk.rich + .bk.rich{border-top:1px dashed var(--hair)}
 table.sched.byeng .bk.rich::before{content:""; position:absolute; left:0; top:0; bottom:0;
   width:6px; background:var(--ph)}
 table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{
@@ -503,7 +505,7 @@ table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-ch
 /* An overlapped week: the whole cell is tinted and the first booking carries the worded tag.
    No frames: the tag says it, the tint lets a busy month be scanned for it. */
 table.sched.byeng td.over2, table.sched.byeng td.over3{outline:none; font-weight:400; color:inherit}
-table.sched.byeng td.over2{background:var(--tint2)}
+/* Only 3 at once is tinted: 2 at once is ordinary here, and its tag says enough. */
 table.sched.byeng td.over3{background:var(--tint3)}
 /* Worded depth. 3 at once is BLACK on red: white on --red measured 3.85:1, below the
    4.5:1 small text needs; black on it is 5.45:1. */
