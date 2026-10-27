@@ -859,3 +859,18 @@ table.sched.byeng .stack .bk.rich + .bk.rich, table.sched.byeng .stack .bk.rich 
   border-top:2px solid #fff; padding-top:8px}
 table.sched.byeng .otag{background:#fff}
 table.sched.byeng .otag.t3{background:var(--red)}
+
+/* WIDER, not taller (Tara, 2026-10-28). Height goes back down (44px floor, 6px padding, up to
+   two lines); instead every engineer column is at least 220px wide, so more of a name fits on a
+   line. If the columns no longer fit the screen, the grid scrolls sideways under the sticky
+   week column. The filled phase colours stay. */
+table.sched.byeng{width:auto; min-width:100%}
+table.sched.byeng thead th:not(.corner){width:220px; min-width:220px}
+table.sched.byeng tbody td{min-width:220px}
+table.sched.byeng tbody td, table.sched.byeng tbody th{height:44px}
+table.sched.byeng td.cell{height:1px}
+table.sched.byeng .stack{min-height:44px}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child), table.sched.byeng .stack .bk.rich:only-child{
+  min-height:44px; padding:6px 10px; justify-content:center}
+table.sched.byeng .stack .bk.rich + .bk.rich, table.sched.byeng .stack .bk.rich + .bk.rich.samejob{padding-top:6px}
+table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{-webkit-line-clamp:2}
