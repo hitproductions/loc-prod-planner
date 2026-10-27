@@ -29,6 +29,14 @@ Use Check first when you're unsure. It costs nothing and tells you the same thin
 saving would. Both stay dimmed until the dates are valid, and a note beside them says
 what is missing.
 
+### Titles are unique
+
+A project's title is its identity — its bookings, History and lock all find it by title — so
+two projects can't share one. A title that is already taken (case and spacing ignored) is
+saved with a number instead: **Harbor Lights (2)**. The form says so as you type, and
+Check availability and the saved result say it again. The existing project is never touched.
+Closed and removed projects keep their titles too.
+
 ### When each phase runs
 
 One line per phase: a start, an end, and the weeks that works out to ("3 wks · 2 Nov –

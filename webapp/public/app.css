@@ -364,3 +364,7 @@ table.projects tr[hidden]{display:none}
   font-size:10px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:.06em}
 .tl .empty{padding:34px 0; text-align:center; color:var(--fg3); font-style:italic; border:1px dashed var(--line)}
 .form h3{margin-bottom:14px}
+
+/* A taken title is numbered; the note sits under the box without moving the row. */
+.titlef{position:relative}
+.titletag{position:absolute; left:0; top:calc(100% + 3px); font-size:11px; font-weight:700; color:var(--warn); white-space:nowrap}

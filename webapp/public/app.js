@@ -1105,6 +1105,22 @@ function wireDates() {
   drawDates();
 }
 
+// A title that is already taken is numbered by the server ("Harbor Lights (2)"). Said here as
+// it is typed, with the same rule (titles.js), so the result is never a surprise.
+function wireTitle(p) {
+  const T = window.PlannerTitles, box = $('f_title'), note = $('f_titlenote');
+  const others = BOOT.projects.map(x => x.title).filter(t => !p || T.key(t) !== T.key(p.title));
+  const show = () => {
+    const wanted = T.clean(box.value);
+    const final = p && T.key(wanted) === T.key(p.title) ? wanted : T.uniqueTitle(wanted, others);
+    const clash = !!wanted && final !== wanted;
+    note.hidden = !clash;
+    if (clash) note.textContent = `Already used \u2014 saved as \u201c${final}\u201d`;
+  };
+  box.addEventListener('input', show);
+  show();
+}
+
 function openForm(title) {
   const p = title ? BOOT.projects.find(x => x.title === title) : null;
   const opts = sel => ['Auto', ...BOOT.engineers]
@@ -1113,8 +1129,9 @@ function openForm(title) {
   $('formHost').innerHTML = `<div class="form${p ? ' editing' : ''}">
     <h3>${p ? 'Edit ' + esc(p.title) : 'Add project'}</h3>
     <div class="top5">
-      <div class="f"><label for="f_title">Project</label>
-        <input type="text" id="f_title" value="${p ? esc(p.title) : ''}"></div>
+      <div class="f titlef"><label for="f_title">Project</label>
+        <input type="text" id="f_title" value="${p ? esc(p.title) : ''}">
+        <div class="titletag" id="f_titlenote" hidden></div></div>
       <div class="f"><label for="f_client">Client</label>
         <input type="text" id="f_client" list="clientList" value="${esc(p ? p.client : 'Netflix')}">
         <datalist id="clientList">${(BOOT.clients || []).map(c => `<option>${esc(c)}</option>`).join('')}</datalist></div>
@@ -1172,6 +1189,7 @@ function openForm(title) {
     </div>
     <div id="f_out"></div></div>`;
   wireDates();
+  wireTitle(p);
 
   $('formHost').scrollIntoView({ block: 'nearest' });
   $('f_check').addEventListener('click', () => submitForm(p, true));
@@ -1256,6 +1274,8 @@ async function submitForm(p, dryRun) {
     ? (r.boot.projects.find(x => x.title === r.title) || {}).overlap || 0 : 0;
   let h = `<div class="result ${deep > 2 ? 'alarm' : dryRun ? 'dry' : 'saved'}">` +
     `<h4>${dryRun ? 'Availability check \u2014 nothing was written' : 'Saved'}</h4>` +
+    (r.renamed ? `<div class="kv"><b>${dryRun ? 'Would be' : 'Saved'} as</b><span><b>${esc(r.renamed.to)}</b> ` +
+      `<span class="muted-inline">\u2014 \u201c${esc(r.renamed.from)}\u201d was already a project</span></span></div>` : '') +
     `<div class="kv"><b>Recordist</b><span>${esc(r.dubber || r.recordist)}</span></div>` +
     `<div class="kv"><b>Editor</b><span>${esc(r.editor || r.recordist)}</span></div>` +
     `<div class="kv"><b>Mixer</b><span>${esc(r.mixer)}</span></div>`;

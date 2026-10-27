@@ -1645,6 +1645,51 @@ section('The form reads and checks typed dates (webapp/public/dates.js)');
   ok('and the sample really did include accepted and refused sets', accepted > 40 && accepted < 560, `${accepted} accepted`);
 }
 
+
+section('Project titles stay unique (Tara, 2026-10-27)');
+{
+  const T = require('../webapp/public/titles.js');
+  ok('a free title is kept', T.uniqueTitle('Harbor Lights', ['Other']) === 'Harbor Lights');
+  ok('a taken title is numbered', T.uniqueTitle('Harbor Lights', ['Harbor Lights']) === 'Harbor Lights (2)');
+  ok('the next free number is used', T.uniqueTitle('Harbor Lights', ['Harbor Lights', 'Harbor Lights (2)']) === 'Harbor Lights (3)');
+  ok('case and spacing do not make a title different', T.uniqueTitle('harbor   LIGHTS ', ['Harbor Lights']) === 'harbor LIGHTS (2)',
+     T.uniqueTitle('harbor   LIGHTS ', ['Harbor Lights']));
+  ok('typing the numbered title again does not double up', T.uniqueTitle('Harbor Lights (2)', ['Harbor Lights', 'Harbor Lights (2)']) === 'Harbor Lights (3)',
+     T.uniqueTitle('Harbor Lights (2)', ['Harbor Lights', 'Harbor Lights (2)']));
+  ok('blank stays blank', T.uniqueTitle('   ', ['x']) === '');
+
+  const book = await freshBook();
+  const existing = book.projects.find(x => !x.status);
+  const title = existing.project_title;
+  const liveOf = b => A.activeRows(b.bookings).filter(x => x.project === title).map(x => x.row_number).sort().join(',');
+  const before = liveOf(book);
+  const dates = { dub_from: '2027-02-01', dub_to: '2027-02-14', edit_from: '2027-02-15', edit_to: '2027-02-21', mix_from: '2027-02-22', mix_to: '2027-03-07' };
+  const add = actions.saveProject(book, { title, client: 'Other', deadline: '2027-03-12', mix_level: 'Advanced', ...dates });
+  ok('adding a second project with a taken title is accepted', add.ok, JSON.stringify(add.errors));
+  ok('but it is numbered, and says so', add.title === title + ' (2)' && add.renamed && add.renamed.from === title && add.renamed.to === title + ' (2)', JSON.stringify(add.renamed));
+  ok('and it does NOT take over the existing project’s bookings', add.change.supersede.length === 0, add.change.supersede.length + ' superseded');
+  const next = apply(book, add.change);
+  ok('so the first project keeps every one of its bookings', liveOf(next) === before, `${before} vs ${liveOf(next)}`);
+  ok('and the new one is its own project', A.activeRows(next.bookings).some(x => x.project === title + ' (2)'));
+  ok('a free title is not renamed', actions.saveProject(book, { title: 'Brand New Title', client: 'X', deadline: '2027-03-12', mix_level: 'Advanced', ...dates }).renamed === null);
+
+  // editing the project itself is not a clash with itself
+  const edit = actions.saveProject(book, { title, original_title: title, client: existing.client, deadline: '2027-03-12', mix_level: 'Advanced', ...dates });
+  ok('editing a project under its own title is fine', edit.ok && edit.title === title && edit.renamed === null, JSON.stringify(edit.renamed || edit.errors));
+  const recased = actions.saveProject(book, { title: title.toUpperCase(), original_title: title, client: existing.client, deadline: '2027-03-12', mix_level: 'Advanced', ...dates });
+  ok('and so is changing only its capitals', recased.ok && recased.renamed === null, JSON.stringify(recased.renamed || recased.errors));
+  // renaming onto another project's title is a clash
+  const other = book.projects.find(x => x.project_title !== title);
+  const clash = actions.saveProject(book, { title: other.project_title, original_title: title, client: 'X', deadline: '2027-03-12', mix_level: 'Advanced', ...dates });
+  ok('renaming a project onto another’s title numbers it too', clash.ok && clash.renamed && clash.title === other.project_title + ' (2)', JSON.stringify(clash.renamed || clash.errors));
+  // a cancelled project still has a row, so its title is taken
+  const closed = { ...book, projects: book.projects.map(x => x === existing ? { ...x, status: 'Cancelled' } : x) };
+  const onClosed = actions.saveProject(closed, { title, client: 'X', deadline: '2027-03-12', mix_level: 'Advanced', ...dates });
+  ok('a closed project’s title is still taken', onClosed.ok && onClosed.renamed && onClosed.renamed.to === title + ' (2)', JSON.stringify(onClosed.renamed));
+  const dry = actions.saveProject(book, { title, client: 'X', deadline: '2027-03-12', mix_level: 'Advanced', dry_run: true, ...dates });
+  ok('Check availability reports it too, without writing', dry.ok && dry.renamed && !dry.change, JSON.stringify(dry.renamed));
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud
