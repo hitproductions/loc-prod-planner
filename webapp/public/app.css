@@ -8,6 +8,9 @@
   /* Overlap frame for 2 at once. --warn measured 2.2:1 against Mix and 2.9:1 against Dub,
      below the 3:1 a frame needs; this navy is 3.8:1 or better against every phase. */
   --ink2:#1B4F80;
+  /* Engineers grid rules: the week line is the stronger one, the line between two bookings
+     in one week the lighter. Tints mark an overlapped week without a frame. */
+  --rule:#A9AAAB; --hair:#E6E5E1; --tint2:#EAF1F8; --tint3:#FDE9E4;
   /* Sequential ramp for the heatmap: one hue, lightness stepping down evenly, so
      "darker = busier" is readable without telling two colours apart. */
   --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
@@ -473,12 +476,23 @@ table.sched.byeng tbody th{height:56px}
    its own white row inside the week with its phase as a 6px rail; the cell grows to hold
    them, and the depth is a frame plus a worded tag. The Projects grid keeps solid blocks:
    58 narrow columns have no room for a rail and a name. */
-table.sched.byeng tbody td{height:auto; min-height:56px; vertical-align:top}
-table.sched.byeng td.cell{padding:4px; position:static}
-table.sched.byeng .stack{position:static; inset:auto; gap:4px}
+/* Revised the same day after a look at it full of real weeks: inset cards with their own
+   borders floated in borderless white cells, the week lines all but vanished, and a 2px
+   frame round every overlapped booking covered a busy month in navy. Now the bookings sit
+   flush in the cell, divided by a light hairline; the WEEK line is the stronger rule; and an
+   overlap tints the cell and says so once, instead of framing each booking. */
+table.sched.byeng tbody td{height:auto; min-height:56px; vertical-align:top; padding:0;
+  border-right:1px solid var(--line); border-bottom:1px solid var(--rule)}
+table.sched.byeng tbody th{border-bottom:1px solid var(--rule)}
+/* The stack fills the cell (height:100% on a table cell needs the cell to have a height,
+   hence the 1px), and the bookings share it, so a rail always reaches the week line instead
+   of stopping short and leaving a white band under a lone booking. */
+table.sched.byeng td.cell{padding:0; position:static; height:1px}
+table.sched.byeng .stack{position:static; inset:auto; gap:0; height:100%; min-height:56px}
 table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){
-  flex:0 0 auto; display:block; position:relative; background:var(--bg1);
-  border:1px solid var(--line); padding:4px 8px 4px 14px; font-size:12px; white-space:normal}
+  flex:1 0 auto; display:block; position:relative; background:transparent; border:0;
+  padding:6px 8px 6px 14px; font-size:12px; white-space:normal}
+table.sched.byeng .stack .bk.rich + .bk.rich{border-top:1px solid var(--hair)}
 table.sched.byeng .bk.rich::before{content:""; position:absolute; left:0; top:0; bottom:0;
   width:6px; background:var(--ph)}
 table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{
@@ -486,12 +500,11 @@ table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-ch
   text-overflow:ellipsis; -webkit-line-clamp:unset}
 table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-m{
   display:block; font-size:11px; color:#333; opacity:1; white-space:nowrap}
-/* The frame moves from the cell edge onto the rows themselves, 2px, in a colour that holds
-   3:1 against the white row and the rail. */
+/* An overlapped week: the whole cell is tinted and the first booking carries the worded tag.
+   No frames: the tag says it, the tint lets a busy month be scanned for it. */
 table.sched.byeng td.over2, table.sched.byeng td.over3{outline:none; font-weight:400; color:inherit}
-/* Same specificity as the row rule above plus the cell class, so these win over its 1px line. */
-table.sched.byeng td.over2 .stack .bk.rich{border:2px solid var(--ink2)}
-table.sched.byeng td.over3 .stack .bk.rich{border:2px solid var(--red); background:#FFF5F3}
+table.sched.byeng td.over2{background:var(--tint2)}
+table.sched.byeng td.over3{background:var(--tint3)}
 /* Worded depth. 3 at once is BLACK on red: white on --red measured 3.85:1, below the
    4.5:1 small text needs; black on it is 5.45:1. */
 .otag{display:inline-block; margin-left:6px; padding:0 5px; font-size:10px; font-weight:700;
@@ -499,7 +512,7 @@ table.sched.byeng td.over3 .stack .bk.rich{border:2px solid var(--red); backgrou
 .otag.t3{color:#000; background:var(--red); border-color:var(--red)}
 /* By hand keeps its dotted ring, now on the row so it never collides with an overlap frame. */
 table.sched.byeng td.pinned{outline:none}
-table.sched.byeng .bk.rich[data-hand]{outline:2px dotted var(--fg1); outline-offset:-4px}
+table.sched.byeng .bk.rich[data-hand]{outline:2px dotted var(--fg1); outline-offset:-3px}
 table.sched.byeng tr.past td .stack{opacity:.55}
 .legend.key{margin:0 0 0 14px; gap:12px}
 .legend.key .k{white-space:nowrap}

@@ -151,8 +151,11 @@ function scheduleKey() {
   const sw = (css, t, tip) => `<span class="k"${tip ? ` title="${esc(tip)}"` : ''}><i class="sw" style="${css}"></i>${t}</span>`;
   return '<div class="legend key">' +
     sw('background:var(--dub)', 'Dub') + sw('background:var(--edit)', 'Edit') + sw('background:var(--mix)', 'Mix') +
-    sw('border:2px solid var(--ink2);background:transparent', '2 at once', 'Someone holds two jobs this week') +
-    sw('border:2px solid var(--red);background:transparent', '3 at once', 'Three jobs in one week \u2014 move one') +
+    (MODE === 'engineer'
+      ? sw('background:var(--tint2);border-color:var(--ink2)', '2 at once', 'Someone holds two jobs this week') +
+        sw('background:var(--tint3);border-color:var(--red)', '3 at once', 'Three jobs in one week \u2014 move one')
+      : sw('border:2px solid var(--warn);background:transparent', '2 at once', 'Someone holds two jobs this week') +
+        sw('border:2px solid var(--red);background:transparent', '3 at once', 'Three jobs in one week \u2014 move one')) +
     sw('border:2px dotted var(--fg1);background:transparent', 'By hand',
        READONLY ? 'Moved by hand' : 'Moved by hand \u2014 click the cell to give it back') +
     (MODE === 'project' ? sw('background:var(--red)', 'Deadline week') : '') + '</div>';
