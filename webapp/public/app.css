@@ -239,12 +239,18 @@ table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:9px}
    height instead of splitting the week into slivers. Bars are positioned in column units from
    the row's first cell (--c0 start column, --n weeks, --lane), so week lines stay intact.
    Weight: the engineer name on a bar is the one bold role; project names are regular. */
-table.sched:not(.byeng){--colw:84px; --laneh:32px; --lpad:6px}
+table.sched:not(.byeng){--colw:104px; --laneh:32px; --lpad:6px}
 table.sched:not(.byeng) thead tr:nth-child(2) th{width:var(--colw); min-width:var(--colw);
   font-size:12px; font-weight:400; letter-spacing:0; text-transform:none}
 table.sched:not(.byeng) thead tr:nth-child(2) th.nowcol{background:var(--red); color:#000;
   font-weight:700; box-shadow:none}
 table.sched:not(.byeng) .monthband th{font-size:12px; letter-spacing:0; text-transform:none}
+/* The project-name column is sticky and the grid scrolls under it. Bars, "3 at once" and "Due"
+   are positioned too, so without a higher layer they slid OVER the names when scrolled
+   (Tara, 2026-10-28: "Due still floating on top of the titles"). It sits above everything in
+   the grid body, and its corner header above that. */
+table.sched:not(.byeng) tbody th{z-index:5}
+table.sched:not(.byeng) thead th.corner{z-index:7}
 table.sched:not(.byeng) tbody th{text-transform:none; font-size:14px; font-weight:400; color:#000;
   border-bottom:1px solid var(--rule); min-width:250px; max-width:250px}
 table.sched:not(.byeng) tbody tr.lanes td{width:var(--colw); min-width:var(--colw); padding:0;
