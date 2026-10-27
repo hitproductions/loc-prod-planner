@@ -4,7 +4,7 @@ Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planne
 
 Update the server copy to the latest **`main`**. It must include the pull request titled
 **"Page improvements: this-week view, new Add project form, search and History filter"**
-and the one after it, **"Series: keep the same people on a show"**, which also bring in everything before them (per-phase dates, review fixes, overlapping
+and the two after it, **"Series: keep the same people on a show"** and **"Layout fixes: Re-plan, Analysis, taller schedule boxes"**, which also bring in everything before them (per-phase dates, review fixes, overlapping
 phases). `git log --oneline -8` should list it. All of it is tested.
 
 **Take the latest, not an older step.** The first version has a bug that can erase a completed
@@ -54,6 +54,9 @@ directly.
 - The Add project form has a **Series** box; typing a show that exists lists its earlier
   projects and who did each phase.
 - Saving a project adds the new columns to the Projects tab (first save only).
+- Schedule boxes are taller and read like "Dub · wk 1/3"; a colour key sits above the grid.
+- **Re-plan → Preview** shows a summary, the change list and a **Left alone** fold.
+- **Analysis** opens with an OK/Tight/Short verdict and a week-by-week free grid.
 - A new **History** entry shows the correct Manila time.
 
 ## If something goes wrong
