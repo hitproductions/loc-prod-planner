@@ -3,7 +3,7 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the commit titled
-**"Projects grid: one engineer name per week cell, short 36px rows, filled phase colour (replaces lane bars)"** (`cd6561a`), which also brings in everything after
+**"Projects grid: shared weeks stack one name per job (row grows 36px per booking); titles not bold in either view"** (`7856512`), which also brings in everything after
 the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars with a thin seam between lanes, roomier Engineers cells, dashed dividers between bookings, no Dub/Edit/Mix word on Engineers cells since the rail colour shows it), the Inter font, the
 new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
 should list it. All of it is tested.
@@ -52,12 +52,12 @@ No existing column moves and no data changes.
 - **Add project → the calendar button** opens a small calendar under the date box. It closes
   when a day is picked, on Escape, or on a click outside it. It no longer stays stuck open.
 - Saving a project with a **Series** works (it used to fail with the grid-limits error).
-- **Schedule → Projects**: one engineer name per week cell. Every cell is 104px wide and 36px tall, filled with its phase colour, name in regular weight. A week with more than one booking shows the first name and " / …"; hover lists them all. 3 at once is a red bar at the foot of the cell; past weeks are greyed; the deadline week has a red line on its right edge, with "Due" in it when the week is empty. Finished projects are folded under **Show N finished projects** at the bottom.
+- **Schedule → Projects**: one engineer name per week cell. Every cell is 104px wide; a row is 36px per booking in its busiest week. Cells are filled with its phase colour, name in regular weight. A week with more than one booking stacks one name per booking, and the row grows 36px per booking in its busiest week; hover lists them all. 3 at once is a red bar at the foot of the cell; past weeks are greyed; the deadline week has a red line on its right edge, with "Due" in it when the week is empty. Finished projects are folded under **Show N finished projects** at the bottom.
 - **Schedule → Engineers**: week dates are black and readable; this week has a red bar and
   the words "This week"; show names wrap to two lines instead of being cut off; a 2 or 3 at
   once tag names the jobs when you hover over it. Only 3 at once is tinted.
 - **Report**: below the selected month are two separate tables. **Work done by month** counts booked weeks in the month they actually happened (finished or not, future weeks excluded) with weeks per engineer. **Completed by month** counts projects in the month they were marked complete, with their booked weeks and late ones.
-- Hovering darkens only the header (the engineer name in Projects, the week label in Engineers); cells are not tinted. Engineers cells are filled edge to edge with the phase colour, engineer columns exactly 180px, every booking exactly 56px tall with the name in up to two lines and the "at once" tag in its corner, so dividers line up across a row, no week count (hover for the full name, phase and week). Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
+- Hovering darkens only the header (the engineer name in Projects, the week label in Engineers); cells are not tinted. Engineers cells are filled edge to edge with the phase colour, titles in regular weight (past weeks greyed, not bolded), engineer columns exactly 180px, every booking exactly 56px tall with the name in up to two lines and the "at once" tag in its corner, so dividers line up across a row, no week count (hover for the full name, phase and week). Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
 - **History** shows 25 entries a page, with Newer / Older buttons under the list. The filter searches the whole log, not just the page.
 - The colour key above the schedule shows Dub, Edit, Mix, By hand and (in Projects) Due.
 - Dragging a week to another engineer still works, in the Engineers view.
