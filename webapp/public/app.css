@@ -927,3 +927,29 @@ table.sched:not(.byeng) tbody tr.wk1 td.now{box-shadow:inset 2px 0 0 var(--red),
 table.sched:not(.byeng) tbody tr.wk1 td.now.duewk{box-shadow:inset 2px 0 0 var(--red), inset -3px 0 0 var(--red)}
 table.sched:not(.byeng) tbody tr.wk1 td > .duemark{position:static; transform:none}
 table.sched:not(.byeng) tbody tr.wk1 td.duewk:not(.wcell){text-align:center}
+
+/* Projects grid: STACKED names (Tara, 2026-10-28). Supersedes "one name per week" above.
+   Fixed rules: a row is 36px per booking in its busiest week (--n); every week cell is 104px
+   wide and fills the row height; its bookings are bands that share that height equally, one
+   name each, phase-coloured, divided by a 2px white line. Neighbouring weeks are divided by a
+   2px white line too; every row ends in a grey rule. */
+table.sched:not(.byeng) tbody tr.wk1 th{height:calc(var(--n, 1) * 36px)}
+table.sched:not(.byeng) tbody tr.wk1 td{height:calc(var(--n, 1) * 36px); padding:0; overflow:visible}
+table.sched:not(.byeng) tbody tr.wk1 td.wcell{background:transparent}
+table.sched:not(.byeng) tbody tr.wk1 td.past.wcell, table.sched:not(.byeng) tbody tr.wk1 td.past.wcell.duewk{box-shadow:none}
+table.sched:not(.byeng) tbody tr.wk1 td.past.wcell.duewk{box-shadow:inset -3px 0 0 var(--red)}
+.wstack{display:flex; flex-direction:column; height:calc(var(--n, 1) * 36px); width:100%}
+.wstack .wb{flex:1 1 0; min-height:0; display:flex; align-items:center; padding:0 8px; box-sizing:border-box;
+  font-size:13px; font-weight:400; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.wstack .wb + .wb{border-top:2px solid #fff}
+.wstack .wb.dub{background:var(--dub)} .wstack .wb.edit{background:var(--edit)} .wstack .wb.mix{background:var(--mix)}
+table.sched:not(.byeng) tbody tr.wk1 td.past .wb{box-shadow:inset 0 0 0 200px rgba(90,90,90,.28)}
+table.sched:not(.byeng) tbody tr.wk1 td.duewk .wstack{box-shadow:inset -3px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td.now .wstack{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+
+/* Engineers grid: titles NOT bold (Tara, 2026-10-28). Past weeks keep their phase colour under
+   a grey overlay instead of the paler colour; weight stays regular everywhere. */
+table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n,
+table.sched.byeng tr.past .bk.rich .bk-n{font-weight:400}
+table.sched.byeng tr.past .bk.rich{background:var(--ph);
+  box-shadow:inset 0 0 0 1px var(--ph-edge, transparent), inset 0 0 0 200px rgba(90,90,90,.28)}

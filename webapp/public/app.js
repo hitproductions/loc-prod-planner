@@ -274,14 +274,15 @@ function renderProjectGrid() {
   d.labels.forEach((n, ri) => (finished(ri) ? done : live).push(ri));
   const span = d.weeks.length + 1;
 
-  // ONE NAME PER WEEK (Tara, 2026-10-28). Each week cell holds one engineer name on one line,
-  // filled with that booking's phase colour, so rows stay short and a project reads across.
-  // A week with more than one booking shows the first name then "/ \u2026"; the tooltip lists
-  // them all. 3 at once is a red bar along the foot of the cell. Every cell is the same size.
+  // ONE NAME PER JOB, STACKED (Tara, 2026-10-28). A week cell holds one engineer name per
+  // booking, each a full-width band in its phase colour, one above the other. A row is as tall
+  // as its busiest week (36px per booking); a cell's bands share its height equally, so a
+  // single booking fills the cell. Names are regular weight, one line each.
   const ORD = { Dub: 0, Edit: 1, Mix: 2 };
   const row = ri => {
     const name = d.labels[ri];
-    let r = `<tr class="wk1"><th title="${esc(name)}">${esc(name)}</th>`;
+    const most = Math.max(1, ...(d.cells[ri] || []).map(c => (c && c.items ? c.items.length : 0)));
+    let r = `<tr class="wk1" style="--n:${most}"><th title="${esc(name)}">${esc(name)}</th>`;
     for (let ci = 0; ci < d.weeks.length; ci++) {
       const w = d.weeks[ci], cls = [];
       if (w.start < BOOT.today_week) cls.push('past');
@@ -291,16 +292,16 @@ function renderProjectGrid() {
       const c = (d.cells[ri] || [])[ci];
       let inner = '', tip = '';
       if (c && c.items && c.items.length) {
-        const its = c.items.slice().sort((a, b) => (ORD[a.ph] || 0) - (ORD[b.ph] || 0));
-        const f = its[0], more = its.length > 1;
+        const its = c.items.slice().sort((a, b) => (ORD[a.ph] || 0) - (ORD[b.ph] || 0) || String(a.e).localeCompare(String(b.e)));
         const deep = Math.max(...its.map(x => x.deep || 1));
-        cls.push('wcell', String(f.ph || '').toLowerCase());
+        cls.push('wcell');
         if (deep > 2) cls.push('deep3');
         if (its.some(x => x.hand)) cls.push('hand');
         tip = its.map(x => `${x.e} \u00b7 ${x.ph}` + (x.of > 1 ? ` \u00b7 week ${x.at} of ${x.of}` : '') +
           (x.hand ? ' \u00b7 moved by hand' : '')).join('\n') +
           (deep > 2 ? '\n3 at once' : deep > 1 ? '\n2 at once' : '') + (due ? '\nDue this week' : '');
-        inner = `<span class="wn">${esc(f.e)}</span>` + (more ? '<span class="wmore"> / \u2026</span>' : '');
+        inner = '<div class="wstack">' + its.map(x =>
+          `<span class="wb ${String(x.ph || '').toLowerCase()}">${esc(x.e)}</span>`).join('') + '</div>';
       } else if (due) {
         tip = 'Due ' + w.label;
         inner = '<span class="duemark">Due</span>';
