@@ -354,6 +354,7 @@ function createSheetsSource(opts) {
     const missing = MANAGED.filter(h => !have.includes(norm(h)));
     if (!missing.length) return [];
     const at = projectsMeta.header.length;
+    await widenProjectsTab(at + missing.length);
     await auth.api(`spreadsheets/${id}/values/` +
       encodeURIComponent(`${TABS.projects}!${colName(at)}${HEADER_ROW.Projects}`) +
       '?valueInputOption=RAW', {
@@ -367,6 +368,23 @@ function createSheetsSource(opts) {
     bookingsMeta = null;
     await read();
     return missing;
+  }
+
+  // A tab has a fixed number of columns, and Google refuses any write past the last one
+  // ("Range (Projects!AE2) exceeds grid limits ... max columns: 30"). The six phase-date
+  // columns took the Projects tab to exactly 30, so the Series column, the 31st, could
+  // never be created and every save failed (Tara, 2026-10-27). Add the columns first.
+  async function widenProjectsTab(needed) {
+    const meta = await auth.api(`spreadsheets/${id}?fields=sheets.properties`);
+    const sheet = (meta.sheets || []).find(x => x.properties.title === TABS.projects);
+    if (!sheet) return;
+    const have = (sheet.properties.gridProperties || {}).columnCount || 0;
+    if (have >= needed) return;
+    await auth.api(`spreadsheets/${id}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({ requests: [{ appendDimension: {
+        sheetId: sheet.properties.sheetId, dimension: 'COLUMNS', length: needed - have } }] }),
+    });
   }
 
   // A column written as bare text sits outside everything the setup formatted — no

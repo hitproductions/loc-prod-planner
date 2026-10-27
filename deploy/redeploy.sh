@@ -33,7 +33,7 @@ fi
 if command -v node >/dev/null 2>&1; then
   say "running the suites that need no credentials"
   for t in test/wrapper.test.js test/webapp.test.js test/engine_drift.test.js \
-           test/io_roundtrips.test.js; do
+           test/io_roundtrips.test.js test/sheets_grid.test.js; do
     if ! node "$t" >/dev/null 2>&1; then
       say "ABORTED: $t failed. Nothing was redeployed."
       exit 1
