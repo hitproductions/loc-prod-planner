@@ -792,3 +792,13 @@ table.sched td.colhi, table.sched tbody tr.lanes td.colhi{box-shadow:inset 2px 0
 table.sched thead th.colhi{background:#fff; color:#000; font-weight:700; box-shadow:inset 0 -4px 0 #000}
 table.sched.byeng tbody tr:hover td, table.sched.byeng tbody tr:hover th{background-color:rgba(0,0,0,.08)}
 table.sched.byeng tbody tr:hover th{box-shadow:inset 4px 0 0 #000}
+
+/* Too much (Tara, 2026-10-28): no black frame or black markers on hover. A darker tint is
+   enough: the hovered week column is shaded, its header goes a lighter charcoal, and the hovered
+   Engineers row is shaded the same. */
+table.sched td.colhi, table.sched tbody tr.lanes td.colhi{box-shadow:none; background-color:rgba(0,0,0,.10)}
+table.sched tbody tr.lanes td.now.colhi{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+table.sched thead th.colhi{background:#4A4B4C; color:#fff; font-weight:inherit; box-shadow:none}
+table.sched.byeng tbody tr:hover td, table.sched.byeng tbody tr:hover th{background-color:rgba(0,0,0,.10)}
+table.sched.byeng tbody tr:hover th{box-shadow:none}
+table.sched.byeng tbody tr.nowrow:hover th{box-shadow:inset 4px 0 0 var(--red)}
