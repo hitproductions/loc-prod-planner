@@ -3,8 +3,8 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the commit titled
-**"Schedule: roomier Engineers cells; Projects bars flush to their week cells, 36px lanes"** (`39908d4`), which also brings in everything after
-the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars, roomier Engineers cells), the Inter font, the
+**"Schedule: restore dividers between bookings (Engineers same-job, Projects lanes)"** (`cfb1ffb`), which also brings in everything after
+the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars with a thin seam between lanes, roomier Engineers cells, dashed dividers between bookings), the Inter font, the
 new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
 should list it. All of it is tested.
 
