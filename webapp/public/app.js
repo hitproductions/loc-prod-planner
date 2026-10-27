@@ -1220,7 +1220,7 @@ function dateBox(id, label, iso, placeholder) {
     `value="${Number.isNaN(t) ? '' : esc(dayLabel(t))}" autocomplete="off">` +
     `<button type="button" class="cal" data-for="${id}" tabindex="-1" aria-label="Pick ${esc(label)} from a calendar" title="Pick from a calendar">` +
     '<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><path d="M1.5 3h10v8.5h-10zM1.5 5.5h10M4 1.5v3M9 1.5v3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>' +
-    '<input type="date" class="hidpick" tabindex="-1" aria-hidden="true"></span>';
+    '</span>';
 }
 
 const PHASES = [['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']];
@@ -1320,14 +1320,74 @@ function wireDates() {
       drawDates();
     });
   });
-  document.querySelectorAll('#formHost .cal').forEach(btn => btn.addEventListener('click', () => {
-    const box = $(btn.dataset.for), pick = btn.parentNode.querySelector('.hidpick');
-    const t = parseDay(box.value);
-    if (t != null && !Number.isNaN(t)) pick.value = isoOf(t);
-    pick.onchange = () => { if (pick.value) { box.value = dayLabel(Date.parse(pick.value + 'T00:00:00Z')); drawDates(); } };
-    if (pick.showPicker) { try { pick.showPicker(); } catch (e) { pick.click(); } } else pick.click();
+  document.querySelectorAll('#formHost .cal').forEach(btn => btn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const box = $(btn.dataset.for);
+    if (CAL && CAL.box === box) return closeCal();
+    openCal(box, btn.parentNode);
   }));
   drawDates();
+}
+
+// ---------------------------------------------------------------- the calendar popup
+// Drawn by the app, not the browser. The calendar button used to open Safari's native
+// date picker on a hidden 1px input; with nothing visible to anchor to, Safari never
+// dismissed it and it stayed on screen over the form (Tara, 2026-10-27). This one closes
+// on a pick, on Escape, and on any click outside it.
+let CAL = null;
+
+function closeCal() {
+  if (!CAL) return;
+  CAL.el.remove();
+  document.removeEventListener('mousedown', CAL.outside, true);
+  document.removeEventListener('keydown', CAL.key, true);
+  CAL = null;
+}
+
+function openCal(box, anchor) {
+  closeCal();
+  const t = parseDay(box.value);
+  const seed = new Date(t != null && !Number.isNaN(t) ? t : Date.parse(BOOT.today_week + 'T00:00:00Z'));
+  const el = document.createElement('div');
+  el.className = 'calpop';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Pick a date');
+  anchor.appendChild(el);
+  CAL = { el, box, y: seed.getUTCFullYear(), m: seed.getUTCMonth(),
+    outside: e => { if (!el.contains(e.target) && !e.target.closest('.cal')) closeCal(); },
+    key: e => { if (e.key === 'Escape') { e.preventDefault(); closeCal(); box.focus(); } } };
+  document.addEventListener('mousedown', CAL.outside, true);
+  document.addEventListener('keydown', CAL.key, true);
+  drawCal();
+}
+
+function drawCal() {
+  const { el, box, y, m } = CAL;
+  const chosen = parseDay(box.value);
+  const today = Date.parse(BOOT.today_week + 'T00:00:00Z') + ((new Date().getDay() + 6) % 7) * DAYMS;
+  // Monday-first, as the app's weeks are.
+  const first = Date.UTC(y, m, 1);
+  const start = first - ((new Date(first).getUTCDay() + 6) % 7) * DAYMS;
+  let h = `<div class="calhd"><button type="button" class="calnav" data-step="-1" aria-label="Previous month">\u2039</button>` +
+    `<b>${MONTHS[m]} ${y}</b><button type="button" class="calnav" data-step="1" aria-label="Next month">\u203A</button></div>` +
+    '<div class="calgrid">' + ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="calwd">${d}</span>`).join('');
+  for (let i = 0; i < 42; i++) {
+    const day = start + i * DAYMS, d = new Date(day);
+    const cls = ['calday', d.getUTCMonth() !== m ? 'out' : '', day === chosen ? 'on' : '',
+      day === today ? 'now' : ''].filter(Boolean).join(' ');
+    h += `<button type="button" class="${cls}" data-t="${day}">${d.getUTCDate()}</button>`;
+  }
+  el.innerHTML = h + '</div>';
+  el.querySelectorAll('.calnav').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const n = new Date(Date.UTC(CAL.y, CAL.m + Number(b.dataset.step), 1));
+    CAL.y = n.getUTCFullYear(); CAL.m = n.getUTCMonth(); drawCal();
+  }));
+  el.querySelectorAll('.calday').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    box.value = dayLabel(Number(b.dataset.t));
+    closeCal(); box.focus(); drawDates();
+  }));
 }
 
 // ---------------------------------------------------------------- series
@@ -1487,7 +1547,7 @@ function openForm(title) {
   $('formHost').scrollIntoView({ block: 'nearest' });
   $('f_check').addEventListener('click', () => submitForm(p, true));
   $('f_save').addEventListener('click', () => submitForm(p, false));
-  $('f_close').addEventListener('click', () => { $('formHost').innerHTML = ''; });
+  $('f_close').addEventListener('click', () => { closeCal(); $('formHost').innerHTML = ''; });
   if ($('f_cancel')) $('f_cancel').addEventListener('click', async () => {
     const to = p.status === 'Cancelled' ? '' : 'Cancelled';
     // Cancelling frees the weeks, so it is the one status change that alters the
@@ -1646,6 +1706,7 @@ function placeSchedule() {
 
 function paint() {
   syncTop();
+  closeCal();          // its listeners live on document; a repaint must not orphan them
   $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
   topRight();
   if (VIEW === 'analysis') {
