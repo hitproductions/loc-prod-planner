@@ -305,10 +305,64 @@ td.muted-inline{color:var(--fg2); font-size:11px}
 table.projects tbody tr.locked{background:var(--surface);
   box-shadow:inset 3px 0 0 var(--fg1)}
 
-/* Per-phase dates on the project form: one row per phase, start "to" end. */
-table.phasedates{border-collapse:collapse}
-table.phasedates th{font-size:13px; font-weight:700; text-align:left; padding:3px 12px 3px 0;
-  white-space:nowrap}
-table.phasedates td{padding:3px 0}
-table.phasedates td.to{padding:3px 10px; font-size:12px; color:var(--fg2)}
-table.phasedates input[type=date]{width:auto; min-width:160px}
+
+/* Weeks that have gone: still there as the record of who did what, but not competing with
+   the weeks that can still change. Outlines (overlaps) stay at full strength. */
+table.sched tr.past th{color:var(--fg3)}
+table.sched tr.past td .stack{opacity:.5}
+table.sched td.past .stack, table.sched td.past.marker{opacity:.5}
+table.sched thead th.nowcol{box-shadow:inset 0 -3px 0 var(--red)}
+
+/* Projects list: search, the past-deadline heading, and the Runs column. */
+input.search{width:260px; height:30px; font-size:13px; padding:0 10px}
+table.projects tr.grp td{background:var(--bg2); color:var(--fg2); font-size:10px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.08em; padding:5px 10px 5px 0; border-bottom:1px solid var(--line)}
+table.projects tr[hidden]{display:none}
+.runs{white-space:nowrap}
+.runs .sw{width:9px; height:9px; margin-right:2px}
+.runs .sw:last-of-type{margin-right:7px}
+
+/* ---- Add project: one line per phase, with the weeks side by side ------------------- */
+.top5{display:grid; grid-template-columns:2fr 1.2fr 1fr 1fr 1.1fr; gap:14px; align-items:end}
+@media (max-width:1000px){.top5{grid-template-columns:repeat(2,1fr)}}
+.phases2{display:grid; grid-template-columns:minmax(500px,540px) 1fr; gap:28px; margin-top:20px;
+  padding-top:16px; border-top:1px solid #E6E5E1}
+@media (max-width:1100px){.phases2{grid-template-columns:1fr}}
+.lab{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--fg2);
+  display:block; margin-bottom:4px}
+.ph{display:grid; grid-template-columns:62px 142px 14px 142px 1fr; gap:6px; align-items:center; margin-bottom:8px}
+.ph .name{display:flex; align-items:center; gap:7px; font-weight:700; font-size:13px}
+.ph .arrow{color:var(--fg3); text-align:center}
+.ph .snap{font-size:12px; color:var(--fg2); font-variant-numeric:tabular-nums; white-space:nowrap}
+.ph .snap b{color:var(--fg1)}
+.ph .snap.none{color:var(--fg3); font-style:italic}
+.ph .err{grid-column:2 / 6; color:var(--red); font-size:12px; font-weight:700; margin:-4px 0 4px}
+.dbox{position:relative; display:block}
+.dbox input[type=text]{height:36px; font-size:14px; padding-right:30px}
+.dbox input.bad{border:2px solid var(--red)}
+.dbox input::placeholder{color:var(--fg3); font-style:italic}
+.dbox .cal{position:absolute; right:1px; top:1px; bottom:1px; width:28px; border:0; background:transparent;
+  color:var(--fg2); cursor:pointer; display:flex; align-items:center; justify-content:center}
+.dbox .cal:hover{color:var(--fg1)}
+.dbox .hidpick{position:absolute; right:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none; border:0; padding:0}
+.top5 .dbox input[type=text]{height:auto; font-size:15px}
+.formnote{margin-left:auto; font-size:12px; color:var(--fg2)}
+.tl{min-width:0}
+.tl .hd{margin-bottom:28px}
+.tl .hd .lab{margin:0}
+.tl .ov{font-size:12px; color:var(--warn); font-weight:700; margin-top:8px}
+.tl .ov.none{color:var(--fg3); font-weight:400}
+.tl .grid{position:relative; border-left:1px solid var(--line); border-right:1px solid var(--line)}
+.tl .grid .row{display:grid; height:30px; border-bottom:1px solid #E6E5E1; align-items:stretch}
+.tl .grid .row:last-of-type{border-bottom:none}
+.tl .bk{margin:4px 0; display:flex; align-items:center; padding:0 8px; font-size:11px; font-weight:700;
+  white-space:nowrap; overflow:hidden; flex:none; cursor:default; min-height:0}
+.tl .bk.dub{background:var(--dub)} .tl .bk.edit{background:var(--edit)} .tl .bk.mix{background:var(--mix)}
+.tl .bk.under{outline:2px solid #000; outline-offset:-2px}
+.tl .axis{display:grid; font-size:10px; color:var(--fg2); margin-top:5px; font-variant-numeric:tabular-nums}
+.tl .axis span{border-left:1px solid var(--line); padding-left:3px; overflow:hidden; white-space:nowrap}
+.tl .dl{position:absolute; top:-6px; bottom:-2px; width:0; border-left:2px solid var(--red)}
+.tl .dl em{position:absolute; top:-15px; left:-26px; width:52px; text-align:center; font-style:normal;
+  font-size:10px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:.06em}
+.tl .empty{padding:34px 0; text-align:center; color:var(--fg3); font-style:italic; border:1px dashed var(--line)}
+.form h3{margin-bottom:14px}

@@ -1,14 +1,14 @@
-# IT handoff: update the local planner (21 Oct 2026)
+# IT handoff: update the local planner (27 Oct 2026)
 
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
-Update the server copy to the latest **`main`**, which must include **pull request #5**
-("Allow all phases to overlap"; it includes #2, #3 and #4). `git log --oneline -5` should
-list it. All are tested.
+Update the server copy to the latest **`main`**. It must include the pull request titled
+**"Page improvements: this-week view, new Add project form, search and History filter"**,
+which also brings in everything before it (per-phase dates, review fixes, overlapping
+phases). `git log --oneline -8` should list it. All of it is tested.
 
-**Take the latest, not just #2.** #2 alone has bugs that can erase a completed project's
-bookings on a re-plan (fixed in #3). The Add project form's date rules changed in #4 and
-#5: any phase may overlap any other, so an older copy refuses entries the new one accepts.
+**Take the latest, not an older step.** The first version has a bug that can erase a completed
+project's bookings on a re-plan, and an older copy refuses date entries the new one accepts.
 
 ## What to do
 
@@ -34,7 +34,8 @@ bookings on a re-plan (fixed in #3). The Add project form's date rules changed i
    dated project leaves the dates stale.
 
 Nothing else changes: no new settings, no new credentials, same sheet, same
-sign-in, same ports and paths.
+sign-in, same ports and paths. One new static file, `webapp/public/dates.js`, is served
+alongside `app.js`; if a reverse proxy lists files explicitly, add it.
 
 ## What to expect on the sheet
 
@@ -47,6 +48,8 @@ the **Projects** tab: `Dub start`, `Dub end`, `Edit start`, `Edit end`, `Mix sta
 - The **Add project** form shows a start and end date for Dub, Edit and Mix, instead
   of weeks per phase, and accepts overlapping phases (for example a mix that starts while the
   edit or dub is still running).
+- The schedule opens on this week, with the weeks before it dimmed.
+- The Projects list has a search box and a *Runs* column, and shows soonest deadlines first.
 - Saving a project adds the six columns to the Projects tab (first save only).
 - A new **History** entry shows the correct Manila time.
 

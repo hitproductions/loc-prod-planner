@@ -56,7 +56,10 @@ const depthOf = rows => {
 section('Read models');
 {
   const book = await freshBook();
-  const boot = api.bootstrap(book);
+  // The clock is pinned: overlaps are counted from THIS WEEK on, so an unpinned test
+  // would pass or fail depending on the day it is run (and did, once the sample book's
+  // weeks began to pass).
+  const boot = api.bootstrap(book, { today: '2026-06-01' });
   ok('bootstrap names every engineer', boot.engineers.length === book.engineers.length);
   ok('and every project', boot.projects.length === book.projects.length);
   ok('overlap counts split by depth',
@@ -69,6 +72,27 @@ section('Read models');
   const three = Object.keys(per).filter(k => per[k] > 2).length;
   ok('two-at-once count matches the book', boot.counts.over2 === two, `${boot.counts.over2} vs ${two}`);
   ok('three-at-once count matches the book', boot.counts.over3 === three, `${boot.counts.over3} vs ${three}`);
+
+  // Weeks that have already gone are not problems (Tara, 2026-10-27): nothing can be
+  // reassigned in them, so they sat in the header forever.
+  const latest = Object.keys(per).filter(k => per[k] > 1).map(k => Number(k.split('|').pop())).sort((a, b) => b - a)[0];
+  const after = A.weekStart(latest + 1);                // the Monday after the last overlapped week
+  const later = api.bootstrap(book, { today: after });
+  ok('once every overlapped week is past, none is counted as a problem',
+     later.counts.over2 === 0 && later.counts.over3 === 0, JSON.stringify(later.counts));
+  ok('but they are still reported, as earlier ones',
+     later.counts.over2_past === two && later.counts.over3_past === three,
+     `${later.counts.over2_past}/${later.counts.over3_past} vs ${two}/${three}`);
+  ok('and no project is flagged for an overlap that is over', later.projects.every(p => !p.overlap),
+     later.projects.filter(p => p.overlap).map(p => p.title).join(', '));
+  const mid = per && api.bootstrap(book, { today: A.weekStart(latest) });
+  ok('the current week still counts', mid.counts.over2 + mid.counts.over3 >= 1, JSON.stringify(mid.counts));
+  const an = api.analysis(book, { from: after });
+  ok('Analysis lists no collision from a past week', an.overlaps.collisions.length === 0 && an.overlaps.earlier_weeks === two + three,
+     `${an.overlaps.collisions.length} listed, ${an.overlaps.earlier_weeks} earlier`);
+  const an0 = api.analysis(book, { from: '2026-06-01' });
+  ok('and lists all of them when they are still ahead', an0.overlaps.collisions.length >= 1 && an0.overlaps.earlier_weeks === 0,
+     `${an0.overlaps.collisions.length} listed, ${an0.overlaps.earlier_weeks} earlier`);
 
   // Explicit: the default is PROJECT mode, matching the Apps Script app.
   const sch = api.schedule(book, { mode: 'engineer' });
@@ -1556,6 +1580,69 @@ section('Every phase may overlap every other, through the real save path (Tara, 
   const bad = actions.saveProject(book, { ...same, edit_from: '2026-10-26' });
   ok('an edit starting before the dub starts is still refused', !bad.ok && bad.errors.some(e => /Edit cannot start before the dub/.test(e)),
      JSON.stringify(bad.errors));
+}
+
+
+section('The form reads and checks typed dates (webapp/public/dates.js)');
+{
+  const D = require('../webapp/public/dates.js');
+  const day = (raw, today) => { const t = D.parseDay(raw, today || '2026-10-27'); return t === null ? null : Number.isNaN(t) ? 'NaN' : D.isoOf(t); };
+  ['2 Nov 2026', '2 nov 2026', 'Nov 2 2026', 'Nov 2, 2026', '11/2/2026', '2026-11-02', '2 Nov', 'Nov 2', '11/2'].forEach(v =>
+    ok(`"${v}" is read as 2 November 2026`, day(v) === '2026-11-02', String(day(v))));
+  ok('blank is blank, not an error', day('') === null && day('   ') === null);
+  ['banana', '31/12', '13/45/2026', '2 Smarch 2026', '2026-02-30', '30 Feb 2026', '29 Feb 2026'].forEach(v =>
+    ok(`"${v}" is refused, not guessed at`, day(v) === 'NaN', String(day(v))));
+  ok('a real leap day is accepted', day('29 Feb 2028') === '2028-02-29');
+  ok('two-digit years mean 20xx', day('11/2/26') === '2026-11-02');
+  ok('no year: this year', day('1 Jun', '2026-10-27') === '2026-06-01', day('1 Jun', '2026-10-27'));
+  ok('no year, and well in the past: next year ("2 Jan" typed in December)', day('2 Jan', '2026-12-10') === '2027-01-02', day('2 Jan', '2026-12-10'));
+  ok('no year, more than half a year back: next year', day('15 Apr', '2026-10-27') === '2027-04-15', day('15 Apr', '2026-10-27'));
+  ok('a slash date is month then day', day('3/4/2026') === '2026-03-04');
+
+  const ph = (a, b) => ({ a: a == null ? null : D.parseDay(a, '2026-10-27'), b: b == null ? null : D.parseDay(b, '2026-10-27') });
+  const chk = (dub, edit, mix, deadline) => D.checkPhases({ deadline: D.parseDay(deadline || '20 Dec 2026', '2026-10-27'),
+    phases: { dub: ph(...dub), edit: ph(...edit), mix: ph(...mix) } });
+  const errs = r => Object.values(r.errors).flat().join(' | ');
+  const base = [['2 Nov', '22 Nov'], ['16 Nov', '29 Nov'], ['23 Nov', '6 Dec']];
+  ok('dub, edit and mix overlapping is accepted', errs(chk(...base)) === '', errs(chk(...base)));
+  ok('all three over the same weeks is accepted', errs(chk(['2 Nov', '29 Nov'], ['2 Nov', '29 Nov'], ['2 Nov', '29 Nov'])) === '');
+  ok('an edit starting before the dub is refused', /Edit cannot start before the dub/.test(errs(chk(['9 Nov', '29 Nov'], ['2 Nov', '22 Nov'], [null, null]))));
+  ok('a mix starting before the edit is refused', /Mix cannot start before the edit/.test(errs(chk(['2 Nov', '8 Nov'], ['16 Nov', '29 Nov'], ['9 Nov', '6 Dec']))));
+  ok('with no edit, a mix starting before the dub is refused', /Mix cannot start before the dub/.test(errs(chk(['9 Nov', '29 Nov'], [null, null], ['2 Nov', '6 Dec']))));
+  ok('a phase running past the deadline is refused', /Ends after the deadline/.test(errs(chk(...base, '25 Nov 2026'))));
+  ok('a phase ending in the deadline\u2019s own week is fine', errs(chk(...base, '1 Dec 2026')) === '', errs(chk(...base, '1 Dec 2026')));
+  ok('a start with no end is refused', /needs both/.test(errs(chk(['2 Nov', null], [null, null], [null, null]))));
+  ok('an end before its start is refused', /ends before it starts/.test(errs(chk(['22 Nov', '2 Nov'], [null, null], [null, null]))));
+  ok('a phase left blank is simply not used', errs(chk(['2 Nov', '22 Nov'], [null, null], [null, null])) === '' && chk(['2 Nov', '22 Nov'], [null, null], [null, null]).used.join() === 'dub');
+  ok('a mid-week date snaps to its Monday-Sunday week',
+     D.isoOf(chk(['4 Nov', '24 Nov'], [null, null], [null, null]).phases.dub.snapped[0]) === '2026-11-02');
+
+  // The page and the server must agree on what is acceptable, or the form would enable a
+  // button the server then refuses (or the reverse). Compared on many random date sets.
+  let seed = 2026, bad = [];
+  const rnd = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 2147483648 * n); };
+  const at = n => D.isoOf(Date.UTC(2026, 10, 2) + n * 86400000);
+  let agree = 0, accepted = 0;
+  for (let i = 0; i < 600; i++) {
+    // Phases laid out roughly in order, then nudged so some break the rules.
+    const dubA = rnd(20), dubB = dubA + rnd(25), editA = dubA + rnd(25) - 4, editB = editA + rnd(25);
+    const mixA = editA + rnd(25) - 4, mixB = mixA + rnd(25);
+    const cell = (a, b) => { const r = rnd(20); return r < 3 ? [null, null] : r === 3 ? [at(a), null] : [at(a), at(b)]; };
+    const v = { dub: cell(dubA, dubB), edit: cell(editA, editB), mix: cell(mixA, mixB) };
+    const dl = at(Math.max(dubB, editB, mixB) + rnd(20) - 6);
+    const P = x => (x == null ? null : D.parseDay(x, '2026-10-27'));
+    const client = D.checkPhases({ deadline: P(dl),
+      phases: { dub: { a: P(v.dub[0]), b: P(v.dub[1]) }, edit: { a: P(v.edit[0]), b: P(v.edit[1]) }, mix: { a: P(v.mix[0]), b: P(v.mix[1]) } } });
+    const clientOk = Object.values(client.errors).every(e => !e.length) && client.used.length > 0;
+    const server = A.normalizeProject({ project_title: 'R', deadline: dl, mix_level_required: 'Advanced',
+      dub_from: v.dub[0] || '', dub_to: v.dub[1] || '', edit_from: v.edit[0] || '', edit_to: v.edit[1] || '',
+      mix_from: v.mix[0] || '', mix_to: v.mix[1] || '' });
+    const serverOk = server.errors.length === 0;
+    if (clientOk === serverOk) agree++; else bad.push(JSON.stringify({ v, dl, client: Object.values(client.errors).flat(), server: server.errors }));
+    if (serverOk) accepted++;
+  }
+  ok('the page and the server agree on 600 random date sets', agree === 600, `${bad.length} disagree, e.g. ${bad[0]}`);
+  ok('and the sample really did include accepted and refused sets', accepted > 40 && accepted < 560, `${accepted} accepted`);
 }
 
 section('The password gate, for when the URL is public');

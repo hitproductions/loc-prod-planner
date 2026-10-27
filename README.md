@@ -15,7 +15,7 @@ works out who does each phase and when, without double-booking anyone.
 
 **Projects → + Add project.**
 
-Fill in the title, deadline, and the three phase lengths in whole weeks. Everything
+Fill in the title, the deadline, and **when each phase runs** (see below). Everything
 else has a sensible default — client is Netflix, mix level is Advanced, Music and
 Special are off.
 
@@ -26,13 +26,19 @@ Two buttons:
 - **Plot & save** — commits it.
 
 Use Check first when you're unsure. It costs nothing and tells you the same thing
-saving would.
+saving would. Both stay dimmed until the dates are valid, and a note beside them says
+what is missing.
 
-### The three phase lengths
+### When each phase runs
 
-Whole weeks only. **Zero is valid** — a mix-only job is `0/0/2`. Phases run
-back-to-back ending the week before the deadline, so a 2/1/1 job occupies the four
-weeks leading up to delivery.
+One line per phase: a start, an end, and the weeks that works out to ("3 wks · 2 Nov –
+22 Nov"). Type dates the way they come — `2 Nov`, `Nov 2`, `11/2`, `2026-11-02` — or use
+the small calendar button beside each box. Whatever was understood is shown back as a full
+date, and as the Monday–Sunday week it falls in. A phase left blank is simply not used.
+
+Beside the boxes, a **week-by-week strip** draws the phases as bars on one axis, with the
+deadline marked. Phases that share weeks are outlined and listed under the strip. Mistakes
+appear next to the box that caused them.
 
 Get these right. Everything else follows from them, and a week's error moves every
 window on that title.
@@ -41,7 +47,10 @@ window on that title.
 
 ## Reading the schedule
 
-**Schedule.** Colours are the tracker's:
+**Schedule.** It opens on **this week**, with two weeks of the past above it; earlier weeks are
+dimmed but still there. The overlap warnings at the top count **from this week on** — a week
+that has already gone can't be reassigned, so it is shown quietly as "N earlier" instead.
+Colours are the tracker's:
 
 | | |
 |---|---|
@@ -97,9 +106,19 @@ whole picture.
 
 ## Finding a project
 
-Projects are listed by deadline. The **A–Z** button beside *Add project* sorts by
-title instead, which is faster when you know the name but not the date. **Deadline**
-switches back.
+Projects are listed by deadline, **soonest first**. Those whose deadline has passed come
+after, under a *Deadline passed* heading, most recent first. The **A–Z** button sorts by
+title instead; **Deadline** switches back.
+
+The **search box** narrows the list as you type. Every word has to appear somewhere in the
+row, in any order: `kyle nov` finds Kyle's November work. It looks at the title, client,
+engineers, deadline and flags.
+
+The **Runs** column shows when a project runs, first day to last ("2 Nov – 6 Dec · 5 wks"),
+with a coloured square for each phase it has. Hover for each phase's own dates.
+
+**History** can be narrowed the same way: a box for any word (a project, an engineer) and a
+menu for the kind of change.
 
 ## Changing something
 
