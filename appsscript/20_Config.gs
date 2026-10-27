@@ -61,11 +61,15 @@ var P_COL = {
   // the web app creates them on first save, and nothing before them moves. Each date
   // snaps to its Monday-Sunday week; a phase the project does not have stays blank.
   DUB_START: 25, DUB_END: 26, EDIT_START: 27, EDIT_END: 28, MIX_START: 29, MIX_END: 30,
+  // The show or franchise a project belongs to ("Harbor Lights"), shared by its seasons and
+  // episode batches so the planner can keep the same people on a series (Tara, 2026-10-27).
+  // Typed by whoever adds the project, or straight into this column.
+  SERIES: 31,
 };
 var P_INPUT_LAST  = P_COL.MIX_PICK;      // columns 1..12 are the user's
 var P_OUTPUT_FIRST = P_COL.DUB_W;        // 13..21 belong to the engine
 var P_OUTPUT_LAST  = P_COL.PLOTTED;
-var P_LAST = P_COL.MIX_END;
+var P_LAST = P_COL.SERIES;
 var P_HEADER_ROW = 2;                    // row 1 is the banner
 var P_FIRST_DATA_ROW = 3;
 var P_ROWS = 300;                        // validated/formatted depth
@@ -78,6 +82,7 @@ var P_HEADERS = [
   'Recordist', 'Editor', 'Mixer', 'Warnings', 'Notes', 'Plotted', 'Locked',
   'Status', 'Completed',
   'Dub start', 'Dub end', 'Edit start', 'Edit end', 'Mix start', 'Mix end',
+  'Series',
 ];
 
 // ---- Bookings tab -----------------------------------------------------------
@@ -185,6 +190,9 @@ var SOLVE_OBJECTIVE = [
   'split_dub_edit',          // keep a project's dub and edit with the same person where
                              // nothing above is lost by it -- preferred, never required
                              // (Tara, 2026-10-15)
+  'series_continuity',       // keep a series' people: whoever did a phase on an earlier season
+                             // or batch is preferred for the same phase on the next, where
+                             // nothing above is lost by it (Tara, 2026-10-27)
   'regular_spread',          // then flattest load across the regular pool
   'max_consecutive',         // then prefer handing off, all else equal
   'regular_peak',            // then the lowest peak in the regular pool

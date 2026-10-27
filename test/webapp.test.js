@@ -1690,6 +1690,57 @@ section('Project titles stay unique (Tara, 2026-10-27)');
   ok('Check availability reports it too, without writing', dry.ok && dry.renamed && !dry.change, JSON.stringify(dry.renamed));
 }
 
+
+section('Series: connecting seasons and episode batches (Tara, 2026-10-27)');
+{
+  const T = require('../webapp/public/titles.js');
+  ok('a series typed in other capitals joins the existing one', T.canonSeries('harbor  LIGHTS', ['Harbor Lights', 'Other']) === 'Harbor Lights');
+  ok('a new series keeps what was typed, tidied', T.canonSeries('  New   Show ', ['Harbor Lights']) === 'New Show');
+  ok('blank is no series', T.canonSeries('  ', ['Harbor Lights']) === '');
+
+  const book = await freshBook();
+  const sheets = require('../webapp/sources/sheets.js');
+  const dates = n => ({ dub_from: `2027-0${n}-01`, dub_to: `2027-0${n}-14`, edit_from: `2027-0${n}-15`, edit_to: `2027-0${n}-21`, mix_from: `2027-0${n}-22`, mix_to: `2027-0${n}-28` });
+  const s1 = actions.saveProject(book, { title: 'Harbor Lights S1', series: 'Harbor Lights', client: 'X', deadline: '2027-03-12', mix_level: 'Advanced', ...dates(2) });
+  ok('a project saves with its series', s1.ok && s1.series === 'Harbor Lights' && s1.project.series === 'Harbor Lights', JSON.stringify(s1.errors || s1.series));
+  ok('the series is written to the sheet’s Series column', sheets.projectCells({ project: s1.project })['series'] === 'Harbor Lights');
+  ok('and it is a column the app creates on first save', sheets.MANAGED_COLUMNS.includes('Series'));
+  const b1 = apply(book, s1.change);
+  b1.projects = b1.projects.concat(s1.project);       // the store would add the row; the fixture does not
+  const boot = api.bootstrap(b1, { today: '2026-06-01' });
+  ok('the series is offered to the form', boot.series.includes('Harbor Lights'), JSON.stringify(boot.series));
+  ok('and each project reports its own', boot.projects.find(x => x.title === 'Harbor Lights S1').series === 'Harbor Lights');
+  const s2 = actions.saveProject(b1, { title: 'Harbor Lights S2', series: 'harbor lights', client: 'X', deadline: '2027-05-12', mix_level: 'Advanced', ...dates(4) });
+  ok('a second season typed in other capitals joins the same series', s2.ok && s2.series === 'Harbor Lights', s2.series);
+  const who = (r, ph) => [...new Set(r.rows.filter(x => x.phase === ph).map(x => x.engineer))].join('+');
+  const none = actions.saveProject(b1, { title: 'Harbor Lights S2', client: 'X', deadline: '2027-05-12', mix_level: 'Advanced', ...dates(4) });
+  ok('with no series the plan is exactly what it was before this feature', none.ok && none.series === '' && JSON.stringify(none.rows) === JSON.stringify(
+     actions.saveProject(b1, { title: 'Harbor Lights S2', series: '', client: 'X', deadline: '2027-05-12', mix_level: 'Advanced', ...dates(4) }).rows));
+
+  // continuity through the real save path: make the planner's own pick differ from S1's, then
+  // let the series bring the people back
+  const people = [...new Set(s1.rows.map(x => x.engineer))];
+  const busyKyle = (eng) => ({ ...b1, bookings: b1.bookings.concat([2, 3].map((i, k) => ({ row_number: 900 + k, project: 'Elsewhere', phase: k ? 'Edit' : 'Dub', engineer: eng,
+    start_date: k ? '2027-04-12' : '2027-04-01', end_date: k ? '2027-04-18' : '2027-04-11', source: 'plot', note: '', status: '' }))) });
+  const plain = actions.saveProject(b1, { title: 'Harbor Lights S2', client: 'X', deadline: '2027-05-12', mix_level: 'Advanced', ...dates(4) });
+  const linked = actions.saveProject(b1, { title: 'Harbor Lights S2', series: 'Harbor Lights', client: 'X', deadline: '2027-05-12', mix_level: 'Advanced', ...dates(4) });
+  ok('the linked project’s dub is with someone who dubbed the series before',
+     linked.rows.filter(x => x.phase === 'Dub').every(x => s1.rows.some(y => y.phase === 'Dub' && y.engineer === x.engineer)), who(linked, 'Dub') + ' vs ' + who(s1, 'Dub'));
+  ok('and the summary names the same people as the rows', who(linked, 'Dub') === linked.dubber && who(linked, 'Mix') === linked.mixer, `${linked.dubber}/${linked.mixer}`);
+
+  // set the series on a scheduled project without re-plotting it
+  const set = actions.setSeries(b1, { title: 'Harbor Lights S1', series: 'Brand New Show' });
+  ok('a series can be set on its own', set.ok && set.series === 'Brand New Show', JSON.stringify(set));
+  ok('and it writes only that field, no bookings', set.change.fields.join() === 'series' && set.change.append.length === 0 && set.change.supersede.length === 0);
+  ok('it can be rolled back', set.revert && set.revert.values.series === 'Harbor Lights', JSON.stringify(set.revert));
+  ok('setting it to what it already is says so', !actions.setSeries(b1, { title: 'Harbor Lights S1', series: 'harbor lights' }).ok);
+  ok('an unknown project is refused', !actions.setSeries(b1, { title: 'No Such Project', series: 'X' }).ok);
+  ok('clearing a series is allowed', actions.setSeries(b1, { title: 'Harbor Lights S1', series: '' }).ok);
+  ok('the sheet cell for a lone series change is just that column', JSON.stringify(sheets.projectCells(set.change)) === JSON.stringify({ series: 'Brand New Show' }),
+     JSON.stringify(sheets.projectCells(set.change)));
+  ok('the objective has a plain-English name for the new term', actions.TERM_NAMES.series_continuity && /series/.test(actions.TERM_NAMES.series_continuity));
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud
@@ -1780,7 +1831,7 @@ section('Read-only instance: the refusal is on the server, not in the page');
     return mod;
   };
 
-  const WRITES = ['reassign', 'undo', 'save-project', 'set-status',
+  const WRITES = ['reassign', 'undo', 'save-project', 'set-status', 'set-series',
                   'replan', 'replan-apply', 'rollback'];
 
   // ---- with the switch on

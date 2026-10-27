@@ -102,6 +102,7 @@ const ACTIONS = {
   '/api/save-project':  (b, p) => actions.saveProject(b, p),
   '/api/set-status':    (b, p) => actions.setStatus(b, p),
   '/api/set-lock':      (b, p) => actions.setLock(b, p),
+  '/api/set-series':    (b, p) => actions.setSeries(b, p),
   '/api/clear-ghosts':  (b, p) => actions.clearOrphans(b, p),
   '/api/replan':        (b, p) => previewReplan(b, p),      // async
   '/api/replan-apply':  (b, p) => applyReplan(b, p),
@@ -173,6 +174,9 @@ function describe(path, r) {
   }
   if (path === '/api/set-lock') {
     return `${r.locked ? 'Locked' : 'Unlocked'} ${r.title}`;
+  }
+  if (path === '/api/set-series') {
+    return r.series ? `${r.title} put in the series ${r.series}` : `${r.title} taken out of its series`;
   }
   if (path === '/api/set-status') {
     return r.status ? `${r.title} marked ${r.status.toLowerCase()}`

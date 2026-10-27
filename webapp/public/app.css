@@ -368,3 +368,18 @@ table.projects tr[hidden]{display:none}
 /* A taken title is numbered; the note sits under the box without moving the row. */
 .titlef{position:relative}
 .titletag{position:absolute; left:0; top:calc(100% + 3px); font-size:11px; font-weight:700; color:var(--warn); white-space:nowrap}
+
+/* Series: the box, and the earlier projects of the same show with who did each phase. */
+.seriesrow{display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:start; margin-top:14px}
+@media (max-width:1000px){.seriesrow{grid-template-columns:1fr}}
+.seriesrow input{height:auto}
+.serarea{display:flex; flex-direction:column; gap:3px; padding-top:18px; min-width:0}
+.serarea .btn{align-self:flex-start; margin-top:4px}
+.sertag{font-size:11px; font-weight:700; color:var(--fg3); text-transform:uppercase; letter-spacing:.06em}
+.sermore{font-size:11px; color:var(--fg3)}
+.serline{display:flex; align-items:center; gap:8px; font-size:12px; min-width:0}
+.sername{font-weight:700; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.serdue{color:var(--fg3); white-space:nowrap; font-variant-numeric:tabular-nums}
+.serchip{padding:1px 7px; font-size:11px; font-weight:700; white-space:nowrap}
+.serchip.dub{background:var(--dub)} .serchip.edit{background:var(--edit)} .serchip.mix{background:var(--mix)}
+.chip.ok{border-color:var(--ok); color:var(--ok); font-weight:700}

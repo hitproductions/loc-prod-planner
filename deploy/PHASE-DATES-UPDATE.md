@@ -3,8 +3,8 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the pull request titled
-**"Page improvements: this-week view, new Add project form, search and History filter"**,
-which also brings in everything before it (per-phase dates, review fixes, overlapping
+**"Page improvements: this-week view, new Add project form, search and History filter"**
+and the one after it, **"Series: keep the same people on a show"**, which also bring in everything before them (per-phase dates, review fixes, overlapping
 phases). `git log --oneline -8` should list it. All of it is tested.
 
 **Take the latest, not an older step.** The first version has a bug that can erase a completed
@@ -34,14 +34,15 @@ project's bookings on a re-plan, and an older copy refuses date entries the new 
    dated project leaves the dates stale.
 
 Nothing else changes: no new settings, no new credentials, same sheet, same
-sign-in, same ports and paths. One new static file, `webapp/public/dates.js`, is served
+sign-in, same ports and paths. Two new static files, `webapp/public/dates.js` and `titles.js`, are served
 alongside `app.js`; if a reverse proxy lists files explicitly, add it.
 
 ## What to expect on the sheet
 
-On the first project saved after the update, the app adds six columns to the end of
-the **Projects** tab: `Dub start`, `Dub end`, `Edit start`, `Edit end`, `Mix start`,
-`Mix end`. This is automatic. Do not add them by hand.
+On the first project saved after the update, the app adds columns to the end of the
+**Projects** tab: `Dub start`, `Dub end`, `Edit start`, `Edit end`, `Mix start`, `Mix end`
+and `Series`. This is automatic. Do not add them by hand. People may type into `Series`
+directly.
 
 ## Check after the update
 
@@ -50,7 +51,9 @@ the **Projects** tab: `Dub start`, `Dub end`, `Edit start`, `Edit end`, `Mix sta
   edit or dub is still running).
 - The schedule opens on this week, with the weeks before it dimmed.
 - The Projects list has a search box and a *Dates* column, and shows soonest deadlines first.
-- Saving a project adds the six columns to the Projects tab (first save only).
+- The Add project form has a **Series** box; typing a show that exists lists its earlier
+  projects and who did each phase.
+- Saving a project adds the new columns to the Projects tab (first save only).
 - A new **History** entry shows the correct Manila time.
 
 ## If something goes wrong
