@@ -694,6 +694,8 @@ async function loadHistory(index) {
 // words in it (a project name, an engineer). Kept across repaints: opening an entry
 // repaints the page, and losing your filter each time would defeat it.
 let HF = { q: '', kind: '' };
+// History is shown a page at a time (Tara, 2026-10-28) so a long log does not run on forever.
+let HP = 0; const HPAGE = 25;
 const KIND = {
   'save-project': 'Saved a project', 'reassign': 'Moved a week', 'undo': 'Undid a move',
   'set-status': 'Completed, cancelled or reopened', 'set-lock': 'Locked or unlocked', 'set-series': 'Series set',
@@ -728,7 +730,9 @@ function renderHistory() {
       `<td class="mono">${esc(e.at)}</td><td>${esc(e.summary || e.action)}</td>` +
       `<td>${e.index === HISTORY.latest
         ? '<span class="chip">most recent</span>' : ''}</td></tr>`).join('') +
-    '</tbody></table><div class="hint" id="hNone" hidden>Nothing in the log matches that.</div></div>';
+    '</tbody></table><div class="hint" id="hNone" hidden>Nothing in the log matches that.</div>' +
+    '<div class="bar-row noprint" id="hPager" hidden><button class="btn small" id="hPrev">Newer</button>' +
+    '<span id="hPage" class="muted"></span><button class="btn small" id="hNext">Older</button></div></div>';
 
   if (OPENED && OPENED.diff) {
     const d = OPENED.diff;
@@ -762,24 +766,35 @@ function renderHistory() {
   return h;
 }
 
-function applyHistoryFilter() {
+function applyHistoryFilter(resetPage) {
+  if (resetPage) HP = 0;
   const rows = [...document.querySelectorAll('table.projects tbody tr[data-ev]')];
-  let n = 0;
-  rows.forEach(tr => {
-    const show = (!HF.kind || tr.dataset.k === HF.kind) && (!HF.q.trim() || matchesAll(tr.dataset.q || '', HF.q));
-    tr.hidden = !show; if (show) n++;
-  });
+  const match = rows.filter(tr => (!HF.kind || tr.dataset.k === HF.kind) &&
+    (!HF.q.trim() || matchesAll(tr.dataset.q || '', HF.q)));
+  const n = match.length, pages = Math.max(1, Math.ceil(n / HPAGE));
+  if (HP >= pages) HP = pages - 1;
+  const shown = new Set(match.slice(HP * HPAGE, HP * HPAGE + HPAGE));
+  rows.forEach(tr => { tr.hidden = !shown.has(tr); });
   const c = $('hCount');
   if (c) c.textContent = (HF.q.trim() || HF.kind) ? `${n} of ${rows.length}` : `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
   const none = $('hNone'); if (none) none.hidden = n > 0;
   const clr = $('hClear'); if (clr) clr.hidden = !(HF.q || HF.kind);
+  const pg = $('hPager'); if (pg) pg.hidden = n <= HPAGE;
+  const pt = $('hPage');
+  if (pt) pt.textContent = `Page ${HP + 1} of ${pages} \u00b7 entries ${HP * HPAGE + 1}\u2013${Math.min(n, HP * HPAGE + HPAGE)} of ${n}`;
+  const pv = $('hPrev'), nx = $('hNext');
+  if (pv) pv.disabled = HP === 0;
+  if (nx) nx.disabled = HP >= pages - 1;
 }
 
 function wireHistory() {
   const hq = $('hQ'), hk = $('hK'), hc = $('hClear');
-  if (hq) hq.addEventListener('input', () => { HF.q = hq.value; applyHistoryFilter(); });
-  if (hk) hk.addEventListener('change', () => { HF.kind = hk.value; applyHistoryFilter(); });
-  if (hc) hc.addEventListener('click', () => { HF = { q: '', kind: '' }; if (hq) hq.value = ''; if (hk) hk.value = ''; applyHistoryFilter(); });
+  if (hq) hq.addEventListener('input', () => { HF.q = hq.value; applyHistoryFilter(true); });
+  if (hk) hk.addEventListener('change', () => { HF.kind = hk.value; applyHistoryFilter(true); });
+  if (hc) hc.addEventListener('click', () => { HF = { q: '', kind: '' }; if (hq) hq.value = ''; if (hk) hk.value = ''; applyHistoryFilter(true); });
+  const pv = $('hPrev'), nx = $('hNext');
+  if (pv) pv.addEventListener('click', () => { HP--; applyHistoryFilter(); });
+  if (nx) nx.addEventListener('click', () => { HP++; applyHistoryFilter(); });
   applyHistoryFilter();
   document.querySelectorAll('[data-ev]').forEach(tr =>
     tr.addEventListener('click', () => loadHistory(tr.dataset.ev)));

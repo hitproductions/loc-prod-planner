@@ -802,3 +802,11 @@ table.sched thead th.colhi{background:#4A4B4C; color:#fff; font-weight:inherit; 
 table.sched.byeng tbody tr:hover td, table.sched.byeng tbody tr:hover th{background-color:rgba(0,0,0,.10)}
 table.sched.byeng tbody tr:hover th{box-shadow:none}
 table.sched.byeng tbody tr.nowrow:hover th{box-shadow:inset 4px 0 0 var(--red)}
+
+/* Engineers cells (Tara, 2026-10-28): text starts at the top, so a lone booking lines up with
+   the first title beside it instead of floating in the middle with space above and below.
+   The spare room sits at the bottom of the cell. */
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){justify-content:flex-start}
+table.sched.byeng .stack .bk.rich:only-child{padding-top:10px}
+#hPager{justify-content:center; gap:14px; margin-top:12px}
+#hPager[hidden]{display:none}
