@@ -106,6 +106,15 @@ const PHASE_PALE = { Dub:'var(--dub-pale)', Edit:'var(--edit-pale)', Mix:'var(--
 // `label` differs by orientation: the Engineers grid shows project names, the Projects
 // grid shows engineer names.
 function cellBands(c, label, dragAttrs, rich, deep) {
+  // Engineers grid: a project's bookings sit together (Dub, Edit, Mix), so a dub and its edit
+  // are always adjacent and can be drawn as the one job they are. Labels are matched by index
+  // in the Projects grid, so its order is left alone.
+  if (rich) {
+    const ord = { Dub: 0, Edit: 1, Mix: 2 }, first = {};
+    c.items.forEach((x, i) => { if (first[x.p] === undefined) first[x.p] = i; });
+    c = { ...c, items: c.items.slice().sort((a, b) =>
+      first[a.p] - first[b.p] || (ord[a.ph] || 0) - (ord[b.ph] || 0)) };
+  }
   return '<div class="stack">' + c.items.map((it, i) => {
     const text = label(it, i);
     // Engineers grid: the cell is tall enough to say more than the name. The phase and where
@@ -114,15 +123,27 @@ function cellBands(c, label, dragAttrs, rich, deep) {
     // One row per booking, the phase as a rail down its left edge (Tara, 2026-10-27). An
     // overlapped week says so in words on its first row, so the depth never rests on the
     // frame colour alone.
+    // The count is of JOBS: a project's dub and its edit with one person are one job (Tara,
+    // 2026-10-15). Three bookings can therefore read "2 at once", so the tag names the jobs on
+    // hover, e.g. "The Take: Dub + Edit \u00b7 Single's Inferno: Edit".
+    const jobs = () => {
+      const by = {};
+      c.items.forEach(x => { const k = x.p + (x.ph === 'Mix' ? '|M' : '|R');
+        (by[k] = by[k] || { p: x.p, ph: [] }).ph.push(x.ph); });
+      return Object.values(by).map(j => `${j.p}: ${j.ph.join(' + ')}`).join(' \u00b7 ');
+    };
     const tag = rich && i === 0 && deep > 1
-      ? `<span class="otag${deep > 2 ? ' t3' : ''}">${deep} at once</span>` : '';
+      ? `<span class="otag${deep > 2 ? ' t3' : ''}" title="${esc(`${deep} jobs this week \u2014 ${jobs()}`)}">${deep} at once</span>` : '';
+    // Same job as the booking above it (same project, dub or edit): drawn as one, no divider.
+    const prev = c.items[i - 1];
+    const sameJob = rich && prev && prev.p === it.p && prev.ph !== 'Mix' && it.ph !== 'Mix';
     const body = rich
       ? `<span class="bk-n">${esc(text)}</span>` +
         (meta || tag ? `<span class="bk-m">${esc(meta)}${tag}</span>` : '')
       : `<span class="bk-l">${esc(text)}</span>`;
     const paint = rich ? `--ph:${PHASE_BG[it.ph] || 'var(--line)'};--ph-pale:${PHASE_PALE[it.ph] || 'var(--line)'}`
       : `background:${PHASE_BG[it.ph] || 'transparent'}`;
-    return `<span class="bk${rich ? ' rich ' + String(it.ph || '').toLowerCase() : ''}" style="${paint}"` +
+    return `<span class="bk${rich ? ' rich ' + String(it.ph || '').toLowerCase() : ''}${sameJob ? ' samejob' : ''}" style="${paint}"` +
       (dragAttrs ? dragAttrs(it) : '') +
       (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"'
         : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + meta)}"` : '')) +
@@ -153,12 +174,7 @@ function scheduleKey() {
   return '<div class="legend key">' +
     sw('background:var(--dub)', 'Dub') + sw('background:var(--edit);border-color:var(--edit-edge)', 'Edit') +
     sw('background:var(--mix)', 'Mix') +
-    (MODE === 'engineer'
-      ? '<span class="k" title="Someone holds two jobs this week"><span class="otag" style="margin:0 5px 0 0">2 at once</span>tag</span>' +
-        '<span class="k" title="Three jobs in one week \u2014 move one"><i class="sw" style="background:var(--tint3)"></i>' +
-        '<span class="otag t3" style="margin:0">3 at once</span></span>'
-      : '<span class="k" title="Three jobs in one week \u2014 move one. 2 at once shows on hover.">' +
-        '<span class="otag t3" style="margin:0 5px 0 0">3 at once</span>tag on the bar</span>') +
+
     sw('border:2px dotted var(--fg1);background:transparent', 'By hand',
        READONLY ? 'Moved by hand' : 'Moved by hand \u2014 click the cell to give it back') +
     (MODE === 'project' ? '<span class="k"><span class="duemark">Due</span> Deadline week</span>' : '') + '</div>';
@@ -272,6 +288,7 @@ function renderProjectGrid() {
   const row = ri => {
     const name = d.labels[ri];
     const lanes = Math.max(1, (laneRows[ri] || []).length);
+    const dueCols = Object.keys(mark).filter(k => k.startsWith(ri + '|')).map(k => Number(k.split('|')[1]));
     let r = `<tr class="lanes" style="--lanes:${lanes}"><th title="${esc(name)}">${esc(name)}</th>`;
     for (let ci = 0; ci < d.weeks.length; ci++) {
       const w = d.weeks[ci], cls = [];
@@ -286,22 +303,28 @@ function renderProjectGrid() {
           const past = d.weeks[b.c1].start < BOOT.today_week;
           const firstDeep = b.deep3.includes(b.c0);
           const when = b.c1 > b.c0 ? `${d.weeks[b.c0].label} \u2013 ${d.weeks[b.c1].label}` : d.weeks[b.c0].label;
-          inner += `<span class="lbar ${(b.phase || '').toLowerCase()}${past ? ' gone' : ''}${b.hand ? ' hand' : ''}"` +
+          // A deadline inside this bar: "Due" goes in the bar, after the name, instead of on top of it.
+          const dueIn = dueCols.some(c => c >= b.c0 && c <= b.c1);
+          inner += `<span class="lbar ${(b.phase || '').toLowerCase()}${past ? ' gone' : ''}${b.hand ? ' hand' : ''}${dueIn ? ' hasdue' : ''}"` +
             ` style="--c0:${b.c0};--n:${b.c1 - b.c0 + 1};--ln:${b.lane}"` +
             ` title="${esc(`${b.engineer} \u00b7 ${b.phase} \u00b7 ${when}` +
               (b.deep > 2 ? ' \u00b7 3 at once' : b.deep > 1 ? ' \u00b7 2 at once' : '') +
-              (b.hand ? ' \u00b7 moved by hand' : ''))}">` +
-            `<span class="bk-l">${esc(b.engineer)}</span>${firstDeep ? '<span class="otag t3">3 at once</span>' : ''}</span>`;
+              (b.hand ? ' \u00b7 moved by hand' : '') + (dueIn ? ' \u00b7 runs into the deadline week' : ''))}">` +
+            `<span class="bk-l">${esc(b.engineer)}</span>${firstDeep ? '<span class="otag t3">3 at once</span>' : ''}` +
+            (dueIn ? '<span class="duemark inbar">Due</span>' : '') + '</span>';
           // The tag is the only 3-at-once marker here, so it appears in every later 3-deep week too.
           b.deep3.filter(c => c > b.c0).forEach(c => {
             inner += `<span class="lflag" style="--c0:${c};--ln:${b.lane}"><span class="otag t3">3 at once</span></span>`;
           });
         });
       }
+      if (due) cls.push('duewk');
+      // The free-standing tag only where no bar runs through the deadline week.
+      const covered = due && bars.some(b => b.row === ri && ci >= b.c0 && ci <= b.c1);
       r += `<td data-c="${ci}" class="${cls.join(' ')}"` +
            (due ? ` title="${esc('Due ' + w.label)}"` : '') + '>' +
            (ci === 0 ? `<div class="lanebox">${inner}</div>` : '') +
-           (due ? '<span class="duemark">Due</span>' : '') + '</td>';
+           (due && !covered ? '<span class="duemark">Due</span>' : '') + '</td>';
     }
     return r + '</tr>';
   };

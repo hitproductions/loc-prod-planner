@@ -270,10 +270,23 @@ table.sched:not(.byeng) tbody tr.lanes td.now{box-shadow:inset 2px 0 0 var(--red
 .lbar .bk-l{position:sticky; left:258px; overflow:hidden; text-overflow:ellipsis; min-width:0}
 .lflag{left:calc(var(--c0) * var(--colw)); width:var(--colw); display:flex; align-items:center;
   justify-content:center}
-table.sched:not(.byeng) tbody tr.lanes td .duemark{position:absolute; left:50%; top:var(--lpad);
-  transform:translateX(-50%); margin-top:4px; z-index:2}
+/* Due (Tara, 2026-10-28). A tag pinned near the top of the cell looked loose in a tall row
+   and sat ON a bar when the deadline fell inside one. Now the deadline week is a column the
+   full height of the row with a red line down its right edge (the deadline is the end of
+   that week), and "Due" sits in it vertically centred, so it belongs to the column. When a
+   bar runs into the deadline week, "Due" goes inside the bar instead and the line still marks
+   the edge. */
+table.sched:not(.byeng) tbody tr.lanes td.duewk{box-shadow:inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.lanes td.duewk.now{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.lanes td > .duemark{position:absolute; left:50%; top:50%;
+  transform:translate(-50%, -50%); z-index:2}
 .duemark{display:inline-block; font-size:11px; font-weight:700; color:#C4321A; background:#fff;
   border:1px solid var(--red); padding:0 6px; line-height:18px}
+/* In a bar the name is sticky (left:258px) so it stays on screen while scrolling; on a bar
+   far to the right that pushes the name to the bar's end, onto a "Due" placed after it. So
+   "Due" is pinned to the bar's right edge, and the name stops short of it. */
+.lbar.hasdue{padding-right:52px}
+.lbar .duemark.inbar{position:absolute; right:5px; top:50%; transform:translateY(-50%)}
 table.sched tr.donehead td{background:var(--bg2); padding:0; height:auto;
   border-bottom:1px solid var(--line); text-align:left; overflow:visible}
 /* The row spans all 58 weeks and the grid opens scrolled to this week, so the label is pinned
@@ -608,6 +621,19 @@ table.sched.byeng tr.past td .stack{opacity:1}
 table.sched.byeng tr.past .bk.rich .bk-n{font-weight:400}
 table.sched.byeng tr.past .bk.rich::before{background:var(--ph-pale)}
 .otag{font-size:11px; line-height:16px}
+/* A project's edit right under its own dub, same person, same week: one job, so no divider
+   and a tighter top. The count on the tag follows the same rule. */
+table.sched.byeng .stack .bk.rich + .bk.rich.samejob{border-top:0; padding-top:2px}
+/* White space (Tara, 2026-10-28). A row is as tall as its busiest cell, so a lone booking
+   beside a 3-booking week sat in ~92px with its text at the top and ~45px of white pooled
+   under it. Each booking's text is now centred in the space it is given (the rail still runs
+   its full height), and the floor drops from 56px to 48px. */
+table.sched.byeng tbody td, table.sched.byeng tbody th{height:48px}
+table.sched.byeng td.cell{height:1px}
+table.sched.byeng .stack{min-height:48px; display:flex; flex-direction:column}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){
+  display:flex; flex-direction:column; justify-content:center; flex:1 1 auto}
+.otag[title]{cursor:help}
 .legend.key{margin:0 0 0 14px; gap:12px}
 .legend.key .k{white-space:nowrap}
 
