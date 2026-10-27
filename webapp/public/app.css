@@ -765,3 +765,11 @@ table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-ch
   text-align:left; line-height:1.2; margin-top:2px}
 table.sched.byeng .stack .bk.rich + .bk.rich, table.sched.byeng .stack .bk.rich + .bk.rich.samejob{
   border-top:2px dashed #8a8a8a; padding-top:5px}
+
+/* Fix (Tara, 2026-10-28): the fixed 60px + overflow:hidden clipped two-line titles. Now a
+   MINIMUM height and nothing is hidden. 74px holds the tallest booking (two-line name, then the
+   week count and the "2 at once" tag), so the dividers still line up across the row. */
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){overflow:visible; height:auto}
+table.sched.byeng .stack .bk.rich:not(:only-child){flex:1 0 auto; min-height:74px; height:auto}
+table.sched.byeng .stack .bk.rich:only-child{min-height:60px}
+table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{overflow:visible}
