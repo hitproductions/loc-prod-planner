@@ -978,3 +978,10 @@ table.sched:not(.byeng) tbody tr.wk1 td.past.wcell:not(.duewk){box-shadow:none}
 table.sched:not(.byeng) tbody tr.wk1 td.deep3::after{z-index:1; height:2px}
 table.sched:not(.byeng) tbody tr.wk1 td.hand{outline:none}
 table.sched:not(.byeng) tbody tr.wk1 td.hand .wb{outline:2px dotted var(--fg1); outline-offset:-2px}
+
+/* Hover must never make anything see-through (Tara, 2026-10-28). Earlier rules gave the sticky
+   week/project label an rgba() background on hover, so titles scrolling under it showed through.
+   Labels get a SOLID darker grey; cells are not tinted at all. Same in both views. */
+table.sched tbody tr:hover td, table.sched.byeng tbody tr:hover td{background-color:transparent}
+table.sched tbody tr:hover th, table.sched.byeng tbody tr:hover th{background:#D6D7D8; background-color:#D6D7D8}
+table.sched.byeng tbody tr.nowrow:hover th{background:#EDEDED; background-color:#EDEDED}
