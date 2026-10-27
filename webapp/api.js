@@ -475,8 +475,26 @@ function report(book, opts) {
         .sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name)) };
   });
 
+  // WORK DONE per month: a separate stat from completed work. Every booked week is counted in
+  // the month it actually fell in (the month its Monday is in), whether or not the project is
+  // finished, and only weeks that have started count: a future booking is not work done yet.
+  const todayW = A.widx(todayLocal());
+  const wm = {};
+  rows.forEach(b => {
+    for (let w = A.widx(b.start_date); w <= A.widx(b.end_date) && w <= todayW; w++) {
+      const m = A.weekStart(w).slice(0, 7);
+      const e = wm[m] = wm[m] || { month: m, weeks: 0, projects: new Set(), eng: {} };
+      e.weeks++; e.projects.add(b.project);
+      e.eng[b.engineer] = (e.eng[b.engineer] || 0) + 1;
+    }
+  });
+  const worked = Object.values(wm).sort((a, b) => a.month.localeCompare(b.month)).map(e => ({
+    month: e.month, weeks: e.weeks, projects: e.projects.size,
+    engineers: Object.keys(e.eng).map(n => ({ name: n, weeks: e.eng[n] }))
+      .sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name)) }));
+
   return {
-    month, months, monthly,
+    month, months, monthly, worked,
     projects,
     totals: {
       projects: projects.length,

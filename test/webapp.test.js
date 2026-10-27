@@ -584,6 +584,14 @@ section('The monthly report');
      JSON.stringify(aug.monthly) === JSON.stringify(sep.monthly));
   ok('and each month splits its weeks by engineer, adding up to its total',
      aug.monthly.every(m => m.engineers.reduce((n, e) => n + e.weeks, 0) === m.weeks));
+  // Work DONE is a separate stat from work COMPLETED: it counts the month the week happened.
+  ok('the report also lists work done by month, from the bookings themselves',
+     Array.isArray(aug.worked) && aug.worked.length > 0 &&
+     aug.worked.every((m, i, a) => i === 0 || a[i - 1].month < m.month));
+  ok('work done splits its weeks by engineer, adding up to its total',
+     aug.worked.every(m => m.engineers.reduce((n, e) => n + e.weeks, 0) === m.weeks));
+  ok('and counts no week that has not started yet',
+     aug.worked.every(m => m.month <= new Date().toISOString().slice(0, 7)));
 
   // An unfinished project must never be inferred into a report from its deadline.
   const unmarked = book.projects.filter(p => p.status !== 'Complete').length;
