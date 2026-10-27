@@ -447,6 +447,33 @@ function overlapWeeks(rows, fromW) {
   return out;
 }
 
+// Projects a re-plan cannot or will not move, and why -- so the page can show the reason
+// as data instead of explaining it in a paragraph. A project is left alone when every one of
+// its live rows is pinned: it is locked, or already under way, or placed by hand (the same
+// three rules the engine uses), or it is finished.
+function leftAlone(book, rows, todayISO) {
+  const nowW = A.widx(todayISO);
+  const by = {};
+  rows.forEach(b => { (by[b.project] = by[b.project] || []).push(b); });
+  const out = [];
+  (book.projects || []).forEach(p => {
+    const rs = by[p.project_title] || [];
+    if (!rs.length || p.status === 'Cancelled') return;
+    if (p.status === 'Complete') { out.push({ project: p.project_title, reason: 'complete' }); return; }
+    if (p.locked === true || /^(yes|true)$/i.test(String(p.locked || ''))) { out.push({ project: p.project_title, reason: 'locked' }); return; }
+    const started = rs.filter(b => A.widx(b.start_date) <= nowW);
+    const manual = rs.filter(b => !started.includes(b) && /manual/i.test(b.note || ''));
+    if (started.length + manual.length < rs.length) return;       // something of it can still move
+    if (started.length === rs.length) {
+      const first = started.slice().sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)))[0];
+      out.push({ project: p.project_title, reason: 'under_way', phase: first.phase, since: first.start_date });
+    } else {
+      out.push({ project: p.project_title, reason: 'by_hand', phases: [...new Set(manual.map(b => b.phase))] });
+    }
+  });
+  return out.sort((a, b) => a.project.localeCompare(b.project));
+}
+
 function shapeReplan(book, rows, r, todayISO) {
   let why = null;
   // Which overlaps the plan clears and which it leaves or creates, from this week on.
@@ -476,6 +503,8 @@ function shapeReplan(book, rows, r, todayISO) {
     overlaps_resolved,
     why,
     skipped: r.skipped || [],
+    left_alone: leftAlone(book, rows, todayISO ||
+      new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)),
     change: r.no_improvement ? null
       : { supersede: r.rows_to_supersede || [], append: r.rows_to_append || [] },
   };

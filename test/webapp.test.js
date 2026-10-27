@@ -1583,6 +1583,90 @@ section('Every phase may overlap every other, through the real save path (Tara, 
 }
 
 
+section('Layout fixes, 2026-10-27: what the new pages are fed');
+{
+  const today = '2026-10-27';
+  const book = await freshBook();
+  const rows = actions.live(book);
+
+  // Re-plan: the projects it will not touch are listed with the reason.
+  const raw = A.replanBook(actions.forReplan(book.projects, rows), rows, book.engineers, today);
+  const left = actions.shapeReplan(book, rows, raw, today).left_alone;
+  ok('the re-plan preview lists what it leaves alone', Array.isArray(left) && left.length > 0, JSON.stringify(left));
+  const nowW = A.widx(today);
+  const underWay = left.filter(x => x.reason === 'under_way');
+  ok('a project listed as under way has every booking started',
+     underWay.length > 0 && underWay.every(x => rows.filter(b => b.project === x.project).every(b => A.widx(b.start_date) <= nowW)),
+     JSON.stringify(underWay[0]));
+  ok('and says which phase began first and when', underWay.every(x => x.phase && /^\d{4}-\d\d-\d\d$/.test(x.since)));
+  const movable = book.projects.find(p => rows.some(b => b.project === p.project_title && A.widx(b.start_date) > nowW) && p.status !== 'Cancelled');
+  ok('a project with a booking still ahead is not listed', !movable || !left.some(x => x.project === movable.project_title),
+     movable && movable.project_title);
+
+  // Locked and completed projects say so, and that wins over "under way".
+  const b2 = JSON.parse(JSON.stringify(book));
+  const names = [...new Set(rows.map(b => b.project))];
+  const lockP = b2.projects.find(p => p.project_title === names[0]);
+  const doneP = b2.projects.find(p => p.project_title === names[1]);
+  lockP.locked = true; doneP.status = 'Complete';
+  const left2 = actions.shapeReplan(b2, actions.live(b2), A.replanBook(actions.forReplan(b2.projects, actions.live(b2)), actions.live(b2), b2.engineers, today), today).left_alone;
+  ok('a locked project is listed as locked', (left2.find(x => x.project === lockP.project_title) || {}).reason === 'locked',
+     JSON.stringify(left2.find(x => x.project === lockP.project_title)));
+  ok('a completed project is listed as complete', (left2.find(x => x.project === doneP.project_title) || {}).reason === 'complete',
+     JSON.stringify(left2.find(x => x.project === doneP.project_title)));
+
+  // Analysis: the free-capacity grid is the booking, counted in jobs, from this week.
+  const an = api.analysis(book, { from: today });
+  const g = an.grid;
+  ok('the grid has 16 weeks starting this week', g.weeks.length === 16 && g.weeks[0] === A.weekStart(nowW), g.weeks[0]);
+  ok('and one row per engineer, one cell per week',
+     g.engineers.length === book.engineers.filter(e => e && e.name).length && g.engineers.every(e => e.cells.length === 16));
+  const jobs = A.jobsByEngineerWeek(rows);
+  const wrong = [];
+  g.engineers.forEach(e => e.cells.forEach((c, i) => {
+    const at = jobs[e.name + '|' + (nowW + i)];
+    const want = at ? A.depthOf(at) : 0;
+    if (c.depth !== want || c.work.length !== (at ? at.rows.length : 0)) wrong.push(`${e.name} wk${i}: ${c.depth}/${want}`);
+  }));
+  ok('every cell matches the bookings, counted in jobs', wrong.length === 0, wrong.slice(0, 3).join('; '));
+  ok('a dub and its own edit in the same week read as one job, not two',
+     g.engineers.every(e => e.cells.every(c => c.depth <= c.work.length)));
+  // The one place jobs and rows differ: a dub and edit of the SAME project with one person.
+  const same = actions.saveProject(book, { title: 'Grid Probe', client: 'X', deadline: '2027-01-17', mix_level: 'Developing',
+    dub_from: '2026-11-02', dub_to: '2026-11-22', edit_from: '2026-11-02', edit_to: '2026-11-22' });
+  const gb = same.ok ? apply(book, same.change) : null;
+  const gg = gb && api.analysis(gb, { from: today }).grid;
+  const both = gg && gg.engineers.flatMap(e => e.cells).filter(c =>
+    c.work.some(w => /^Grid Probe \(Dub\)/.test(w)) && c.work.some(w => /^Grid Probe \(Edit\)/.test(w)));
+  ok('a dub and its own edit with one person in a week count as one job in the grid',
+     both && both.length > 0 && both.every(c => c.work.length >= 2 && c.depth < c.work.length),
+     JSON.stringify(same.ok ? both : same.errors));
+  ok('reserve engineers are marked so the page can leave them out of "free"',
+     g.engineers.some(e => e.reserve) === book.engineers.some(e => /^yes$/i.test(String(e.overflow_only || ''))));
+
+  // Schedule: each item says where this week falls in its booking, for "Dub, week 2 of 3".
+  const sch = api.schedule(book, { mode: 'engineer' });
+  const items = sch.cells.flat().filter(Boolean).flatMap(c => c.items);
+  ok('every schedule item knows its week and the booking length',
+     items.length > 0 && items.every(i => i.at >= 1 && i.of >= i.at), JSON.stringify(items.find(i => !(i.at >= 1 && i.of >= i.at))));
+  const one = rows.find(b => A.widx(b.end_date) - A.widx(b.start_date) >= 2);
+  const mine = sch.cells.flat().filter(Boolean).flatMap(c => c.items).filter(i => i.p === one.project && i.ph === one.phase);
+  const span = A.widx(one.end_date) - A.widx(one.start_date) + 1;
+  ok('a booking of N weeks shows weeks 1..N of N, in order',
+     mine.length >= 1 && mine.every(i => i.of === span) && Math.max(...mine.map(i => i.at)) <= span,
+     JSON.stringify(mine.slice(0, 3)));
+
+  // Report: each project carries its phase dates, so the page can show Dates beside Weeks booked.
+  const b3 = JSON.parse(JSON.stringify(book));
+  const rp = b3.projects.find(p => p.project_title === names[0]);
+  rp.status = 'Complete'; rp.completed = '2026-08-14';
+  const rep = api.report(b3, { month: '2026-08' });
+  const row = rep.projects.find(p => p.title === rp.project_title);
+  ok('a completed project appears in the report with its phase dates',
+     row && row.dates && ['dub', 'edit', 'mix'].every(k => k in row.dates), JSON.stringify(row && row.dates));
+}
+
+
 section('The form reads and checks typed dates (webapp/public/dates.js)');
 {
   const D = require('../webapp/public/dates.js');

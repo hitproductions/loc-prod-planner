@@ -4,7 +4,7 @@
   --black:#000; --red:#EF4123; --white:#fff; --gray:#646667; --cool:#D0D0CE;
   --fg1:var(--black); --fg2:var(--gray); --fg3:#8A8C8D;
   --bg1:var(--white); --bg2:#F5F5F4; --surface:#FCFCFB; --line:var(--cool);
-  --dub:#FFC000; --edit:#BDD7EE; --mix:#EA9999; --warn:#2E75B6;
+  --dub:#FFC000; --edit:#BDD7EE; --mix:#EA9999; --warn:#2E75B6; --ok:#1B7F3B;
   /* Sequential ramp for the heatmap: one hue, lightness stepping down evenly, so
      "darker = busier" is readable without telling two colours apart. */
   --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
@@ -27,7 +27,7 @@ button{font-family:var(--font); cursor:pointer}
 .pill.bad{border-color:var(--red); color:var(--red); font-weight:700}
 main{padding:20px 22px 64px}
 .loading{color:var(--fg2); padding:30px 0}
-.gridwrap{overflow:auto; border:1px solid var(--line); max-height:78vh}
+.gridwrap{overflow:auto; border:1px solid var(--line); max-height:calc(100vh - 160px); min-height:320px}
 table.sched{border-collapse:separate; border-spacing:0; font-size:11px; width:auto}
 table.sched th,table.sched td{padding:0; border:none; white-space:nowrap}
 table.sched thead th{position:sticky; top:0; z-index:3; background:var(--black); color:#fff;
@@ -383,3 +383,141 @@ table.projects tr[hidden]{display:none}
 .serchip{padding:1px 7px; font-size:11px; font-weight:700; white-space:nowrap}
 .serchip.dub{background:var(--dub)} .serchip.edit{background:var(--edit)} .serchip.mix{background:var(--mix)}
 .chip.ok{border-color:var(--ok); color:var(--ok); font-weight:700}
+
+/* ---- Re-plan result: the verdict and the button together, one row per project ---------- */
+.sum{position:sticky; top:var(--toph, 52px); z-index:15; background:var(--bg1); border:1px solid var(--black);
+  padding:14px 18px; display:flex; align-items:center; gap:24px}
+.sum .v{flex:1; min-width:0}
+.sum .v .s{font-size:17px; font-weight:700; letter-spacing:-.01em; line-height:1.35}
+.sum .v .w{font-size:12px; color:var(--fg2); margin-top:3px}
+.sum .act{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:none}
+.sum .act .hint{white-space:nowrap; margin:0}
+.sum.calm{border-color:var(--fg3)}
+.sum.done{border-color:var(--ok)}
+.link{background:none; border:0; padding:0; font-size:12px; font-weight:700; text-decoration:underline; color:var(--fg1)}
+.link:hover{color:var(--red)}
+.head .n{font-size:12px; color:var(--fg2)}
+.prow{display:grid; grid-template-columns:230px 84px 1fr 170px; gap:14px; align-items:center; padding:9px 0;
+  border-bottom:1px solid var(--line)}
+.prow.hd{padding:6px 0; border-bottom:1px solid var(--black); font-size:10px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--fg2)}
+.prow .nm{font-weight:700; font-size:14px}
+.prow .due{font-size:12px; color:var(--fg2); font-variant-numeric:tabular-nums}
+.prow .note{font-size:11px; color:var(--fg2); text-align:right}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.ch{display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:4px 9px;
+  border:1px solid rgba(0,0,0,.18); white-space:nowrap}
+.ch b{font-size:10px; text-transform:uppercase; letter-spacing:.07em}
+.ch .ar{color:rgba(0,0,0,.55)}
+.ch.dub{background:var(--dub)} .ch.edit{background:var(--edit)} .ch.mix{background:var(--mix)}
+.rows.applied .prow{color:var(--fg2)}
+.rows.applied .ch{opacity:.55}
+details.fold{border-top:1px solid var(--black); margin-top:26px}
+details.fold + details.fold{margin-top:0; border-top:1px solid var(--line)}
+details.fold > summary{display:flex; align-items:baseline; gap:12px; padding:11px 0; cursor:pointer; list-style:none}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary h3{margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.08em}
+details.fold > summary .n{font-size:12px; color:var(--fg2)}
+details.fold > summary::after{content:'Show'; margin-left:auto; font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--fg2)}
+details.fold[open] > summary::after{content:'Hide'}
+details.fold > summary:hover::after{color:var(--fg1)}
+details.fold .body{padding:0 0 12px}
+.orow{display:grid; grid-template-columns:110px 90px 1fr 170px; gap:14px; padding:7px 0;
+  border-bottom:1px solid #E6E5E1; font-size:13px; align-items:center}
+.orow.hd{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--fg2);
+  border-bottom:1px solid var(--line)}
+.orow.cleared{color:var(--fg3)}
+.orow.cleared .pj{text-decoration:line-through}
+.orow .tags{display:flex; gap:5px; justify-content:flex-end}
+.tag{display:inline-block; font-size:9px; padding:2px 6px; border:1px solid var(--line); color:var(--fg2);
+  text-transform:uppercase; letter-spacing:.06em; font-weight:700}
+.tag.two{border-color:var(--warn); color:var(--warn)}
+.tag.red{border-color:var(--red); color:var(--red)}
+.tag.solid{background:var(--black); color:#fff; border-color:var(--black)}
+.lrow{display:grid; grid-template-columns:230px 150px 1fr; gap:14px; padding:7px 0;
+  border-bottom:1px solid #E6E5E1; font-size:13px}
+.lrow .why{color:var(--fg2)}
+
+/* ---- Schedule: taller cells that say what the booking is, and the key up in the toolbar -- */
+table.sched.byeng tbody td{height:56px}
+table.sched.byeng tbody th{height:56px}
+.bk.rich{flex-direction:column; align-items:flex-start; justify-content:center; gap:1px; padding:3px 10px; white-space:normal}
+.bk.rich .bk-n{font-weight:700; line-height:1.2; display:-webkit-box; -webkit-box-orient:vertical;
+  -webkit-line-clamp:2; overflow:hidden; word-break:break-word; max-width:100%}
+.bk.rich .bk-m{font-size:11px; opacity:.72; font-variant-numeric:tabular-nums; white-space:nowrap}
+/* Two in one week: each band is about 28px, enough for the name on one line and the phase beside it. */
+.stack .bk.rich:not(:only-child){flex-direction:row; align-items:center; justify-content:space-between; gap:8px; padding:1px 8px; font-size:11px}
+.stack .bk.rich:not(:only-child) .bk-n{display:block; white-space:nowrap; text-overflow:ellipsis; -webkit-line-clamp:1; min-width:0}
+.stack .bk.rich:not(:only-child) .bk-m{display:none}
+.legend.key{margin:0 0 0 14px; gap:12px}
+.legend.key .k{white-space:nowrap}
+
+/* A row that opens looks like it does: it lights on hover and ends in an arrow. */
+table.projects tbody tr[data-title]:hover{background:var(--bg2)}
+table.projects td.go{width:22px; padding:0 4px 0 0; color:var(--fg3); text-align:right}
+table.projects tbody tr[data-title]:hover td.go{color:var(--fg1)}
+table.projects td.go svg{display:inline-block; vertical-align:middle}
+.result h4 .tag{margin-left:8px; vertical-align:2px}
+
+/* ---- Analysis: the answer first, then the grid it comes from ------------------------- */
+.st{display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+  padding:2px 8px; border:1px solid; white-space:nowrap; vertical-align:2px}
+.st.ok{color:var(--ok); border-color:var(--ok); background:var(--bg1)}
+.st.tight{color:#fff; background:var(--warn); border-color:var(--warn)}
+.st.short{color:#fff; background:var(--red); border-color:var(--red)}
+.verdict{border:1px solid var(--black); padding:18px 22px; display:grid; grid-template-columns:minmax(0,1fr) 540px;
+  gap:28px; align-items:center}
+@media (max-width:1100px){.verdict{grid-template-columns:1fr}}
+.verdict .a{font-size:22px; line-height:1.35; font-weight:700; letter-spacing:-.015em; margin:0}
+.verdict .a small{display:block; font-size:12px; font-weight:400; color:var(--fg2); letter-spacing:0; margin-top:8px}
+.verdict .a .st{font-size:11px; margin-right:6px}
+.caps{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.cap{border:1px solid var(--line); background:var(--surface); padding:10px 12px}
+.cap .row1{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px}
+.cap .row1 .lab{margin:0}
+.cap .big{font-size:13px; font-weight:700}
+.cap .sub{font-size:12px; color:var(--fg2); margin-top:2px}
+.job{border:1px solid var(--line); background:var(--surface); padding:14px 18px 16px}
+.jrow{display:grid; grid-template-columns:90px 120px 14px 120px 1fr; gap:8px; align-items:center; margin-bottom:8px}
+.jrow .nm{display:flex; align-items:center; gap:7px; font-weight:700; font-size:13px}
+.jrow input,.dlrow input{font-size:14px; height:34px; padding:0 10px; width:100%}
+.jrow input.bad,.dlrow input.bad{border:2px solid var(--red)}
+.jrow input::placeholder,.dlrow input::placeholder{color:var(--fg3); font-style:italic}
+.jrow .ar{color:var(--fg3); text-align:center}
+.jrow .res{display:flex; align-items:baseline; gap:10px; font-size:13px; min-width:0; padding-left:10px}
+.jrow .res .t{color:var(--fg2)}
+.jrow .res.empty{color:var(--fg3); font-style:italic}
+.dlrow{display:grid; grid-template-columns:90px 120px 1fr; gap:8px; align-items:center; margin-top:12px;
+  padding-top:12px; border-top:1px solid #E6E5E1}
+.dlrow .lab{margin:0}
+.dlrow .all{font-size:13px; font-weight:700; padding-left:10px; display:flex; gap:10px; align-items:center}
+.hmkey{display:flex; gap:16px; font-size:11px; color:var(--fg2); margin:0 0 8px; flex-wrap:wrap; align-items:center}
+.hmkey i{display:inline-block; width:14px; height:12px; vertical-align:-2px; margin-right:5px; border:1px solid rgba(0,0,0,.15)}
+.hmkey i.c0,table.hm2 td.c0{background:var(--bg1) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='6' height='6'><path d='M0 6L6 0' stroke='%23D0D0CE' stroke-width='1'/></svg>")}
+.hmkey i.nowkey{background:var(--bg1); border:0; border-top:3px solid var(--red); height:9px}
+table.hm2{border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; font-size:12px}
+table.hm2 col.l{width:170px}
+table.hm2 th{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--fg2); font-weight:700;
+  padding:3px 0; text-align:center; white-space:nowrap}
+table.hm2 th.mo{text-align:left; padding-left:4px; border-left:1px solid var(--line)}
+table.hm2 th.who{text-align:left; padding-right:8px; font-size:13px; color:var(--fg1); text-transform:none; letter-spacing:0}
+table.hm2 th.who em{font-style:normal; font-size:9px; color:var(--fg3); letter-spacing:.06em; margin-left:6px; text-transform:uppercase}
+table.hm2 th.now{color:var(--red); border-top:3px solid var(--red)}
+table.hm2 td{height:28px; border:2px solid var(--bg1); text-align:center; color:#fff; font-weight:700; font-size:11px; padding:0}
+table.hm2 td.c0{box-shadow:inset 0 0 0 1px #E6E5E1}
+table.hm2 td.c1{background:var(--fg3)} table.hm2 td.c2{background:var(--warn)} table.hm2 td.c3{background:var(--black)}
+table.hm2 td.nowc{border-left-color:var(--red); border-right-color:var(--red)}
+table.hm2 tr.sumrow td{height:26px; color:var(--fg1); font-weight:400; font-size:12px; border-top:1px solid var(--line); background:var(--bg1)}
+table.hm2 tr.sumrow.first td,table.hm2 tr.sumrow.first th{border-top:2px solid var(--black)}
+table.hm2 tr.sumrow th.who{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--fg2)}
+table.hm2 tr.sumrow td.f-tight{color:var(--warn); font-weight:700; box-shadow:inset 0 0 0 1px var(--warn)}
+table.hm2 tr.sumrow td.f-short{color:#fff; background:var(--red); font-weight:700}
+.carry{display:grid; grid-template-columns:90px minmax(0,1fr) 190px; gap:12px; align-items:center; margin-bottom:6px; max-width:900px; font-size:13px}
+.carry .nm{font-weight:700}
+.carry .track{height:16px; background:var(--bg2); position:relative; border:1px solid #E6E5E1}
+.carry .busy{position:absolute; left:0; top:0; bottom:0; background:var(--gray)}
+.carry .dbl{position:absolute; left:0; top:0; bottom:0; background:var(--warn)}
+.carry .v{font-size:12px; color:var(--fg2)} .carry .v b{color:var(--fg1)}
+.calmbox{border:1px solid var(--line); background:var(--bg2); padding:12px 16px; font-size:13px; color:var(--fg2)}
+.quiet{font-size:12px; color:var(--fg3); margin:10px 0 0}

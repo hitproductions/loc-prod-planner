@@ -102,6 +102,10 @@ purpose:
   so a single row tells you who is free that week. Cells show the project name, and
   weeks read as `11/02 - 11/08`, with a rule at each quarter.
 
+Each booking is a taller box that says what it is: the project, the phase and which week
+of the booking it is (**Dub · wk 2/3**). A key above the grid explains the colours,
+"2 at once" / "3 at once" and "By hand".
+
 Hovering a cell highlights its row *and* marks its column — the week header turns red
 and a hairline runs down it. Useful when you're twenty rows down and need to know which
 week you're looking at.
@@ -229,8 +233,15 @@ It will never touch:
 - anything you **picked by hand**
 - anything you've **locked**
 
+The result opens with a one-line summary (how many projects change, whether overlaps
+clear), then the change list: each project, each phase, who it moves from and to. A fold
+at the bottom, **Left alone**, lists every project the re-plan did not touch and why
+(*under way*, *locked*, *complete*, *moved by hand*), so a project that did not move is
+explained rather than missing.
+
 Read the change list, then **Apply re-plan** if it looks right. Old rows are
-superseded, not deleted, so nothing is lost.
+superseded, not deleted, so nothing is lost, and the change can be rolled back from
+**History**.
 
 If it proposes a lot of changes, that's normal after adding several projects at
 once. Lock anything already promised to people first.
@@ -239,23 +250,31 @@ once. Lock anything already promised to people first.
 
 ## Analysis
 
-Worth a look monthly rather than daily. Two sections:
+Worth a look monthly rather than daily. It reads top to bottom:
 
-**Can we take work?** starts with **forced overlaps** — the projects that couldn't be
-scheduled without doubling someone up, naming who is carrying them. Those are the ones
-to renegotiate.
+**Can we take work?** A one-line verdict (*OK*, *Tight* or *Short*) with the reason, for
+example "room for about 4 more dub/edit projects through February; Advanced mixing is
+tight in the week of 26 Oct". Beside it, two cards show how many more dub/edit and
+Advanced mix projects fit.
 
-The two charts then show, week by week from now on, how many projects need a role
-against how many people can do it. Bars above the dashed line are weeks where more
-projects need that role than there are people who can do it at all — a hiring
-question, not a scheduling one.
+**Taking a new job.** Type the start and end of any phase (and a deadline if you have
+one); each box can stay empty. It answers *OK* or *Check* per phase and names the week and
+role that runs short. It only reads, it never books anything.
 
-**Who is free** names the available engineers for the next ten weeks. Dub/edit and
-Advanced mix are always counted separately: a free dub week can't cover a mix, so
-adding them would invent capacity you don't have.
+**Who is free, week by week.** Every engineer against the next 16 weeks. A darker cell is
+a busier week; a dub beside its own edit with the same person counts once. The last two
+rows total who is free for dub/edit and for Advanced mix. Dub/edit and Advanced mix are
+always counted separately: a free dub week can't cover a mix, so adding them would invent
+capacity you don't have. Reserve engineers are marked and left out of "free".
 
-**Who is overloaded?** Weeks where someone holds two projects at once, naming which
-projects collide. A long run of weeks is *not* flagged — that's just steady work.
+**Who is carrying the most.** Booked weeks per person over the same 16 weeks.
+
+**Overlaps.** Weeks from now on where someone holds two projects at once, naming which
+projects collide. A long run of weeks is *not* flagged, that is just steady work. Earlier
+weeks are counted quietly as "N earlier".
+
+Three folds at the bottom hold the older detail: demand against people, work by client,
+and weeks per quarter.
 
 ---
 

@@ -233,7 +233,9 @@ function schedule(book, opts) {
       if (ci === undefined) continue;        // outside the range: skip the WEEK, not the booking
       const deep = per[b.engineer + '|' + w] || 1;
       const text = byProject ? b.engineer : b.project;
-      const item = { p: b.project, ph: b.phase, hand: /moved by hand/i.test(b.note || '') };
+      // Where this week falls in its booking, so a cell can say "Dub, week 2 of 3".
+      const item = { p: b.project, ph: b.phase, hand: /moved by hand/i.test(b.note || ''),
+                     at: w - A.widx(b.start_date) + 1, of: A.widx(b.end_date) - A.widx(b.start_date) + 1 };
       const cur = cells[ri][ci];
       if (!cur) cells[ri][ci] = { phase: b.phase, text, depth: deep, count: 1, items: [item] };
       else {
@@ -313,8 +315,29 @@ function analysis(book, opts) {
   const collisions = Object.values(byWeek)
     .sort((a, b) => a.start.localeCompare(b.start) || a.engineer.localeCompare(b.engineer));
 
+  // Who is booked in each of the next GRID_WEEKS weeks, for the free-capacity grid and the
+  // "can we take it?" answer. Counted in JOBS (a project's dub beside its own edit is one),
+  // and only as far ahead as work has actually been booked: beyond that everyone is simply free
+  // because nothing has been entered yet, which says nothing about capacity.
+  const GRID_WEEKS = 16, startW = A.widx(from);
+  const jobsAll = A.jobsByEngineerWeek(rows);
+  const grid = {
+    weeks: Array.from({ length: GRID_WEEKS }, (_, i) => A.weekStart(startW + i)),
+    engineers: book.engineers.filter(e => e && e.name).map(e => ({
+      name: e.name,
+      reserve: /^yes$/i.test(String(e.overflow_only || '')),
+      recedit: (cap.pools.recedit || []).includes(e.name),
+      adv_mix: (cap.pools.adv_mix || []).includes(e.name),
+      cells: Array.from({ length: GRID_WEEKS }, (_, i) => {
+        const at = jobsAll[e.name + '|' + (startW + i)];
+        return at ? { work: at.rows.map(b => `${b.project} (${b.phase})`), depth: A.depthOf(at) } : { work: [], depth: 0 };
+      }),
+    })),
+  };
+
   return {
     today: from,
+    grid,
     horizon: cap.horizon,
     pools: cap.pools,
     weeks: ahead,
@@ -366,6 +389,7 @@ function report(book, opts) {
         ? Math.round((Date.parse(p.deadline + 'T00:00:00Z') -
                       Date.parse(p.completed + 'T00:00:00Z')) / 86400000) : null,
       phases: `${p.dub_weeks}/${p.edit_weeks}/${p.mix_weeks}`,
+      dates: phaseDates(p, rows),
       dub: who('Dub'), edit: who('Edit'), mix: who('Mix'),
       weeks,
       music: /^yes$/i.test(String(p.music_songs || '')),

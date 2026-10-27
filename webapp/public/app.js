@@ -104,13 +104,20 @@ const PHASE_BG = { Dub:'var(--dub)', Edit:'var(--edit)', Mix:'var(--mix)' };
 //
 // `label` differs by orientation: the Engineers grid shows project names, the Projects
 // grid shows engineer names.
-function cellBands(c, label, dragAttrs) {
+function cellBands(c, label, dragAttrs, rich) {
   return '<div class="stack">' + c.items.map((it, i) => {
     const text = label(it, i);
-    return `<span class="bk" style="background:${PHASE_BG[it.ph] || 'transparent'}"` +
+    // Engineers grid: the cell is tall enough to say more than the name. The phase and where
+    // the week falls in it ("Dub \u00b7 wk 2/3") are what you otherwise have to hover to learn.
+    const meta = rich && it.of ? `${it.ph} \u00b7 ` + (it.of > 1 ? `wk ${it.at}/${it.of}` : '1 wk') : '';
+    const body = rich
+      ? `<span class="bk-n">${esc(text)}</span>` + (meta ? `<span class="bk-m">${esc(meta)}</span>` : '')
+      : esc(text);
+    return `<span class="bk${rich ? ' rich' : ''}" style="background:${PHASE_BG[it.ph] || 'transparent'}"` +
       (dragAttrs ? dragAttrs(it) : '') +
-      (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"' : '') +
-      `>${esc(text)}</span>`;
+      (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"'
+        : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + meta)}"` : '')) +
+      `>${body}</span>`;
   }).join('') + '</div>';
 }
 
@@ -122,11 +129,25 @@ function scheduleBar() {
   return '<div class="bar-row">' +
     `<button class="btn small${MODE === 'project' ? ' primary' : ''}" data-mode="project">Projects</button>` +
     `<button class="btn small${MODE === 'engineer' ? ' primary' : ''}" data-mode="engineer">Engineers</button>` +
+    scheduleKey() +
     '<div class="spacer"></div>' +
     `<label class="inline">From</label>${sel('qFrom', RANGE.from)}` +
     `<label class="inline">To</label>${sel('qTo', RANGE.to)}` +
     '<button class="btn small" id="qAll">All</button>' +
     `<span class="hint" style="margin:0 0 0 12px">${d.weeks.length} weeks</span></div>`;
+}
+
+// The key, in the toolbar where it is seen, and in one word each. It used to be a row of
+// swatches and phrases below the whole grid, off screen on most windows.
+function scheduleKey() {
+  const sw = (css, t, tip) => `<span class="k"${tip ? ` title="${esc(tip)}"` : ''}><i class="sw" style="${css}"></i>${t}</span>`;
+  return '<div class="legend key">' +
+    sw('background:var(--dub)', 'Dub') + sw('background:var(--edit)', 'Edit') + sw('background:var(--mix)', 'Mix') +
+    sw('border:2px solid var(--warn);background:transparent', '2 at once', 'Someone holds two jobs this week') +
+    sw('border:2px solid var(--red);background:transparent', '3 at once', 'Three jobs in one week \u2014 move one') +
+    sw('border:2px dotted var(--fg1);background:transparent', 'By hand',
+       READONLY ? 'Moved by hand' : 'Moved by hand \u2014 click the cell to give it back') +
+    (MODE === 'project' ? sw('background:var(--red)', 'Deadline week') : '') + '</div>';
 }
 
 function wireScheduleBar() {
@@ -176,7 +197,7 @@ function renderEngineerGrid() {
         body = cellBands(c, it => it.p, it =>
           (READONLY ? '' : ' draggable="true"') +
           ` data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
-          ` data-from="${esc(n)}" data-wk="${w.start}"`);
+          ` data-from="${esc(n)}" data-wk="${w.start}"`, true);
       }
       h += `<td class="${cls.join(' ')}" data-c="${ri}" data-eng="${esc(n)}"` +
            ` data-wk="${w.start}" title="${esc(c ? c.text : '')}">${body}</td>`;
@@ -244,19 +265,6 @@ function renderSchedule() {
     '<div class="loading">No weeks in that range. Widen it or press All.</div>';
   let h = scheduleBar();
   h += d.mode === 'project' ? renderProjectGrid() : renderEngineerGrid();
-  h += '<div class="legend">' +
-    '<span><span class="sw" style="background:var(--dub)"></span>Dub</span>' +
-    '<span><span class="sw" style="background:var(--edit)"></span>Edit</span>' +
-    '<span><span class="sw" style="background:var(--mix)"></span>Mix</span>' +
-    '<span><span class="sw split"></span>two bookings, one week</span>' +
-    '<span><span class="sw" style="border:2px solid var(--warn);background:transparent"></span>2 overlaps this week</span>' +
-    '<span><span class="sw" style="border:2px solid var(--red);background:transparent"></span>3 overlaps — reassign</span>' +
-    // The undo is a click on the cell, so on a read-only page the swatch still means
-    // something ("moved by hand") but the instruction does not.
-    `<span><span class="sw" style="border:2px dotted var(--fg1);background:transparent"></span>moved by hand${READONLY ? '' : ' — click to undo'}</span>` +
-    (d.mode === 'project'
-      ? '<span><span class="sw" style="background:var(--red)"></span>Deadline week</span>' : '') +
-    '</div>';
   return h;
 }
 
@@ -339,16 +347,15 @@ function renderProjects() {
       `aria-label="Search projects" value="${esc(SEARCH)}" autocomplete="off">` +
     `<button class="btn small${SORT === 'deadline' ? ' primary' : ''}" data-sort="deadline">Deadline</button>` +
     `<button class="btn small${SORT === 'title' ? ' primary' : ''}" data-sort="title">A\u2013Z</button>` +
-    '<span class="hint" style="margin:0 0 0 12px">Click a row to edit it.</span></div>' +
-    '<div id="formHost"></div>';
+    '</div><div id="formHost"></div>';
 
   h += '<table class="projects"><thead><tr><th>Deadline</th><th>Project</th><th>Client</th>' +
-    '<th>Dates</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th></tr></thead><tbody>';
+    '<th>Dates</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th><th></th></tr></thead><tbody>';
   let divided = false;
   ps.forEach(p => {
     if (SORT === 'deadline' && !divided && passed(p)) {
       divided = true;
-      h += `<tr class="grp" data-grp="1"><td colspan="8">Deadline passed \u00b7 ` +
+      h += `<tr class="grp" data-grp="1"><td colspan="9">Deadline passed \u00b7 ` +
         `${ps.filter(passed).length}</td></tr>`;
     }
     let flags = '';
@@ -384,7 +391,10 @@ function renderProjects() {
         `data-lock="${esc(p.title)}" data-now="${p.locked ? '1' : '0'}" title="${p.locked
           ? 'Frozen — a re-plan will not move this project. Click to unfreeze.'
           : 'Click to freeze: a re-plan will leave this project alone.'}">` +
-        `${p.locked ? 'LOCKED' : 'Lock'}</button></td></tr>`;
+        `${p.locked ? 'LOCKED' : 'Lock'}</button></td>` +
+      // A row that opens says so by looking like it does: it lights on hover and ends in an
+      // arrow, rather than a line of grey text off to the right telling you to click it.
+      '<td class="go" aria-hidden="true"><svg width="9" height="14" viewBox="0 0 9 14"><path d="M1.5 1.5l5.5 5.5-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></td></tr>';
   });
   return h + '</tbody></table><div class="hint" id="pNone" hidden>No project matches that.</div>';
 }
@@ -485,11 +495,19 @@ function renderReport() {
   h += `<div class="sheetdoc"><h1>Completed work \u2014 ${esc(MONTH_NAME(r.month))}</h1>`;
 
   if (!r.projects.length) {
-    h += '<p class="muted">Nothing was marked complete in this month.</p>' +
-      '<p class="hint">A project appears here once you mark it complete on its row in ' +
-      'Projects. Nothing is inferred from deadlines — a job can be delivered early or ' +
-      'late, and guessing would put work in the wrong month.</p></div>';
-    return h;
+    h += '<p class="muted">Nothing completed in ' + esc(MONTH_NAME(r.month)) + '.</p>';
+    // This month's report is built from projects marked complete, so the way to fill it is
+    // here: this month's open projects, each with the button that does it. (Only for the
+    // current month: marking complete stamps today, so it could not add to another month.)
+    const open = BOOT.projects.filter(p => !p.status && String(p.deadline || '').slice(0, 7) === r.month &&
+      r.month === String(BOOT.today_week).slice(0, 7));
+    if (open.length) {
+      h += '<table class="projects"><thead><tr><th>Due</th><th>Project</th><th>Client</th><th></th></tr></thead><tbody>' +
+        open.map(p => `<tr><td>${esc(p.deadline)}</td><td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
+          `<td class="lockcell"><button class="btn small" data-done="${esc(p.title)}">Mark complete</button></td></tr>`).join('') +
+        '</tbody></table>';
+    }
+    return h + '</div>';
   }
 
   const t = r.totals;
@@ -499,8 +517,8 @@ function renderReport() {
             : ' \u00b7 all on or before the deadline') + '.</p>';
 
   h += '<table class="projects"><thead><tr><th>Delivered</th><th>Project</th><th>Client</th>' +
-    '<th>D/E/M</th><th>Recordist</th><th>Editor</th><th>Mixer</th>' +
-    '<th class="n">Weeks</th><th>Against deadline</th></tr></thead><tbody>' +
+    '<th>Dates</th><th>Recordist</th><th>Editor</th><th>Mixer</th>' +
+    '<th class="n">Weeks booked</th><th>Against deadline</th></tr></thead><tbody>' +
     r.projects.map(p => {
       const d = p.days_early;
       const vs = d === null ? '\u2014'
@@ -512,7 +530,7 @@ function renderReport() {
       if (p.special) flags += '<span class="chip">special</span>';
       if (p.atmos) flags += '<span class="chip">atmos</span>';
       return `<tr><td>${esc(p.completed)}</td><td><b>${esc(p.title)}</b> ${flags}</td>` +
-        `<td>${esc(p.client)}</td><td>${esc(p.phases)}</td>` +
+        `<td>${esc(p.client)}</td><td>${runsCell({ dates: p.dates })}</td>` +
         `<td>${esc(p.dub.join(' + ') || '\u2014')}</td>` +
         `<td>${esc(p.edit.join(' + ') || '\u2014')}</td>` +
         `<td>${esc(p.mix.join(' + ') || '\u2014')}</td>` +
@@ -521,24 +539,29 @@ function renderReport() {
 
   h += '<div class="grid2" style="margin-top:22px">' +
     '<div><h2>By client</h2><table class="projects"><thead><tr><th>Client</th>' +
-    '<th class="n">Projects</th><th class="n">Weeks</th></tr></thead><tbody>' +
+    '<th class="n">Projects</th><th class="n">Weeks booked</th></tr></thead><tbody>' +
     r.by_client.map(c => `<tr><td>${esc(c.name)}</td><td class="n">${c.projects}</td>` +
       `<td class="n">${c.weeks}</td></tr>`).join('') + '</tbody></table></div>' +
     '<div><h2>By engineer</h2><table class="projects"><thead><tr><th>Engineer</th>' +
-    '<th class="n">Projects</th><th class="n">Weeks</th><th>Doing what</th>' +
+    '<th class="n">Projects</th><th class="n">Weeks booked</th><th>Doing what</th>' +
     '</tr></thead><tbody>' +
     r.by_engineer.map(e => `<tr><td>${esc(e.name)}</td><td class="n">${e.projects}</td>` +
       `<td class="n">${e.weeks}</td><td class="muted-inline">` +
       esc(Object.keys(e.phases).sort().map(k => `${k} ${e.phases[k]}`).join(' \u00b7 ')) +
       '</td></tr>').join('') + '</tbody></table></div></div>';
 
-  h += '<p class="hint" style="margin-top:20px">Weeks are booked-row weeks, the same ' +
-    'unit the schedule and Analysis use. An engineer who did two phases on one project ' +
-    'is counted once under Projects and for both phases under Weeks.</p></div>';
+  h += '</div>';
   return h;
 }
 
 function wireReport() {
+  document.querySelectorAll('[data-done]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm(`Mark ${btn.dataset.done} complete?\n\nIt drops out of the list and re-plan leaves it alone. Its bookings stay on the schedule.`)) return;
+    btn.disabled = true;
+    const r = await post('/api/set-status', { title: btn.dataset.done, status: 'Complete' });
+    if (!r.ok) { alert(r.error); btn.disabled = false; return; }
+    absorb(r); REPORT = null; loadReport(MONTH);
+  }));
   const m = $('rMonth');
   if (m) m.addEventListener('change', () => loadReport(m.value));
   const p = $('rPrint');
@@ -574,10 +597,7 @@ function renderHistory() {
   if (!HISTORY) return '<div class="loading">Reading the log\u2026</div>';
   const evs = HISTORY.events || [];
   if (!evs.length) {
-    return '<div class="card"><div class="t">History</div><div class="s">Nothing yet.</div>' +
-      '<div class="hint">The log starts from the first change made through this app. ' +
-      'Rows superseded before it existed are still in the Bookings tab \u2014 nothing has ' +
-      'been lost \u2014 but they carry no date, so they cannot be placed on a timeline.</div></div>';
+    return '<div class="card"><div class="t">History</div><div class="s">No changes yet.</div></div>';
   }
 
   const kinds = [...new Set(evs.map(e => e.action))];
@@ -622,14 +642,11 @@ function renderHistory() {
           `<td>${esc(r[2])}</td><td>${r[3]}</td></tr>`).join('') + '</tbody></table>'
       : '<div class="hint">No booking changed \u2014 this touched the project row only.</div>';
 
-    // Only the latest, and the button says why rather than being mysteriously absent.
-    h += OPENED.event.index === HISTORY.latest
-      ? '<div class="formactions"><button class="btn danger" id="hRoll">Roll this back</button>' +
-        '<span class="hint" style="margin:0">Puts the rows back the way they were. ' +
-        'Reversible \u2014 it is logged as a change of its own.</span></div>'
-      : '<div class="hint" style="margin-top:14px">Only the most recent change can be ' +
-        'rolled back. Undoing an earlier one would revive rows that later changes have ' +
-        'moved past, giving you a schedule that never existed.</div>';
+    // Every entry shows the button; only the newest can use it. An older one is dimmed with a
+    // few words on it, instead of a paragraph explaining the rule under a missing button.
+    const latest = OPENED.event.index === HISTORY.latest;
+    h += '<div class="formactions"><button class="btn danger" id="hRoll"' + (latest ? '' : ' disabled') +
+      '>Roll this back</button>' + (latest ? '' : '<span class="hint">Newer changes exist</span>') + '</div>';
     h += '</div>';
   }
   return h;
@@ -680,56 +697,212 @@ async function loadAnalysis() {
   paint();
 }
 
+// The page answers its own title first. Order follows the decision each part serves: can we
+// take work (the verdict, then a way to try a real job), who is free when (the grid), who is
+// carrying the most, and last the overlaps, which are the only part with something to fix.
+// The older cards (demand per week, clients, weeks per quarter) are kept, folded below.
 function renderAnalysis() {
-  if (!ANALYSIS) return '<div class="loading">Counting\u2026</div>';
-  const a = ANALYSIS;
-  const o = a.overlaps;
+  if (!ANALYSIS) return '<div class="loading">Counting…</div>';
+  const a = ANALYSIS, g = a.grid, m = anModel(a);
 
   let h = '<div class="bar-row"><button class="btn small" id="anRefresh">Refresh</button>' +
-    `<span class="hint" style="margin:0 0 0 12px">Week of ${esc(a.today)} \u00b7 horizon ` +
-    `${esc(a.horizon.from)} \u2192 ${esc(a.horizon.to)} \u00b7 ${a.horizon.weeks} weeks</span></div>`;
+    `<span class="hint" style="margin:0 0 0 12px">Week of ${esc(shortDate(g.weeks[0]))} · the next ${g.weeks.length} weeks</span></div>`;
 
-  // ---------------------------------------------------- can we take work?
-  h += section('Can we take work?');
+  h += section('Can we take work?') + anVerdict(m, a);
 
-  h += '<div class="card"><div class="t">Overlaps</div>' +
-    `<div class="s">${wk(o.pair_weeks)} with two at once, ${wk(o.deep_weeks)} with three or more` +
-    (o.by_engineer.length ? ' \u00b7 carried by ' +
-      o.by_engineer.map(e => `${esc(e.engineer)} (${e.forced_rows})`).join(', ') : '') + '</div>';
-  if (o.earlier_weeks) {
-    h += `<div class="hint">${wk(o.earlier_weeks)} with overlaps earlier are not listed \u2014 ` +
-      'those weeks have already passed.</div>';
-  }
-  if (!o.collisions.length) {
-    h += '<div class="hint">None \u2014 nobody holds two projects in the same week from now on.</div>';
-  } else {
-    h += '<table class="projects"><thead><tr><th>Engineer</th><th>Week of</th>' +
-      '<th>Colliding work</th></tr></thead><tbody>' +
-      o.collisions.map(c => `<tr${c.depth > 2 ? ' class="rowbad"' : ''}>` +
-        `<td><b>${esc(c.engineer)}</b>${c.depth > 2 ? ` <span class="chip red">${c.depth} at once</span>` : ''}</td>` +
-        `<td>${esc(c.start)}</td><td>${esc(c.work.join('  +  '))}</td></tr>`).join('') +
-      '</tbody></table>';
-  }
-  h += '</div>';
+  h += `<div class="head"><span class="bar"></span><h2>Taking a new job</h2><span class="n">Any box can stay empty</span></div>` +
+    '<div class="job" id="anJob">' +
+    [['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']].map(([k, n]) =>
+      `<div class="jrow"><div class="nm"><i class="sw" style="background:var(--${k})"></i>${n}</div>` +
+      `<input type="text" id="aj_${k}_a" placeholder="optional" aria-label="${n} start" autocomplete="off"><span class="ar">→</span>` +
+      `<input type="text" id="aj_${k}_b" placeholder="optional" aria-label="${n} end" autocomplete="off">` +
+      `<div class="res empty" id="aj_${k}_r">not used</div></div>`).join('') +
+    '<div class="dlrow"><span class="lab">Deadline</span>' +
+    '<input type="text" id="aj_dl" placeholder="optional" aria-label="Deadline" autocomplete="off"><div class="all" id="aj_all"></div></div></div>';
 
-  h += '<div class="grid2">' +
-    demandCard(a, 'recedit', 'Dub or edit \u2014 projects per week', a.pools.recedit,
-               a.pools.recedit.length) +
-    demandCard(a, 'adv_mix', 'Advanced mix \u2014 projects per week', a.pools.adv_mix,
-               a.pools.adv_mix.length,
-               a.pools.adv_mix_incl_overflow.length - a.pools.adv_mix.length) + '</div>';
+  h += `<div class="head"><span class="bar"></span><h2>Who is free, week by week</h2></div>` + anHeat(m);
 
-  h += freeCard(a);
-  h += clientCard(a);
+  h += `<div class="head"><span class="bar"></span><h2>Who is carrying the most</h2>` +
+    `<span class="n">Weeks with work, of the next ${g.weeks.length}</span></div>` + anCarry(m);
 
-  // ---------------------------------------------------- who is overloaded?
-  h += section('Who is overloaded?');
-  h += heatmapCard(a);
+  const o = a.overlaps;
+  h += `<div class="head"><span class="bar"></span><h2>Overlaps</h2><span class="n">From this week on</span></div>`;
+  if (!o.collisions.length) h += '<div class="calmbox">None — nobody holds two projects in the same week.</div>';
+  else h += '<div class="orow hd"><span>Week of</span><span>Engineer</span><span>Colliding work</span><span></span></div>' +
+    o.collisions.map(c => `<div class="orow"><span>${esc(shortDate(c.start))}</span><span><b>${esc(c.engineer)}</b></span>` +
+      `<span>${esc(c.work.join('  +  '))}</span><span class="tags">` +
+      (c.depth > 2 ? `<span class="tag red">${c.depth} at once</span>` : '<span class="tag two">2 at once</span>') + '</span></div>').join('');
+  if (o.earlier_weeks) h += `<div class="quiet">${plural(o.earlier_weeks, 'earlier overlap')} not shown — past weeks</div>`;
 
-  h += '<div class="banner">Every figure here counts booking-row weeks, so it reconciles ' +
-    'with the schedule grid. If the heatmap says an engineer has 16 weeks, counting their ' +
-    'cells in the grid gives 16. Superseded rows are never included.</div>';
+  // Kept, not removed: the per-week demand charts, the client pipeline, and weeks per quarter.
+  h += fold('Demand against supply, week by week', 'projects per week against the people who can do them',
+    '<div class="grid2">' +
+    demandCard(a, 'recedit', 'Dub or edit — projects per week', a.pools.recedit, a.pools.recedit.length) +
+    demandCard(a, 'adv_mix', 'Advanced mix — projects per week', a.pools.adv_mix, a.pools.adv_mix.length,
+               a.pools.adv_mix_incl_overflow.length - a.pools.adv_mix.length) + '</div>' + freeCard(a), false);
+  h += fold('Where the work comes from', 'by client', clientCard(a), false);
+  h += fold('Weeks booked per engineer, per quarter', 'all weeks in the book', heatmapCard(a), false);
   return h;
+}
+
+// ---------------------------------------------------------------- analysis: the model
+// Everything on the page is worked out from one grid (engineer x week), so the verdict, the
+// job check, the table and the bars cannot disagree.
+const AN_STATUS = { ok: 'OK', tight: 'Tight', short: 'Short' };
+const AN_RANK = { ok: 0, tight: 1, short: 2 };
+const AN_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function anModel(a) {
+  const g = a.grid, n = g.weeks.length;
+  const pool = k => g.engineers.filter(e => k === 'de' ? e.recedit : e.adv_mix).map(e => e.name);
+  const by = {}; g.engineers.forEach(e => { by[e.name] = e; });
+  const free = (name, w) => by[name].cells[w].depth === 0;
+  const stOf = c => c === 0 ? 'short' : c <= 1 ? 'tight' : 'ok';
+  const m = { a, g, n, by, pool, free, pools: { de: pool('de'), am: pool('am') } };
+  m.freeCount = (k, w) => m.pools[k].filter(e => free(e, w)).length;
+  m.stOf = stOf;
+  m.cap = k => {
+    const ws = [...Array(n).keys()], counts = ws.map(w => m.freeCount(k, w));
+    const status = ws.reduce((st, w, i) => AN_RANK[stOf(counts[i])] > AN_RANK[st] ? stOf(counts[i]) : st, 'ok');
+    const min = Math.min(...counts);
+    return { k, status, min, minW: counts.indexOf(min), tight: ws.filter((w, i) => stOf(counts[i]) === 'tight'),
+      none: ws.filter((w, i) => stOf(counts[i]) === 'short'), size: m.pools[k].length };
+  };
+  return m;
+}
+
+// "the week of 2 Nov", "the weeks of 2 and 9 Nov", "6 weeks from the week of 2 Nov"
+function anWeeks(m, ix) {
+  const day = i => { const d = new Date(m.g.weeks[i] + 'T00:00:00Z'); return { d: d.getUTCDate(), m: d.getUTCMonth() }; };
+  if (ix.length > 5) return `${ix.length} weeks from the week of ${shortDate(m.g.weeks[ix[0]])}`;
+  const groups = [];
+  ix.forEach(i => { const x = day(i), last = groups[groups.length - 1];
+    if (last && last.m === x.m) last.d.push(x.d); else groups.push({ m: x.m, d: [x.d] }); });
+  const text = groups.map(x => (x.d.length > 1 ? x.d.slice(0, -1).join(', ') + ' and ' + x.d[x.d.length - 1] : x.d[0]) + ' ' + MONTHS[x.m]);
+  const body = text.length > 2 ? text.slice(0, -1).join(', ') + ' and ' + text[text.length - 1] : text.join(' and ');
+  return (ix.length === 1 ? 'the week of ' : 'the weeks of ') + body;
+}
+
+function anVerdict(m, a) {
+  const S = { de: m.cap('de'), am: m.cap('am') };
+  const last = AN_MONTHS[new Date(m.g.weeks[m.n - 1] + 'T00:00:00Z').getUTCMonth()];
+  const sentence = s => {
+    if (s.status === 'ok') return s.k === 'de' ? `room for about ${plural(s.min, 'more dub/edit project')} through ${last}`
+      : `Advanced mixing has at least ${s.min} free every week`;
+    if (s.status === 'tight') return `${s.k === 'de' ? 'dub and edit are' : 'Advanced mixing is'} tight in ${anWeeks(m, s.tight)}`;
+    return `nobody is free for ${s.k === 'de' ? 'dub or edit' : 'Advanced mixing'} in ${anWeeks(m, s.none)}`;
+  };
+  const worst = AN_RANK[S.de.status] >= AN_RANK[S.am.status] ? S.de.status : S.am.status;
+  const cap1 = x => x.charAt(0).toUpperCase() + x.slice(1);
+  const txt = `${worst === 'short' ? 'Not in every week' : 'Yes'} — ${sentence(S.de)}. ${cap1(sentence(S.am))}.`;
+  const future = (a.overlaps.pair_weeks || 0) + (a.overlaps.deep_weeks || 0);
+  return `<section class="verdict"><p class="a"><span class="st ${worst}">${AN_STATUS[worst]}</span> ${esc(txt)}` +
+    `<small>${future ? plural(future, 'overlap') + ' planned from this week on, listed at the bottom.' : 'Nobody is double-booked from this week on.'}</small></p>` +
+    '<div class="caps">' + ['de', 'am'].map(k => { const s = S[k];
+      const sub = s.status === 'ok' ? `Always at least ${s.min} free`
+        : s.status === 'tight' ? `Only 1 free in ${plural(s.tight.length, 'week')}` : `Nobody free in ${plural(s.none.length, 'week')}`;
+      return `<div class="cap"><div class="row1"><span class="lab">${k === 'de' ? 'Dub or edit' : 'Advanced mix'}</span>` +
+        `<span class="st ${s.status}">${AN_STATUS[s.status]}</span></div><div class="big">${s.size} can do it</div>` +
+        `<div class="sub">${sub}</div><div class="sub">Fewest free: ${s.min} in the week of ${esc(shortDate(m.g.weeks[s.minW]))}</div></div>`; }).join('') +
+    '</div></section>';
+}
+
+function anHeat(m) {
+  const { g, n } = m;
+  const dt = i => new Date(g.weeks[i] + 'T00:00:00Z');
+  let months = '', i = 0;
+  while (i < n) { const mo = dt(i).getUTCMonth(); let j = i; while (j < n && dt(j).getUTCMonth() === mo) j++;
+    months += `<th class="mo" colspan="${j - i}">${MONTHS[mo]}</th>`; i = j; }
+  let h = '<div class="hmkey"><span><i class="c0"></i>free</span><span class="k"><i style="background:var(--fg3)"></i>one project</span>' +
+    '<span class="k"><i style="background:var(--warn)"></i>two at once</span><span class="k"><i style="background:var(--black)"></i>three or more</span>' +
+    '<span class="k"><i class="nowkey"></i>this week</span></div>';
+  h += `<table class="hm2"><colgroup><col class="l"></colgroup><thead><tr><th></th>${months}</tr><tr><th></th>` +
+    g.weeks.map((w, k) => `<th class="${k === 0 ? 'now' : ''}">${dt(k).getUTCDate()}</th>`).join('') + '</tr></thead><tbody>';
+  g.engineers.forEach(e => {
+    const tags = [e.recedit ? 'D/E' : '', e.adv_mix ? 'Mix' : '', e.reserve ? 'Reserve' : ''].filter(Boolean).join(' · ');
+    h += `<tr><th class="who">${esc(e.name)}<em>${tags}</em></th>` + e.cells.map((c, k) => {
+      const d = Math.min(3, c.depth);
+      return `<td class="c${d}${k === 0 ? ' nowc' : ''}" title="${esc(e.name + ', week of ' + shortDate(g.weeks[k]) + ': ' + (c.work.join(' + ') || 'free'))}">${c.depth > 1 ? c.depth : ''}</td>`; }).join('') + '</tr>';
+  });
+  [['de', 'dub/edit'], ['am', 'Adv. mix']].forEach(([k, label], ix) => {
+    h += `<tr class="sumrow${ix === 0 ? ' first' : ''}"><th class="who">Free for ${label}</th>` +
+      g.weeks.map((w, kk) => { const c = m.freeCount(k, kk), st = m.stOf(c);
+        return `<td class="f-${st}${kk === 0 ? ' nowc' : ''}" title="${c} free in the week of ${esc(shortDate(w))}: ${AN_STATUS[st]}">${c}</td>`; }).join('') + '</tr>';
+  });
+  return h + '</tbody></table>';
+}
+
+function anCarry(m) {
+  const { g, n } = m;
+  const rows = g.engineers.map(e => ({ name: e.name, busy: e.cells.filter(c => c.depth > 0).length, dbl: e.cells.filter(c => c.depth > 1).length }))
+    .sort((x, y) => y.busy - x.busy || y.dbl - x.dbl || x.name.localeCompare(y.name));
+  return rows.map(r => `<div class="carry"><span class="nm">${esc(r.name)}</span><div class="track"><div class="busy" style="width:${r.busy / n * 100}%"></div>` +
+    `<div class="dbl" style="width:${r.dbl / n * 100}%"></div></div><span class="v"><b>${r.busy}</b> of ${n} weeks${r.dbl ? ` · ${r.dbl} doubled` : ''}</span></div>`).join('');
+}
+
+// "Taking a new job": three phases and a deadline, checked against the grid. A rough answer, not
+// a booking -- nothing here can write anything.
+function wireAnalysis() {
+  const rf = $('anRefresh'); if (rf) rf.addEventListener('click', () => { ANALYSIS = null; loadAnalysis(); });
+  const job = $('anJob'); if (!job || !ANALYSIS) return;
+  const m = anModel(ANALYSIS), D = window.PlannerDates, today = BOOT.today_week;
+  const t0 = Date.parse(m.g.weeks[0] + 'T00:00:00Z');
+  const wIdx = t => Math.floor((t - t0) / (7 * 86400000));
+  const wl = i => shortDate(m.g.weeks[i]);
+  const PH = [['dub', 'Dub', 'de'], ['edit', 'Edit', 'de'], ['mix', 'Mix', 'am']];
+
+  const checkPhase = (pk, a, b) => {
+    if (a === null && b === null) return null;
+    if (a === null) a = b; if (b === null) b = a;
+    if (b < a) return { err: 'ends before it starts' };
+    const all = []; for (let w = wIdx(a); w <= wIdx(b); w++) all.push(w);
+    const ws = all.filter(w => w >= 0 && w < m.n);
+    if (!ws.length) return { none: all[all.length - 1] < 0 ? 'These weeks are in the past.' : `Beyond the weeks shown (to ${wl(m.n - 1)}).` };
+    const note = ws.length < all.length ? ' (part of it is outside the weeks shown)' : '';
+    const gap = ws.find(w => m.pools[pk].every(e => !m.free(e, w)));
+    if (gap !== undefined) return { status: 'short', msg: `Nobody free in the week of ${wl(gap)}.${note}` };
+    const full = m.pools[pk].filter(e => ws.every(w => m.free(e, w)));
+    const names = full.length > 3 ? full.slice(0, 3).join(', ') + ` +${full.length - 3}` : full.join(', ');
+    if (full.length >= 2) return { status: 'ok', msg: `${names} free throughout.${note}` };
+    if (full.length === 1) return { status: 'tight', msg: `Only ${full[0]} is free throughout.${note}` };
+    const seg = []; let i = 0;            // nobody is free for all of it: hand over, longest runs first
+    while (i < ws.length) {
+      let best = null;
+      m.pools[pk].forEach(e => { let j = i; while (j < ws.length && m.free(e, ws[j])) j++; if (j > i && (!best || j - i > best.n)) best = { e, n: j - i }; });
+      seg.push(`${best.e} from ${wl(ws[i])}`); i += best.n;
+    }
+    return { status: 'tight', msg: `No one person is free throughout — hand over: ${seg.join(', then ')}.${note}` };
+  };
+
+  const check = () => {
+    let worst = null; const parts = []; let any = false, checked = 0; const ends = [];
+    PH.forEach(([k, n, pk]) => {
+      const A = D.parseDay($('aj_' + k + '_a').value, today), B = D.parseDay($('aj_' + k + '_b').value, today), r = $('aj_' + k + '_r');
+      $('aj_' + k + '_a').classList.toggle('bad', Number.isNaN(A)); $('aj_' + k + '_b').classList.toggle('bad', Number.isNaN(B));
+      if (Number.isNaN(A) || Number.isNaN(B)) { r.className = 'res'; r.innerHTML = '<span class="t">Cannot read that date.</span>'; return; }
+      const c = checkPhase(pk, A, B);
+      if (!c) { r.className = 'res empty'; r.textContent = 'not used'; return; }
+      any = true; r.className = 'res';
+      if (c.err) { r.innerHTML = `<span class="st short">Check</span><span>${n} ${c.err}.</span>`; worst = 'short'; parts.push(n + ' dates'); return; }
+      if (c.none) { r.innerHTML = `<span class="t">${esc(c.none)}</span>`; return; }
+      r.innerHTML = `<span class="st ${c.status}">${AN_STATUS[c.status]}</span><span>${esc(c.msg)}</span>`; checked++;
+      if (!worst || AN_RANK[c.status] > AN_RANK[worst]) worst = c.status;
+      if (c.status !== 'ok') parts.push(n);
+      ends.push([n, B === null ? A : B]);
+    });
+    const DL = D.parseDay($('aj_dl').value, today); $('aj_dl').classList.toggle('bad', Number.isNaN(DL));
+    let late = '';
+    if (DL !== null && !Number.isNaN(DL)) { const l = ends.filter(([, e]) => e > DL); if (l.length) late = `${l[0][0]} ends after the deadline. `; }
+    const ar = $('aj_all');
+    const cover = !parts.length ? 'Every phase you typed has someone free.' : worst === 'short' ? `Not covered: ${parts.join(', ')}.`
+      : `Covered, but ${parts.join(' and ')} ${parts.length > 1 ? 'are' : 'is'} tight.`;
+    if (!any) ar.innerHTML = '';
+    else if (!checked && !late) ar.innerHTML = '<span class="hint">None of the weeks typed fall inside the weeks shown.</span>';
+    else { const w = late ? 'short' : (worst || 'ok');
+      ar.innerHTML = `<span class="st ${w}">${late ? 'Check' : AN_STATUS[w]}</span><span>${esc(late)}${late && !parts.length ? 'Otherwise every phase you typed has someone free.' : esc(cover)}</span>`; }
+  };
+  job.querySelectorAll('input').forEach(i => i.addEventListener('input', check));
+  check();
 }
 
 const wk = n => n + (n === 1 ? ' week' : ' weeks');
@@ -870,92 +1043,124 @@ function heatmapCard(a) {
 // version of the book it was computed against; apply sends back only a token. If
 // anything moved the book in between, the server refuses rather than writing a plan
 // nobody was shown.
-let REPLAN = null;
+let REPLAN = null, RP_DONE = null;
 
+// The page says as little as it can in words. The button says it is a preview; the bar that
+// carries the verdict also carries Apply and "reversible"; the people who change are chips in
+// the phase's own colour (so it is plain that only WHO moves, never when); and why some
+// projects did not move is a list, not a paragraph.
 function renderReplan() {
-  let h = '<div class="bar-row"><button class="btn primary" id="rpRun">Preview re-plan</button>' +
-    '<span class="hint" style="margin:0 0 0 12px">Writes nothing until you apply.</span></div>' +
-    '<p class="muted" style="margin-top:0">Re-planning never moves dates — deadlines are fixed, ' +
-    'so a re-solve only ever changes who. Anything already under way is left alone, and so is ' +
-    'anything you set by hand.</p><div id="rpOut"></div>';
-  return h;
+  return '<div class="bar-row"><button class="btn primary" id="rpRun">Preview re-plan</button></div>' +
+    '<div id="rpOut"></div>';
 }
 
 function wireReplan() {
   $('rpRun').addEventListener('click', runReplan);
-  if (REPLAN) $('rpOut').innerHTML = replanBody(REPLAN);
-  if ($('rpApply')) $('rpApply').addEventListener('click', applyReplan);
+  if (REPLAN) paintReplan();
 }
 
 async function runReplan() {
   $('rpRun').disabled = true;
-  $('rpOut').innerHTML = '<div class="muted">Trying other arrangements\u2026</div>';
+  RP_DONE = null;
+  $('rpOut').innerHTML = '<div class="muted">Trying other arrangements…</div>';
   REPLAN = await post('/api/replan', {});
   $('rpRun').disabled = false;
-  $('rpOut').innerHTML = replanBody(REPLAN);
-  if ($('rpApply')) $('rpApply').addEventListener('click', applyReplan);
+  paintReplan();
 }
+
+function paintReplan() {
+  $('rpOut').innerHTML = replanBody(REPLAN);
+  const ap = $('rpApply'); if (ap) ap.addEventListener('click', applyReplan);
+  const rb = $('rpRoll'); if (rb) rb.addEventListener('click', rollReplanBack);
+}
+
+const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+const PH_LABEL = { Dub: 'Dub', Edit: 'Edit', Mix: 'Mix' };
+
+function leftAloneRow(l) {
+  const kind = { complete: ['Complete', 'Finished work stays as it is.'],
+    locked: ['Locked', 'Locked in the Projects tab.'],
+    under_way: ['Under way', `${PH_LABEL[l.phase] || l.phase} started ${shortDate(l.since)}.`],
+    by_hand: ['Set by hand', `${(l.phases || []).join(' and ')} chosen by hand.`] }[l.reason];
+  return { project: l.project, reason: kind[0], why: kind[1] };
+}
+
+// A fold that needs no script: the browser's own details/summary.
+const fold = (title, count, body, open) =>
+  `<details class="fold"${open ? ' open' : ''}><summary><h3>${title}</h3><span class="n">${count}</span></summary>` +
+  `<div class="body">${body}</div></details>`;
 
 function replanBody(r) {
   if (!r.ok) return `<div class="errs">${esc(r.error || 'Re-plan failed.')}</div>`;
+
+  // Everything left alone, with its reason: pinned projects first, then those whose typed
+  // dates did not check out.
+  const left = (r.left_alone || []).map(leftAloneRow)
+    .concat((r.skipped || []).map(x => ({ project: x.project, reason: 'Dates do not check out', why: x.errors.join(' ') })));
+  const byReason = {};
+  left.forEach(l => { byReason[l.reason] = (byReason[l.reason] || 0) + 1; });
+  const leftFold = left.length
+    ? fold('Left alone', plural(left.length, 'project') + ' — ' +
+        Object.keys(byReason).map(k => `${byReason[k]} ${k.toLowerCase()}`).join(', '),
+        left.map(l => `<div class="lrow"><span><b>${esc(l.project)}</b></span><span>${esc(l.reason)}</span>` +
+          `<span class="why">${esc(l.why)}</span></div>`).join(''), !!r.no_improvement) : '';
+
   if (r.no_improvement) {
-    return '<div class="msg soft">Nothing to change. The schedule you have is already the ' +
-      'best arrangement available — every alternative tried was the same or worse.</div>' +
-      '<p class="muted">Re-plan cannot move work that has already started, so the further ' +
-      'into the year you are the less room it has. This is a normal answer, not a failure.</p>';
+    return '<div class="sum calm"><div class="v"><div class="s">Nothing better found — the schedule stays as it is.</div>' +
+      '<div class="w">Every other arrangement tried was the same or worse.</div></div></div>' + leftFold;
   }
 
   const after = r.overlaps_after || [], resolved = r.overlaps_resolved || [];
-  const deep = after.filter(o => o.projects.length > 2).length;
   const made = after.filter(o => o.isNew).length;
+  const was = resolved.length + after.filter(o => !o.isNew).length;
+  const groups = {};
+  (r.changes || []).forEach(c => { (groups[c.project] = groups[c.project] || []).push(c); });
+  const names = Object.keys(groups);
+  const due = t => { const q = BOOT.projects.find(x => x.title === t); return q && q.deadline ? shortDate(q.deadline) : ''; };
 
-  // What IMPROVED, not just what moved. A plan that shifts 27 assignments and resolves
-  // no overlaps reads as pointless until you can see it closed the gap between the
-  // busiest and quietest engineer from three weeks to one. The objective is ranked, so
-  // the first term that differs is the whole reason one plan beat the other.
-  let h = `<div class="msg${deep ? '' : ' soft'}">` +
-    `<b>${r.change_count} assignment${r.change_count === 1 ? '' : 's'} would move.</b> ` +
-    (r.why
-      ? `${esc(r.why.label)}: <b>${r.why.from} \u2192 ${r.why.to}</b>.`
-      : 'The arrangement is equivalent on every measure.') +
-    (resolved.length || made
-      ? ` ${resolved.length} overlap${resolved.length === 1 ? '' : 's'} resolved, ${made} new` +
-        (deep ? ` \u2014 ${deep} at three or more` : '') + '.'
-      : ' Overlaps are unchanged.') +
-    '</div>';
-
-  // Projects whose typed dates do not check out are left exactly as they are. Said
-  // here, because the alternative is a project that quietly never moves.
-  if ((r.skipped || []).length) {
-    h += '<div class="msg">' + r.skipped.length + ' project' + (r.skipped.length === 1 ? ' was' : 's were') +
-      ' left alone because the dates on its row do not check out: ' +
-      r.skipped.map(x => '<b>' + esc(x.project) + '</b> (' + esc(x.errors.join(' ')) + ')').join('; ') + '</div>';
+  let bar;
+  if (RP_DONE) {
+    bar = `<div class="sum done"><div class="v"><div class="s">Applied. ${RP_DONE.appended} rows added, ${RP_DONE.superseded} superseded. ` +
+      'Nothing was deleted.</div></div><div class="act"><button class="link" id="rpRoll">Roll this back</button></div></div>';
+  } else {
+    const wLine = r.why && r.why.term !== 'total_double_booked'
+      ? `<div class="w">${esc(r.why.label)}: ${r.why.from} → ${r.why.to}</div>` : '';
+    // The overlap clause only when overlaps are involved; "0 → 0, 0 cleared, 0 new" says nothing.
+    const ovLine = was || after.length || resolved.length
+      ? ` · overlapped weeks ${was} → ${after.length} · ${plural(resolved.length, 'overlap')} cleared, ${made} new` : '';
+    bar = `<div class="sum"><div class="v"><div class="s">${plural(names.length, 'project changes', 'projects change')} hands${ovLine}</div>${wLine}</div>` +
+      '<div class="act"><button class="btn primary" id="rpApply">Apply re-plan</button>' +
+      '<span class="hint">Reversible — old rows are kept</span></div></div>';
   }
+
+  let h = bar;
+  h += `<div class="head"><span class="bar"></span><h2>${RP_DONE ? 'Changed' : 'Would change'}</h2>` +
+    `<span class="n">${plural(names.length, 'project')}, ${plural((r.changes || []).length, 'assignment')}</span></div>`;
+  h += `<div class="rows${RP_DONE ? ' applied' : ''}"><div class="prow hd"><span>Project</span><span>Due</span><span>Who changes</span><span></span></div>`;
+  const clears = {};
+  resolved.forEach(o => o.projects.forEach(t => { clears[t] = (clears[t] || 0) + 1; }));
+  names.forEach(t => {
+    h += `<div class="prow"><span class="nm">${esc(t)}</span><span class="due">${esc(due(t))}</span><span class="chips">` +
+      groups[t].map(c => `<span class="ch ${esc(String(c.phase).toLowerCase())}"><b>${esc(PH_LABEL[c.phase] || c.phase)}</b>` +
+        `${esc(c.from)} <span class="ar">→</span> ${esc(c.to)}</span>`).join('') +
+      `</span><span class="note">${clears[t] ? 'clears ' + plural(clears[t], 'overlap') : ''}</span></div>`;
+  });
+  h += '</div>';
 
   if (after.length || resolved.length) {
-    h += '<h3 style="margin-top:22px;font-size:13px;text-transform:uppercase;' +
-      'letter-spacing:.07em">Who would be holding more than one, week by week</h3>' +
-      '<table class="projects"><thead><tr><th>Week</th><th>Engineer</th>' +
-      '<th>Projects colliding</th><th></th></tr></thead><tbody>' +
-      resolved.map(o => `<tr class="dim"><td>${esc(o.label)}</td><td>${esc(o.engineer)}</td>` +
-        `<td>${esc(o.projects.join('  +  '))}</td><td><span class="chip">resolved</span></td></tr>`).join('') +
-      after.map(o => `<tr><td>${esc(o.label)}</td><td>${esc(o.engineer)}</td>` +
-        `<td>${esc(o.projects.join('  +  '))}</td><td>` +
-        (o.isNew ? '<span class="chip red">new</span>' : '<span class="chip">stays</span>') +
-        (o.projects.length > 2 ? `<span class="chip red">${o.projects.length} at once</span>`
-                               : '<span class="chip warn">2 at once</span>') +
-        '</td></tr>').join('') + '</tbody></table>';
+    const rows = resolved.map(o => ({ o, st: 'cleared' })).concat(after.map(o => ({ o, st: o.isNew ? 'new' : 'stays' })))
+      .sort((x, y) => String(x.o.week).localeCompare(String(y.o.week)) || x.o.engineer.localeCompare(y.o.engineer));
+    h += fold('Overlaps this fixes and leaves',
+      `${resolved.length} cleared · ${after.length - made} stay · ${made} new`,
+      '<div class="orow hd"><span>Week of</span><span>Engineer</span><span>Projects colliding</span><span></span></div>' +
+      rows.map(({ o, st }) => `<div class="orow ${st}"><span>${esc(o.label)}</span><span><b>${esc(o.engineer)}</b></span>` +
+        `<span class="pj">${esc(o.projects.join('  +  '))}</span><span class="tags">` +
+        (st === 'cleared' ? '<span class="tag solid">Cleared</span>'
+          : (st === 'new' ? '<span class="tag red">New</span>' : '<span class="tag">Stays</span>') +
+            (o.projects.length > 2 ? `<span class="tag red">${o.projects.length} at once</span>` : '<span class="tag two">2 at once</span>')) +
+        '</span></div>').join(''), true);
   }
-
-  h += '<table class="projects" style="margin-top:18px"><thead><tr><th>Project</th>' +
-    '<th>Phase</th><th>From</th><th>To</th></tr></thead><tbody>' +
-    (r.changes || []).map(c => `<tr><td><b>${esc(c.project)}</b></td><td>${esc(c.phase)}</td>` +
-      `<td>${esc(c.from)}</td><td>${esc(c.to)}</td></tr>`).join('') + '</tbody></table>';
-
-  h += '<div class="formactions"><button class="btn primary" id="rpApply">Apply re-plan</button>' +
-    '<span class="hint" style="margin:0">Reversible \u2014 old rows become superseded, ' +
-    'never deleted.</span></div>';
-  return h;
+  return h + leftFold;
 }
 
 async function applyReplan() {
@@ -963,13 +1168,25 @@ async function applyReplan() {
   const r = await post('/api/replan-apply', { token: REPLAN.token });
   if (!r.ok) {
     $('rpOut').innerHTML = `<div class="errs">${esc(r.error)}</div>` + replanBody(REPLAN);
-    if ($('rpApply')) $('rpApply').addEventListener('click', applyReplan);
+    paintReplan();
     return;
   }
-  REPLAN = null;
+  RP_DONE = { appended: r.appended, superseded: r.superseded };
   absorb(r);
-  $('rpOut').innerHTML = '<div class="msg soft">Applied. ' + r.appended + ' row(s) added, ' +
-    r.superseded + ' superseded. Nothing was deleted.</div>';
+  paintReplan();
+}
+
+// "Roll this back" under an applied re-plan: the apply is the most recent change, so it is the
+// one the log will undo. Asks first, like every other rollback.
+async function rollReplanBack() {
+  if (!confirm('Roll this re-plan back?\n\nThe rows it wrote are retired and the ones it replaced come back. Nothing is deleted.')) return;
+  $('rpRoll').disabled = true;
+  const h = await get('/api/history');
+  const r = await post('/api/rollback', { index: h.latest });
+  if (!r.ok) { alert(r.error); $('rpRoll').disabled = false; return; }
+  absorb(r);
+  HISTORY = null; RP_DONE = null; REPLAN = null;
+  $('rpOut').innerHTML = '<div class="sum calm"><div class="v"><div class="s">Rolled back. The old rows are active again.</div></div></div>';
 }
 
 // ---------------------------------------------------------------- the form
@@ -1351,8 +1568,12 @@ async function submitForm(p, dryRun) {
   // moment later cannot tell you different things.
   const deep = !dryRun && r.boot
     ? (r.boot.projects.find(x => x.title === r.title) || {}).overlap || 0 : 0;
+  // The state is a tag beside the heading, not a sentence under it: "Not saved" says what
+  // the old "nothing was written ... press Plot & save to commit" took two lines to say, and
+  // the overlap depth is the same blue/red as the schedule's outlines.
   let h = `<div class="result ${deep > 2 ? 'alarm' : dryRun ? 'dry' : 'saved'}">` +
-    `<h4>${dryRun ? 'Availability check \u2014 nothing was written' : 'Saved'}</h4>` +
+    `<h4>${dryRun ? 'Availability check <span class="tag">Not saved</span>' : 'Saved'}` +
+    (deep > 2 ? ' <span class="tag red">3 at once</span>' : deep ? ' <span class="tag two">2 at once</span>' : '') + '</h4>' +
     (r.renamed ? `<div class="kv"><b>${dryRun ? 'Would be' : 'Saved'} as</b><span><b>${esc(r.renamed.to)}</b> ` +
       `<span class="muted-inline">\u2014 \u201c${esc(r.renamed.from)}\u201d was already a project</span></span></div>` : '') +
     `<div class="kv"><b>Recordist</b><span>${esc(r.dubber || r.recordist)}</span></div>` +
@@ -1365,14 +1586,9 @@ async function submitForm(p, dryRun) {
         `${esc(x.phase)}</td><td>${esc(x.engineer)}${continuesTag(r, x)}</td><td>${esc(x.start)}</td>` +
         `<td>${esc(x.end)}</td></tr>`).join('') + '</tbody></table>';
   }
-  if (deep > 2) h += '<div class="msg">THREE AT ONCE \u2014 someone now holds three bookings in ' +
-    'the same week. Reassign one of them.</div>';
-  else if (deep) h += '<div class="msg soft">Two at once \u2014 someone doubles up for part of ' +
-    'this run. Normal where a shoot is still recording while its edit starts.</div>';
   if (r.warnings) h += `<div class="msg">${esc(r.warnings)}</div>`;
   const note = [r.record_note, r.mix_note].filter(Boolean).join(' \u00b7 ');
   if (note) h += `<div class="muted">${esc(note)}</div>`;
-  if (dryRun) h += '<div class="muted">Nothing saved yet. Press Plot &amp; save to commit.</div>';
   h += '</div>';
 
   if (!dryRun && r.boot) {
@@ -1394,6 +1610,12 @@ let ANALYSIS = null, HISTORY = null, OPENED = null, REPORT = null, MONTH = null;
 // first screen held was finished work. The position is remembered across repaints (a
 // drag redraws the grid) and only re-aimed when the grid itself changes (mode, range).
 let SCROLL = { key: null, top: 0, left: 0 };
+// Sticky bars on a page sit just under the top bar, whose height changes when it wraps.
+function syncTop() {
+  const t = document.querySelector('.top');
+  if (t) document.documentElement.style.setProperty('--toph', t.offsetHeight + 'px');
+}
+addEventListener('resize', syncTop);
 function placeSchedule() {
   const wrap = document.querySelector('.gridwrap');
   if (!wrap) return;
@@ -1415,12 +1637,12 @@ function placeSchedule() {
 }
 
 function paint() {
+  syncTop();
   $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
   topRight();
   if (VIEW === 'analysis') {
     if (!ANALYSIS) loadAnalysis();
-    else if ($('anRefresh')) $('anRefresh').addEventListener('click',
-      () => { ANALYSIS = null; loadAnalysis(); });
+    else wireAnalysis();
     return;
   }
   if (VIEW === 'report') { if (!REPORT) loadReport(); else wireReport(); return; }
