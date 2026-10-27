@@ -274,59 +274,38 @@ function renderProjectGrid() {
   d.labels.forEach((n, ri) => (finished(ri) ? done : live).push(ri));
   const span = d.weeks.length + 1;
 
-  // LANES (Tara, 2026-10-28). Each booking is one bar in its own lane for its whole run, so
-  // two or three bookings in a week sit one above the other at full height instead of
-  // splitting the week into slivers. A row is as tall as the most lanes it ever needs.
-  const PH_ORDER = { Dub: 0, Edit: 1, Mix: 2 };
-  const laneRows = {};
-  bars.slice().sort((a, b) => a.c0 - b.c0 || (PH_ORDER[a.phase] || 0) - (PH_ORDER[b.phase] || 0))
-    .forEach(b => {
-      const r = laneRows[b.row] = laneRows[b.row] || [];
-      let l = r.findIndex(end => end < b.c0);
-      if (l === -1) { l = r.length; r.push(0); }
-      r[l] = b.c1; b.lane = l;
-    });
-
+  // ONE NAME PER WEEK (Tara, 2026-10-28). Each week cell holds one engineer name on one line,
+  // filled with that booking's phase colour, so rows stay short and a project reads across.
+  // A week with more than one booking shows the first name then "/ \u2026"; the tooltip lists
+  // them all. 3 at once is a red bar along the foot of the cell. Every cell is the same size.
+  const ORD = { Dub: 0, Edit: 1, Mix: 2 };
   const row = ri => {
     const name = d.labels[ri];
-    const lanes = Math.max(1, (laneRows[ri] || []).length);
-    const dueCols = Object.keys(mark).filter(k => k.startsWith(ri + '|')).map(k => Number(k.split('|')[1]));
-    let r = `<tr class="lanes" style="--lanes:${lanes}"><th title="${esc(name)}">${esc(name)}</th>`;
+    let r = `<tr class="wk1"><th title="${esc(name)}">${esc(name)}</th>`;
     for (let ci = 0; ci < d.weeks.length; ci++) {
       const w = d.weeks[ci], cls = [];
       if (w.start < BOOT.today_week) cls.push('past');
       if (w.start === BOOT.today_week) cls.push('now');
       const due = mark[ri + '|' + ci];
-      let inner = '';
-      if (ci === 0) {
-        // Every bar of the row is drawn inside the first cell and positioned in column units,
-        // so a bar spans its weeks without colspan surgery and the week lines stay intact.
-        bars.filter(b => b.row === ri).forEach(b => {
-          const past = d.weeks[b.c1].start < BOOT.today_week;
-          const firstDeep = b.deep3.includes(b.c0);
-          const when = b.c1 > b.c0 ? `${d.weeks[b.c0].label} \u2013 ${d.weeks[b.c1].label}` : d.weeks[b.c0].label;
-          // A deadline inside this bar: "Due" goes in the bar, after the name, instead of on top of it.
-          const dueIn = dueCols.some(c => c >= b.c0 && c <= b.c1);
-          inner += `<span class="lbar ${(b.phase || '').toLowerCase()}${past ? ' gone' : ''}${b.hand ? ' hand' : ''}${dueIn ? ' hasdue' : ''}"` +
-            ` style="--c0:${b.c0};--n:${b.c1 - b.c0 + 1};--ln:${b.lane}"` +
-            ` title="${esc(`${b.engineer} \u00b7 ${b.phase} \u00b7 ${when}` +
-              (b.deep > 2 ? ' \u00b7 3 at once' : b.deep > 1 ? ' \u00b7 2 at once' : '') +
-              (b.hand ? ' \u00b7 moved by hand' : '') + (dueIn ? ' \u00b7 runs into the deadline week' : ''))}">` +
-            `<span class="bk-l">${esc(b.engineer)}</span>${firstDeep ? '<span class="otag t3">3 at once</span>' : ''}` +
-            (dueIn ? '<span class="duemark inbar">Due</span>' : '') + '</span>';
-          // The tag is the only 3-at-once marker here, so it appears in every later 3-deep week too.
-          b.deep3.filter(c => c > b.c0).forEach(c => {
-            inner += `<span class="lflag" style="--c0:${c};--ln:${b.lane}"><span class="otag t3">3 at once</span></span>`;
-          });
-        });
-      }
       if (due) cls.push('duewk');
-      // The free-standing tag only where no bar runs through the deadline week.
-      const covered = due && bars.some(b => b.row === ri && ci >= b.c0 && ci <= b.c1);
-      r += `<td data-c="${ci}" class="${cls.join(' ')}"` +
-           (due ? ` title="${esc('Due ' + w.label)}"` : '') + '>' +
-           (ci === 0 ? `<div class="lanebox">${inner}</div>` : '') +
-           (due && !covered ? '<span class="duemark">Due</span>' : '') + '</td>';
+      const c = (d.cells[ri] || [])[ci];
+      let inner = '', tip = '';
+      if (c && c.items && c.items.length) {
+        const its = c.items.slice().sort((a, b) => (ORD[a.ph] || 0) - (ORD[b.ph] || 0));
+        const f = its[0], more = its.length > 1;
+        const deep = Math.max(...its.map(x => x.deep || 1));
+        cls.push('wcell', String(f.ph || '').toLowerCase());
+        if (deep > 2) cls.push('deep3');
+        if (its.some(x => x.hand)) cls.push('hand');
+        tip = its.map(x => `${x.e} \u00b7 ${x.ph}` + (x.of > 1 ? ` \u00b7 week ${x.at} of ${x.of}` : '') +
+          (x.hand ? ' \u00b7 moved by hand' : '')).join('\n') +
+          (deep > 2 ? '\n3 at once' : deep > 1 ? '\n2 at once' : '') + (due ? '\nDue this week' : '');
+        inner = `<span class="wn">${esc(f.e)}</span>` + (more ? '<span class="wmore"> / \u2026</span>' : '');
+      } else if (due) {
+        tip = 'Due ' + w.label;
+        inner = '<span class="duemark">Due</span>';
+      }
+      r += `<td data-c="${ci}" class="${cls.join(' ')}"` + (tip ? ` title="${esc(tip)}"` : '') + `>${inner}</td>`;
     }
     return r + '</tr>';
   };

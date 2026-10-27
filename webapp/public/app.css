@@ -899,3 +899,31 @@ table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-ch
 table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-m{
   position:absolute; right:4px; bottom:4px; margin:0; line-height:0}
 table.sched.byeng .bk.rich .otag{margin:0; font-size:10px; line-height:14px; padding:0 4px}
+
+/* Projects grid: ONE NAME PER WEEK (Tara, 2026-10-28). Replaces the lane bars. Fixed rules:
+   every week cell is 104px wide and 36px tall; a booked week is filled edge to edge with its
+   phase colour and holds one engineer name on one line (regular weight, "..." if long); more
+   than one booking that week adds " / ..." and the tooltip lists them. Weeks stay apart: a
+   white line between neighbouring cells and a grey rule under every row. Past weeks keep their
+   colour under a grey overlay. 3 at once: a red bar along the foot of the cell. By hand:
+   dotted outline. Due: the red line down the deadline week's right edge, and "Due" in it when
+   the week is empty. */
+table.sched:not(.byeng) tbody tr.wk1 th{height:36px; padding:0 12px; vertical-align:middle}
+table.sched:not(.byeng) tbody tr.wk1 td{width:var(--colw); min-width:var(--colw); max-width:var(--colw);
+  height:36px; padding:0 8px; box-sizing:border-box; vertical-align:middle; text-align:left;
+  border-right:1px solid var(--line); border-bottom:1px solid var(--rule);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; font-weight:400; color:#000; position:relative}
+table.sched:not(.byeng) tbody tr.wk1 td.wcell{border-right:2px solid #fff}
+table.sched:not(.byeng) tbody tr.wk1 td.dub{background:var(--dub)}
+table.sched:not(.byeng) tbody tr.wk1 td.edit{background:var(--edit)}
+table.sched:not(.byeng) tbody tr.wk1 td.mix{background:var(--mix)}
+table.sched:not(.byeng) tbody tr.wk1 td.past.wcell{box-shadow:inset 0 0 0 40px rgba(90,90,90,.28)}
+table.sched:not(.byeng) tbody tr.wk1 td .wmore{color:#333}
+table.sched:not(.byeng) tbody tr.wk1 td.deep3::after{content:""; position:absolute; left:0; right:0; bottom:0; height:4px; background:var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td.hand{outline:2px dotted var(--fg1); outline-offset:-3px}
+table.sched:not(.byeng) tbody tr.wk1 td.duewk{box-shadow:inset -3px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td.past.wcell.duewk{box-shadow:inset -3px 0 0 var(--red), inset 0 0 0 40px rgba(90,90,90,.28)}
+table.sched:not(.byeng) tbody tr.wk1 td.now{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td.now.duewk{box-shadow:inset 2px 0 0 var(--red), inset -3px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td > .duemark{position:static; transform:none}
+table.sched:not(.byeng) tbody tr.wk1 td.duewk:not(.wcell){text-align:center}

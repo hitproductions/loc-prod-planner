@@ -234,7 +234,7 @@ function schedule(book, opts) {
       const deep = per[b.engineer + '|' + w] || 1;
       const text = byProject ? b.engineer : b.project;
       // Where this week falls in its booking, so a cell can say "Dub, week 2 of 3".
-      const item = { p: b.project, ph: b.phase, hand: /moved by hand/i.test(b.note || ''),
+      const item = { p: b.project, e: b.engineer, deep, ph: b.phase, hand: /moved by hand/i.test(b.note || ''),
                      at: w - A.widx(b.start_date) + 1, of: A.widx(b.end_date) - A.widx(b.start_date) + 1 };
       const cur = cells[ri][ci];
       if (!cur) cells[ri][ci] = { phase: b.phase, text, depth: deep, count: 1, items: [item] };
