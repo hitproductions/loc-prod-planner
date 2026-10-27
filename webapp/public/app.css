@@ -953,3 +953,28 @@ table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-ch
 table.sched.byeng tr.past .bk.rich .bk-n{font-weight:400}
 table.sched.byeng tr.past .bk.rich{background:var(--ph);
   box-shadow:inset 0 0 0 1px var(--ph-edge, transparent), inset 0 0 0 200px rgba(90,90,90,.28)}
+
+/* Projects grid: UNIFORM MARGINS (Tara, 2026-10-28). Supersedes the stacked rules above.
+   Fixed rules, every week cell the same:
+   - Grid lines: 1px grey on the right of every cell, 1px grey rule under every row. Filled
+     cells no longer swap their right line for a white one.
+   - Every coloured band sits 2px inside its cell on all four sides, and stacked bands are 2px
+     apart. Every band is exactly 32px tall, whatever the row holds, starting at the top.
+   - A row is exactly 34px per booking in its busiest week + 3px (2px top, 1px rule), so its
+     fullest cell has a 2px margin all round. Quieter cells leave the space under their bands white.
+   - This week and Due are 2px red lines inside the cell edge, in the margin, never over a band. */
+table.sched:not(.byeng) tbody tr.wk1 th, table.sched:not(.byeng) tbody tr.wk1 td{height:calc(var(--n, 1) * 34px + 3px)}
+table.sched:not(.byeng) tbody tr.wk1 td, table.sched:not(.byeng) tbody tr.wk1 td.wcell{
+  padding:2px; box-sizing:border-box; vertical-align:top; overflow:hidden;
+  border-right:1px solid var(--line); border-bottom:1px solid var(--rule); background:transparent}
+table.sched:not(.byeng) tbody tr.wk1 td.duewk:not(.wcell){vertical-align:middle}
+.wstack, table.sched:not(.byeng) tbody tr.wk1 td.duewk .wstack, table.sched:not(.byeng) tbody tr.wk1 td.now .wstack{
+  display:flex; flex-direction:column; gap:2px; height:auto; width:100%; box-shadow:none}
+.wstack .wb{flex:0 0 32px; height:32px; padding:0 8px}
+.wstack .wb + .wb{border-top:0}
+table.sched:not(.byeng) tbody tr.wk1 td.duewk, table.sched:not(.byeng) tbody tr.wk1 td.past.wcell.duewk{box-shadow:inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td.now{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+table.sched:not(.byeng) tbody tr.wk1 td.past.wcell:not(.duewk){box-shadow:none}
+table.sched:not(.byeng) tbody tr.wk1 td.deep3::after{z-index:1; height:2px}
+table.sched:not(.byeng) tbody tr.wk1 td.hand{outline:none}
+table.sched:not(.byeng) tbody tr.wk1 td.hand .wb{outline:2px dotted var(--fg1); outline-offset:-2px}
