@@ -3,7 +3,7 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the commit titled
-**"Uniform bar edges for Dub/Edit/Mix, stronger week hover, month-by-month table in the report"** (`0388eb4`), which also brings in everything after
+**"Hover: darker tint only, no black frame or markers"** (`fc8fd4a`), which also brings in everything after
 the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars with a thin seam between lanes, roomier Engineers cells, dashed dividers between bookings, no Dub/Edit/Mix word on Engineers cells since the rail colour shows it), the Inter font, the
 new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
 should list it. All of it is tested.
@@ -61,7 +61,7 @@ No existing column moves and no data changes.
   the words "This week"; show names wrap to two lines instead of being cut off; a 2 or 3 at
   once tag names the jobs when you hover over it. Only 3 at once is tinted.
 - **Report**: below the selected month there is now a **Month by month** table: projects, booked weeks, late ones and weeks per engineer for every month with completed work.
-- Hovering a week outlines the whole column in black and turns its header white. Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
+- Hovering a week shades the whole column a darker grey and lightens its header (no frame). Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
 - The colour key above the schedule shows Dub, Edit, Mix, By hand and (in Projects) Due.
 - Dragging a week to another engineer still works, in the Engineers view.
 
