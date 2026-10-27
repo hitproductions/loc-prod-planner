@@ -11,6 +11,9 @@
   /* Engineers grid rules: the week line is the stronger one, the line between two bookings
      in one week the lighter. Tints mark an overlapped week without a frame. */
   --rule:#A9AAAB; --hair:#C2C3C1; --tint3:#FDE9E4;
+  /* Edit's pale blue is 1.5:1 against white, so Edit bars and rails get a darker edge to
+     never read as empty. Pale phases mark past weeks without fading the text. */
+  --edit-edge:#7FA7CC; --dub-pale:#FFE080; --edit-pale:#DEEBF7; --mix-pale:#F5CCCC;
   /* Sequential ramp for the heatmap: one hue, lightness stepping down evenly, so
      "darker = busier" is readable without telling two colours apart. */
   --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
@@ -60,7 +63,8 @@ table.sched tbody tr:hover td{background-color:rgba(0,0,0,.05)}
 table.sched tbody tr:hover th{background:var(--cool)}
 /* The column marker is on the HEADER, not a wash down the cells: the cells already
    carry phase colours, and tinting them competes with the tracker's own vocabulary. */
-table.sched thead th.colhi{background:var(--red)}
+/* Hover is grey: red is kept for this week, Due and 3 at once. */
+table.sched thead th.colhi{background:#4A4B4C}
 table.sched td.colhi{box-shadow:inset 1px 0 0 var(--line), inset -1px 0 0 var(--line)}
 table.sched tbody th{position:sticky; left:0; z-index:2; background:var(--bg2); text-align:left;
   padding:6px 12px; font-size:12px; font-weight:400; border-right:1px solid var(--line);
@@ -230,48 +234,55 @@ td.marker{background:var(--red); color:#fff; font-weight:700; text-align:center}
 table.sched:not(.byeng) .bk{padding:1px 4px; justify-content:center}
 table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:9px}
 
-/* ---- Projects grid (Tara, 2026-10-27) -------------------------------------
-   A run of identical weeks is ONE cell spanning them, so a project reads as a bar with the
-   engineer named once. Project names are no longer shouted in capitals, the week columns
-   are separated, 2 at once is no longer outlined (the tooltip says it; only 3 at once is
-   tinted), and the deadline is a labelled "Due" cell instead of a solid red triangle that
-   looked like the loudest booking on the row. */
-table.sched:not(.byeng) tbody th{text-transform:none; font-size:13px; font-weight:700;
-  border-bottom:1px solid var(--line)}
-table.sched:not(.byeng) tbody td{height:36px; border-right:1px solid var(--hair);
-  border-bottom:1px solid var(--line)}
-table.sched:not(.byeng) td.cell{padding:3px 2px; text-align:left}
-table.sched:not(.byeng) td.cell .stack{inset:3px 2px; gap:2px; align-items:stretch}
-table.sched:not(.byeng) .bk{display:block; line-height:28px; text-align:left; padding:0 8px;
-  font-size:12px; font-weight:700}
-table.sched:not(.byeng) .stack .bk:not(:only-child){line-height:normal; display:flex; align-items:center}
-/* A bar that starts before the scrolled-to week still says whose it is: the name sticks to
-   the left edge of what is visible, just right of the sticky project column. */
-table.sched:not(.byeng) .bk-l{position:sticky; left:248px; display:inline-block; max-width:100%;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:top}
-/* Sticky pins to the nearest scrolling box. The base rules clip the cell and the bar
-   (overflow:hidden), which made each of them that box, so the name pinned 248px into its own
-   bar and was shoved against the bar's right end. Unclipped here, the name pins to the grid's
-   scroll area as intended; the name itself still clips with an ellipsis. */
-table.sched:not(.byeng) td.cell, table.sched:not(.byeng) td.cell .bk{overflow:visible}
-table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:11px}
-table.sched:not(.byeng) .stack .bk + .bk{border-top:0}
-table.sched:not(.byeng) td.over2{outline:none; font-weight:400; color:inherit}
-table.sched:not(.byeng) td.over3{outline:none; background:var(--tint3); font-weight:400; color:inherit}
-table.sched:not(.byeng) td.over3 .bk{box-shadow:inset 0 -3px 0 var(--red)}
-table.sched:not(.byeng) td.pinned{outline:2px dotted var(--fg1); outline-offset:-3px}
-table.sched:not(.byeng) td.due{background:#fff}
-.duemark{display:inline-block; font-size:10px; font-weight:700; color:var(--red);
-  border:1px solid var(--red); padding:1px 5px; line-height:14px}
-table.sched:not(.byeng) td.cell.due{box-shadow:inset -3px 0 0 var(--red)}
+/* ---- Projects grid: lanes (Tara, 2026-10-28) ------------------------------
+   Each booking is one bar in its own lane, so two or three bookings in a week stack at full
+   height instead of splitting the week into slivers. Bars are positioned in column units from
+   the row's first cell (--c0 start column, --n weeks, --lane), so week lines stay intact.
+   Weight: the engineer name on a bar is the one bold role; project names are regular. */
+table.sched:not(.byeng){--colw:84px; --laneh:32px; --lpad:6px}
+table.sched:not(.byeng) thead tr:nth-child(2) th{width:var(--colw); min-width:var(--colw);
+  font-size:12px; font-weight:400; letter-spacing:0; text-transform:none}
+table.sched:not(.byeng) thead tr:nth-child(2) th.nowcol{background:var(--red); color:#000;
+  font-weight:700; box-shadow:none}
+table.sched:not(.byeng) .monthband th{font-size:12px; letter-spacing:0; text-transform:none}
+table.sched:not(.byeng) tbody th{text-transform:none; font-size:14px; font-weight:400; color:#000;
+  border-bottom:1px solid var(--rule); min-width:250px; max-width:250px}
+table.sched:not(.byeng) tbody tr.lanes td{width:var(--colw); min-width:var(--colw); padding:0;
+  height:calc(var(--lanes) * var(--laneh) + var(--lpad) * 2 - 6px);
+  border-right:1px solid var(--line); border-bottom:1px solid var(--rule);
+  position:relative; overflow:visible; text-align:left; vertical-align:top}
+/* This week: red lines down the column, behind the bars. */
+table.sched:not(.byeng) tbody tr.lanes td.now{box-shadow:inset 2px 0 0 var(--red), inset -2px 0 0 var(--red)}
+.lanebox{position:absolute; left:0; top:0; height:100%; width:0; z-index:1}
+.lbar, .lflag{position:absolute; top:calc(var(--lpad) + var(--laneh) * var(--ln));
+  height:calc(var(--laneh) - 6px)}
+.lbar{left:calc(var(--c0) * var(--colw) + 3px); width:calc(var(--n) * var(--colw) - 6px);
+  display:flex; align-items:center; gap:6px; padding:0 8px;
+  font-size:13px; font-weight:700; color:#000; white-space:nowrap; overflow:hidden}
+.lbar.dub{background:var(--dub)} .lbar.edit{background:var(--edit); box-shadow:inset 0 0 0 1px var(--edit-edge)}
+.lbar.mix{background:var(--mix)}
+/* Past: a paler phase colour and regular weight, but dark text; never transparency, which
+   faded the names to 3.6:1. */
+.lbar.gone{font-weight:400; color:#333}
+.lbar.gone.dub{background:var(--dub-pale)} .lbar.gone.edit{background:var(--edit-pale)}
+.lbar.gone.mix{background:var(--mix-pale)}
+.lbar.hand{outline:2px dotted var(--fg1); outline-offset:-3px}
+.lbar .bk-l{position:sticky; left:258px; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.lflag{left:calc(var(--c0) * var(--colw)); width:var(--colw); display:flex; align-items:center;
+  justify-content:center}
+table.sched:not(.byeng) tbody tr.lanes td .duemark{position:absolute; left:50%; top:var(--lpad);
+  transform:translateX(-50%); margin-top:4px; z-index:2}
+.duemark{display:inline-block; font-size:11px; font-weight:700; color:#C4321A; background:#fff;
+  border:1px solid var(--red); padding:0 6px; line-height:18px}
 table.sched tr.donehead td{background:var(--bg2); padding:0; height:auto;
   border-bottom:1px solid var(--line); text-align:left; overflow:visible}
 /* The row spans all 58 weeks and the grid opens scrolled to this week, so the label is pinned
    to the left edge; otherwise it sits off screen and the row reads as a blank strip. */
 tr.donehead button{all:unset; cursor:pointer; display:inline-block; position:sticky; left:0;
-  padding:8px 12px; font-size:12px; font-weight:700; color:var(--fg2)}
+  padding:8px 12px; font-size:12px; font-weight:700; color:#333}
 tr.donehead button:hover{color:var(--fg1)}
 tr.donehead button:focus-visible{outline:2px solid var(--ink2); outline-offset:-2px}
+
 
 /* ---- analysis -------------------------------------------------------- */
 .head{display:flex; align-items:baseline; gap:10px; margin:26px 0 10px}
@@ -571,7 +582,32 @@ table.sched.byeng td.over3{background:var(--tint3)}
 /* By hand keeps its dotted ring, now on the row so it never collides with an overlap frame. */
 table.sched.byeng td.pinned{outline:none}
 table.sched.byeng .bk.rich[data-hand]{outline:2px dotted var(--fg1); outline-offset:-3px}
-table.sched.byeng tr.past td .stack{opacity:.55}
+
+/* ---- Readability pass (Tara, 2026-10-28) -----------------------------------
+   Measured before: week dates grey 12px (5.3:1, past 3.1:1); past bookings faded to 3.2:1;
+   52 of 134 show names cut off with the episode range lost; tags 10px. Now: dates black
+   13px, past readable, names on two lines, an 8px rail with an edge on Edit, tags 11px, and
+   this week marked with a red bar by its date and the words "This week". */
+table.sched.byeng thead th{font-size:12px; letter-spacing:0; text-transform:none}
+table.sched.byeng tbody th{font-size:13px; font-weight:400; color:#000; vertical-align:top;
+  padding:9px 12px; white-space:nowrap; width:136px; min-width:136px; max-width:136px}
+table.sched.byeng thead th.corner{width:136px; min-width:136px; max-width:136px}
+table.sched.byeng tr.past th{color:#333}
+table.sched.byeng tr.nowrow th{background:#fff; font-weight:700; box-shadow:inset 4px 0 0 var(--red)}
+.nowlbl{display:block; font-size:11px; font-weight:700; color:#C4321A; margin-top:2px}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){padding:7px 8px 7px 16px}
+table.sched.byeng .bk.rich::before{width:8px}
+table.sched.byeng .bk.rich.edit::before{box-shadow:inset -1px 0 0 var(--edit-edge)}
+table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{
+  font-size:13px; white-space:normal; display:-webkit-box; -webkit-box-orient:vertical;
+  -webkit-line-clamp:2; text-overflow:clip}
+table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-m{
+  font-size:12px; color:#333; margin-top:2px}
+/* Past: regular weight and a pale rail, but the same dark text; never transparency. */
+table.sched.byeng tr.past td .stack{opacity:1}
+table.sched.byeng tr.past .bk.rich .bk-n{font-weight:400}
+table.sched.byeng tr.past .bk.rich::before{background:var(--ph-pale)}
+.otag{font-size:11px; line-height:16px}
 .legend.key{margin:0 0 0 14px; gap:12px}
 .legend.key .k{white-space:nowrap}
 

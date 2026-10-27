@@ -1825,6 +1825,35 @@ section('Series: connecting seasons and episode batches (Tara, 2026-10-27)');
   ok('the objective has a plain-English name for the new term', actions.TERM_NAMES.series_continuity && /series/.test(actions.TERM_NAMES.series_continuity));
 }
 
+section('Projects grid: one bar per booking, for lanes (Tara, 2026-10-28)');
+{
+  // A booking is sent whole, so the page can draw it as one bar in its own lane instead of
+  // splitting a week two or three ways. Its 3-deep weeks are listed so the tag can sit there.
+  const W = n => A.weekStart(A.widx('2026-11-02') + n), E = n => A.weekEnd(A.widx('2026-11-02') + n);
+  const bk = (row, project, phase, engineer, a, z) => ({ row_number: row, project, phase, engineer,
+    start_date: W(a), end_date: E(z), note: '', status: '' });
+  const book = {
+    engineers: [{ name: 'Jek' }, { name: 'Via' }],
+    projects: [{ project_title: 'P1', deadline: W(6) }, { project_title: 'P2', deadline: W(6) }, { project_title: 'P3', deadline: W(6) }],
+    bookings: [bk(2, 'P1', 'Dub', 'Jek', 0, 2), bk(3, 'P1', 'Edit', 'Via', 1, 3),
+               bk(4, 'P2', 'Dub', 'Jek', 1, 1), bk(5, 'P3', 'Mix', 'Jek', 1, 1)],
+  };
+  const s = api.schedule(book, { mode: 'project' });
+  ok('Projects mode sends one bar per booking', s.bars.length === 4, String(s.bars.length));
+  const dub = s.bars.find(b => b.phase === 'Dub' && s.labels[b.row] === 'P1');
+  ok('a three-week booking is ONE bar across its three weeks', dub && dub.c1 - dub.c0 === 2, JSON.stringify(dub));
+  ok('and it starts in its own first week', dub && s.weeks[dub.c0].start === W(0), dub && s.weeks[dub.c0].start);
+  ok('a bar knows how deep its busiest week is', dub && dub.deep === 3, dub && String(dub.deep));
+  ok('and lists the 3-deep week, so the tag goes there and only there',
+     dub && dub.deep3.length === 1 && s.weeks[dub.deep3[0]].start === W(1), dub && JSON.stringify(dub.deep3));
+  const edit = s.bars.find(b => b.phase === 'Edit');
+  ok('a booking with nobody doubled up has no 3-deep weeks', edit && edit.deep3.length === 0 && edit.deep === 1, JSON.stringify(edit));
+  ok('Engineers mode sends no bars', api.schedule(book, { mode: 'engineer' }).bars.length === 0);
+  const clipped = api.schedule(book, { mode: 'project', from: A.quarterOf(A.widx(W(0))), to: A.quarterOf(A.widx(W(0))) });
+  ok('bars stay inside the weeks shown when the range is clipped',
+     clipped.bars.every(b => b.c0 >= 0 && b.c1 < clipped.weeks.length && b.c0 <= b.c1));
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud

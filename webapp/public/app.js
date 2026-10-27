@@ -94,6 +94,7 @@ function numLabel(w) {
 }
 
 const PHASE_BG = { Dub:'var(--dub)', Edit:'var(--edit)', Mix:'var(--mix)' };
+const PHASE_PALE = { Dub:'var(--dub-pale)', Edit:'var(--edit-pale)', Mix:'var(--mix-pale)' };
 
 // A cell holding two bookings is one square on screen but two different things. It
 // used to be filled solid blue with both names crammed into it and truncated, so the
@@ -119,9 +120,9 @@ function cellBands(c, label, dragAttrs, rich, deep) {
       ? `<span class="bk-n">${esc(text)}</span>` +
         (meta || tag ? `<span class="bk-m">${esc(meta)}${tag}</span>` : '')
       : `<span class="bk-l">${esc(text)}</span>`;
-    const paint = rich ? `--ph:${PHASE_BG[it.ph] || 'var(--line)'}`
+    const paint = rich ? `--ph:${PHASE_BG[it.ph] || 'var(--line)'};--ph-pale:${PHASE_PALE[it.ph] || 'var(--line)'}`
       : `background:${PHASE_BG[it.ph] || 'transparent'}`;
-    return `<span class="bk${rich ? ' rich' : ''}" style="${paint}"` +
+    return `<span class="bk${rich ? ' rich ' + String(it.ph || '').toLowerCase() : ''}" style="${paint}"` +
       (dragAttrs ? dragAttrs(it) : '') +
       (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"'
         : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + meta)}"` : '')) +
@@ -150,12 +151,14 @@ function scheduleBar() {
 function scheduleKey() {
   const sw = (css, t, tip) => `<span class="k"${tip ? ` title="${esc(tip)}"` : ''}><i class="sw" style="${css}"></i>${t}</span>`;
   return '<div class="legend key">' +
-    sw('background:var(--dub)', 'Dub') + sw('background:var(--edit)', 'Edit') + sw('background:var(--mix)', 'Mix') +
+    sw('background:var(--dub)', 'Dub') + sw('background:var(--edit);border-color:var(--edit-edge)', 'Edit') +
+    sw('background:var(--mix)', 'Mix') +
     (MODE === 'engineer'
-      ? sw('background:var(--bg1);border-color:var(--ink2)', '2 at once', 'Someone holds two jobs this week \u2014 tagged, not tinted') +
-        sw('background:var(--tint3);border-color:var(--red)', '3 at once', 'Three jobs in one week \u2014 move one')
-      : sw('background:var(--tint3);border-color:var(--red)', '3 at once',
-           'Three jobs in one week \u2014 move one. 2 at once shows on hover.')) +
+      ? '<span class="k" title="Someone holds two jobs this week"><span class="otag" style="margin:0 5px 0 0">2 at once</span>tag</span>' +
+        '<span class="k" title="Three jobs in one week \u2014 move one"><i class="sw" style="background:var(--tint3)"></i>' +
+        '<span class="otag t3" style="margin:0">3 at once</span></span>'
+      : '<span class="k" title="Three jobs in one week \u2014 move one. 2 at once shows on hover.">' +
+        '<span class="otag t3" style="margin:0 5px 0 0">3 at once</span>tag on the bar</span>') +
     sw('border:2px dotted var(--fg1);background:transparent', 'By hand',
        READONLY ? 'Moved by hand' : 'Moved by hand \u2014 click the cell to give it back') +
     (MODE === 'project' ? '<span class="k"><span class="duemark">Due</span> Deadline week</span>' : '') + '</div>';
@@ -195,7 +198,8 @@ function renderEngineerGrid() {
     const starts = w.quarter !== lastQ; lastQ = w.quarter;
     const cls = [starts ? 'qstart' : '', w.start === BOOT.today_week ? 'nowrow' : '',
       w.start < BOOT.today_week ? 'past' : ''].filter(Boolean).join(' ');
-    h += `<tr${cls ? ` class="${cls}"` : ''}><th>${numLabel(w)}</th>`;
+    h += `<tr${cls ? ` class="${cls}"` : ''}><th>${numLabel(w)}` +
+      (w.start === BOOT.today_week ? '<span class="nowlbl">This week</span>' : '') + '</th>';
     d.labels.forEach((n, ri) => {
       const c = d.cells[ri][ci];
       const cls = [];
@@ -245,49 +249,59 @@ function renderProjectGrid() {
   // Rows whose work is all behind this week go in a fold at the bottom. They used to fill the
   // top of the grid as empty rows (the view opens on this week), pushing live work off screen.
   const nowCi = d.weeks.findIndex(w => w.start >= BOOT.today_week);
-  const finished = ri => nowCi !== -1 && d.cells[ri].every((c, ci) => !c || ci < nowCi) &&
+  const bars = d.bars || [];
+  const finished = ri => nowCi !== -1 && bars.every(b => b.row !== ri || b.c1 < nowCi) &&
     !Object.keys(mark).some(k => k.startsWith(ri + '|') && Number(k.split('|')[1]) >= nowCi);
   const live = [], done = [];
   d.labels.forEach((n, ri) => (finished(ri) ? done : live).push(ri));
   const span = d.weeks.length + 1;
 
+  // LANES (Tara, 2026-10-28). Each booking is one bar in its own lane for its whole run, so
+  // two or three bookings in a week sit one above the other at full height instead of
+  // splitting the week into slivers. A row is as tall as the most lanes it ever needs.
+  const PH_ORDER = { Dub: 0, Edit: 1, Mix: 2 };
+  const laneRows = {};
+  bars.slice().sort((a, b) => a.c0 - b.c0 || (PH_ORDER[a.phase] || 0) - (PH_ORDER[b.phase] || 0))
+    .forEach(b => {
+      const r = laneRows[b.row] = laneRows[b.row] || [];
+      let l = r.findIndex(end => end < b.c0);
+      if (l === -1) { l = r.length; r.push(0); }
+      r[l] = b.c1; b.lane = l;
+    });
+
   const row = ri => {
     const name = d.labels[ri];
-    let r = `<tr><th title="${esc(name)}">${esc(name)}</th>`;
+    const lanes = Math.max(1, (laneRows[ri] || []).length);
+    let r = `<tr class="lanes" style="--lanes:${lanes}"><th title="${esc(name)}">${esc(name)}</th>`;
     for (let ci = 0; ci < d.weeks.length; ci++) {
-      const w = d.weeks[ci], c = d.cells[ri][ci], cls = [];
+      const w = d.weeks[ci], cls = [];
       if (w.start < BOOT.today_week) cls.push('past');
-      if (mark[ri + '|' + ci]) cls.push('due');
-      if (c) {
-        // One bar per run: the same phases and people in consecutive weeks join into a
-        // single cell spanning them, named once, instead of a box per week repeating it.
-        const sig = JSON.stringify(c.items.map(i => i.ph)) + '|' + c.text + '|' + (c.depth > 2) +
-          '|' + c.items.some(i => i.hand);
-        let n = 1;
-        while (ci + n < d.weeks.length) {
-          const x = d.cells[ri][ci + n];
-          if (!x || mark[ri + '|' + (ci + n)] ||
-              JSON.stringify(x.items.map(i => i.ph)) + '|' + x.text + '|' + (x.depth > 2) +
-              '|' + x.items.some(i => i.hand) !== sig) break;
-          if ((d.weeks[ci + n].start < BOOT.today_week) !== (w.start < BOOT.today_week)) break;
-          n++;
-        }
-        const deep = c.depth || c.count || 1;
-        cls.push('cell');
-        if (deep > 2) cls.push('over3');
-        if (c.items.some(i => i.hand)) cls.push('pinned');
-        const end = d.weeks[ci + n - 1];
-        const when = n > 1 ? `${w.label} \u2013 ${end.label}` : w.label;
-        // Not draggable here: a Projects row has no engineer column to drop into.
-        const body = cellBands(c, (it, i) => c.text.split(' / ')[i] || it.ph, null);
-        r += `<td data-c="${ci}"${n > 1 ? ` colspan="${n}"` : ''} class="${cls.join(' ')}"` +
-             ` title="${esc(c.text + ' \u00b7 ' + c.items.map(i => i.ph).join(' + ') + ' \u00b7 ' + when +
-               (deep > 2 ? ' \u00b7 3 at once' : deep > 1 ? ' \u00b7 2 at once' : ''))}">${body}</td>`;
-        ci += n - 1;
-      } else {
-        r += `<td data-c="${ci}" class="${cls.join(' ')}"` +
-             (mark[ri + '|' + ci] ? ` title="${esc('Due ' + w.label)}"><span class="duemark">Due</span>` : '>') + '</td>';
+      if (w.start === BOOT.today_week) cls.push('now');
+      const due = mark[ri + '|' + ci];
+      let inner = '';
+      if (ci === 0) {
+        // Every bar of the row is drawn inside the first cell and positioned in column units,
+        // so a bar spans its weeks without colspan surgery and the week lines stay intact.
+        bars.filter(b => b.row === ri).forEach(b => {
+          const past = d.weeks[b.c1].start < BOOT.today_week;
+          const firstDeep = b.deep3.includes(b.c0);
+          const when = b.c1 > b.c0 ? `${d.weeks[b.c0].label} \u2013 ${d.weeks[b.c1].label}` : d.weeks[b.c0].label;
+          inner += `<span class="lbar ${(b.phase || '').toLowerCase()}${past ? ' gone' : ''}${b.hand ? ' hand' : ''}"` +
+            ` style="--c0:${b.c0};--n:${b.c1 - b.c0 + 1};--ln:${b.lane}"` +
+            ` title="${esc(`${b.engineer} \u00b7 ${b.phase} \u00b7 ${when}` +
+              (b.deep > 2 ? ' \u00b7 3 at once' : b.deep > 1 ? ' \u00b7 2 at once' : '') +
+              (b.hand ? ' \u00b7 moved by hand' : ''))}">` +
+            `<span class="bk-l">${esc(b.engineer)}</span>${firstDeep ? '<span class="otag t3">3 at once</span>' : ''}</span>`;
+          // The tag is the only 3-at-once marker here, so it appears in every later 3-deep week too.
+          b.deep3.filter(c => c > b.c0).forEach(c => {
+            inner += `<span class="lflag" style="--c0:${c};--ln:${b.lane}"><span class="otag t3">3 at once</span></span>`;
+          });
+        });
       }
+      r += `<td data-c="${ci}" class="${cls.join(' ')}"` +
+           (due ? ` title="${esc('Due ' + w.label)}"` : '') + '>' +
+           (ci === 0 ? `<div class="lanebox">${inner}</div>` : '') +
+           (due ? '<span class="duemark">Due</span>' : '') + '</td>';
     }
     return r + '</tr>';
   };
@@ -1731,7 +1745,7 @@ function placeSchedule() {
   const w0 = wrap.getBoundingClientRect();
   if (SCHED.mode === 'project') {
     const th = wrap.querySelector('th.nowcol');
-    if (th) wrap.scrollLeft = Math.max(0, th.getBoundingClientRect().left - w0.left + wrap.scrollLeft - 240 - 62 * 2);
+    if (th) wrap.scrollLeft = Math.max(0, th.getBoundingClientRect().left - w0.left + wrap.scrollLeft - 250 - th.offsetWidth * 2);
   } else {
     const row = wrap.querySelector('tr.nowrow'), head = wrap.querySelector('thead');
     // two weeks of the past stay above it, for context

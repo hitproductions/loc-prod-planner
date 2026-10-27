@@ -269,8 +269,35 @@ function schedule(book, opts) {
       .map(m => ({ row: remap[m.row], col: m.col }));
   }
 
+  // Projects mode draws each booking as one bar in its own lane (Tara, 2026-10-28): the
+  // week-by-week cells split a week two or three ways and crushed the names. So each booking
+  // is also sent whole, clipped to the visible weeks, with the deepest week it hits.
+  let bars = [];
+  if (byProject) {
+    const rowOf = {}; labels.forEach((n, i) => { rowOf[n] = i; });
+    rows.forEach(b => {
+      const ri = rowOf[b.project];
+      if (ri === undefined) return;
+      let c0 = null, c1 = null, deep = 1;
+      const deepCols = [];
+      for (let w = A.widx(b.start_date); w <= A.widx(b.end_date); w++) {
+        const ci = col[w];
+        if (ci === undefined) continue;
+        if (c0 === null) c0 = ci;
+        c1 = ci;
+        const d = per[b.engineer + '|' + w] || 1;
+        if (d > deep) deep = d;
+        if (d > 2) deepCols.push(ci);
+      }
+      if (c0 === null) return;
+      bars.push({ row: ri, c0, c1, phase: b.phase, engineer: b.engineer,
+                  hand: /moved by hand/i.test(b.note || ''), deep, deep3: deepCols,
+                  start: b.start_date, end: b.end_date });
+    });
+  }
+
   return { empty: false, mode: byProject ? 'project' : 'engineer',
-           weeks, labels, cells, markers, quarters, range: { from, to } };
+           weeks, labels, cells, markers, bars, quarters, range: { from, to } };
 }
 
 function analysis(book, opts) {
