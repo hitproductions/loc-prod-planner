@@ -58,7 +58,8 @@ const HOST = process.env.HOST || undefined;
 const store = createStore(SOURCE, { ttlMs: Number(process.env.PLANNER_TTL_MS || 30000) });
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-                '.js': 'text/javascript; charset=utf-8', '.json': 'application/json' };
+                '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
+                '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
 
 function send(res, code, body, type) {
   res.writeHead(code, { 'content-type': type || 'application/json; charset=utf-8',

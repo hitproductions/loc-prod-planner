@@ -118,7 +118,7 @@ function cellBands(c, label, dragAttrs, rich, deep) {
     const body = rich
       ? `<span class="bk-n">${esc(text)}</span>` +
         (meta || tag ? `<span class="bk-m">${esc(meta)}${tag}</span>` : '')
-      : esc(text);
+      : `<span class="bk-l">${esc(text)}</span>`;
     const paint = rich ? `--ph:${PHASE_BG[it.ph] || 'var(--line)'}`
       : `background:${PHASE_BG[it.ph] || 'transparent'}`;
     return `<span class="bk${rich ? ' rich' : ''}" style="${paint}"` +
@@ -154,11 +154,11 @@ function scheduleKey() {
     (MODE === 'engineer'
       ? sw('background:var(--bg1);border-color:var(--ink2)', '2 at once', 'Someone holds two jobs this week \u2014 tagged, not tinted') +
         sw('background:var(--tint3);border-color:var(--red)', '3 at once', 'Three jobs in one week \u2014 move one')
-      : sw('border:2px solid var(--warn);background:transparent', '2 at once', 'Someone holds two jobs this week') +
-        sw('border:2px solid var(--red);background:transparent', '3 at once', 'Three jobs in one week \u2014 move one')) +
+      : sw('background:var(--tint3);border-color:var(--red)', '3 at once',
+           'Three jobs in one week \u2014 move one. 2 at once shows on hover.')) +
     sw('border:2px dotted var(--fg1);background:transparent', 'By hand',
        READONLY ? 'Moved by hand' : 'Moved by hand \u2014 click the cell to give it back') +
-    (MODE === 'project' ? sw('background:var(--red)', 'Deadline week') : '') + '</div>';
+    (MODE === 'project' ? '<span class="k"><span class="duemark">Due</span> Deadline week</span>' : '') + '</div>';
 }
 
 function wireScheduleBar() {
@@ -242,32 +242,66 @@ function renderProjectGrid() {
       `${esc(w.day_range)}</th>`).join('') + '</tr>';
   h += '</thead><tbody>';
 
-  d.labels.forEach((name, ri) => {
-    h += `<tr><th title="${esc(name)}">${esc(name)}</th>`;
-    d.weeks.forEach((w, ci) => {
-      const c = d.cells[ri][ci];
-      const cls = [];
+  // Rows whose work is all behind this week go in a fold at the bottom. They used to fill the
+  // top of the grid as empty rows (the view opens on this week), pushing live work off screen.
+  const nowCi = d.weeks.findIndex(w => w.start >= BOOT.today_week);
+  const finished = ri => nowCi !== -1 && d.cells[ri].every((c, ci) => !c || ci < nowCi) &&
+    !Object.keys(mark).some(k => k.startsWith(ri + '|') && Number(k.split('|')[1]) >= nowCi);
+  const live = [], done = [];
+  d.labels.forEach((n, ri) => (finished(ri) ? done : live).push(ri));
+  const span = d.weeks.length + 1;
+
+  const row = ri => {
+    const name = d.labels[ri];
+    let r = `<tr><th title="${esc(name)}">${esc(name)}</th>`;
+    for (let ci = 0; ci < d.weeks.length; ci++) {
+      const w = d.weeks[ci], c = d.cells[ri][ci], cls = [];
       if (w.start < BOOT.today_week) cls.push('past');
-      let body = '', text = '';
+      if (mark[ri + '|' + ci]) cls.push('due');
       if (c) {
+        // One bar per run: the same phases and people in consecutive weeks join into a
+        // single cell spanning them, named once, instead of a box per week repeating it.
+        const sig = JSON.stringify(c.items.map(i => i.ph)) + '|' + c.text + '|' + (c.depth > 2) +
+          '|' + c.items.some(i => i.hand);
+        let n = 1;
+        while (ci + n < d.weeks.length) {
+          const x = d.cells[ri][ci + n];
+          if (!x || mark[ri + '|' + (ci + n)] ||
+              JSON.stringify(x.items.map(i => i.ph)) + '|' + x.text + '|' + (x.depth > 2) +
+              '|' + x.items.some(i => i.hand) !== sig) break;
+          if ((d.weeks[ci + n].start < BOOT.today_week) !== (w.start < BOOT.today_week)) break;
+          n++;
+        }
         const deep = c.depth || c.count || 1;
-        text = c.text;
         cls.push('cell');
-        if (deep > 1) cls.push(deep > 2 ? 'over3' : 'over2');
+        if (deep > 2) cls.push('over3');
         if (c.items.some(i => i.hand)) cls.push('pinned');
+        const end = d.weeks[ci + n - 1];
+        const when = n > 1 ? `${w.label} \u2013 ${end.label}` : w.label;
         // Not draggable here: a Projects row has no engineer column to drop into.
-        body = cellBands(c, (it, i) => c.text.split(' / ')[i] || it.ph, null);
-      } else if (mark[ri + '|' + ci]) {
-        cls.push('marker'); body = '\u25B2';
+        const body = cellBands(c, (it, i) => c.text.split(' / ')[i] || it.ph, null);
+        r += `<td data-c="${ci}"${n > 1 ? ` colspan="${n}"` : ''} class="${cls.join(' ')}"` +
+             ` title="${esc(c.text + ' \u00b7 ' + c.items.map(i => i.ph).join(' + ') + ' \u00b7 ' + when +
+               (deep > 2 ? ' \u00b7 3 at once' : deep > 1 ? ' \u00b7 2 at once' : ''))}">${body}</td>`;
+        ci += n - 1;
+      } else {
+        r += `<td data-c="${ci}" class="${cls.join(' ')}"` +
+             (mark[ri + '|' + ci] ? ` title="${esc('Due ' + w.label)}"><span class="duemark">Due</span>` : '>') + '</td>';
       }
-      h += `<td data-c="${ci}" class="${cls.join(' ')}"` +
-           ` title="${esc(text ? text + ' \u00b7 ' + w.label : w.label + ' \u00b7 deadline')}">` +
-           `${body}</td>`;
-    });
-    h += '</tr>';
-  });
+    }
+    return r + '</tr>';
+  };
+
+  live.forEach(ri => { h += row(ri); });
+  if (done.length) {
+    h += `<tr class="donehead"><td colspan="${span}"><button type="button" id="doneFold" aria-expanded="${SHOW_FINISHED}">` +
+      `${SHOW_FINISHED ? 'Hide' : 'Show'} ${done.length} finished project${done.length === 1 ? '' : 's'}` +
+      '</button></td></tr>';
+    if (SHOW_FINISHED) done.forEach(ri => { h += row(ri); });
+  }
   return h + '</tbody></table></div>';
 }
+let SHOW_FINISHED = false;
 
 function renderSchedule() {
   const d = SCHED;
@@ -1727,6 +1761,8 @@ function paint() {
     // Dragging is an Engineers-mode action: you move a week between engineers, and a
     // Projects row has no engineer column to drop into.
     if (SCHED.mode === 'engineer' && !READONLY) wireDrag();
+    const fold = $('doneFold');
+    if (fold) fold.addEventListener('click', () => { SHOW_FINISHED = !SHOW_FINISHED; paint(); });
   }
   else wireProjects();
 }

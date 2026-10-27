@@ -34,8 +34,9 @@ project's bookings on a re-plan, and an older copy refuses date entries the new 
    dated project leaves the dates stale.
 
 Nothing else changes: no new settings, no new credentials, same sheet, same
-sign-in, same ports and paths. Two new static files, `webapp/public/dates.js` and `titles.js`, are served
-alongside `app.js`; if a reverse proxy lists files explicitly, add it.
+sign-in, same ports and paths. New static files are served alongside `app.js`:
+`webapp/public/dates.js`, `titles.js`, and the font folder `webapp/public/fonts/` (Inter,
+three `.woff2` files, served as `font/woff2`). If a reverse proxy lists files explicitly, add them.
 
 ## What to expect on the sheet
 

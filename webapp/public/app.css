@@ -14,11 +14,24 @@
   /* Sequential ramp for the heatmap: one hue, lightness stepping down evenly, so
      "darker = busier" is readable without telling two colours apart. */
   --r0:#FBE9E5; --r1:#F6C4B8; --r2:#F09A85; --r3:#EF4123; --r4:#C4321A; --r5:#8E2412;
-  --font:"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  /* Inter (Tara, 2026-10-27), served from /fonts so it is the same on every machine and
+     needs no outside request. It replaced Avenir Next, which only Macs have: Windows fell
+     back to its own font, and Avenir's digits are harder to tell apart at the 11-12px the
+     schedule's dates and week counts are set in. tnum keeps every digit the same width,
+     so dates line up down a column. */
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;
 }
+@font-face{font-family:"Inter"; font-style:normal; font-weight:400; font-display:swap;
+  src:url("./fonts/Inter-Regular.woff2") format("woff2")}
+@font-face{font-family:"Inter"; font-style:normal; font-weight:700; font-display:swap;
+  src:url("./fonts/Inter-Bold.woff2") format("woff2")}
+@font-face{font-family:"Inter"; font-style:italic; font-weight:400; font-display:swap;
+  src:url("./fonts/Inter-Italic.woff2") format("woff2")}
 *{box-sizing:border-box; border-radius:0 !important}
 html,body{margin:0; padding:0; background:var(--bg1); color:var(--fg1);
-  font-family:var(--font); font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased}
+  font-family:var(--font); font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  font-feature-settings:"tnum" 1, "cv11" 1}
+input, select, textarea{font-family:var(--font)}
 button{font-family:var(--font); cursor:pointer}
 .top{position:sticky; top:0; z-index:20; background:var(--bg1); border-bottom:2px solid var(--black);
   display:flex; align-items:center; gap:24px; padding:12px 22px}
@@ -216,6 +229,49 @@ table.sched:not(.byeng) tbody th{min-width:240px; max-width:240px; text-align:le
 td.marker{background:var(--red); color:#fff; font-weight:700; text-align:center}
 table.sched:not(.byeng) .bk{padding:1px 4px; justify-content:center}
 table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:9px}
+
+/* ---- Projects grid (Tara, 2026-10-27) -------------------------------------
+   A run of identical weeks is ONE cell spanning them, so a project reads as a bar with the
+   engineer named once. Project names are no longer shouted in capitals, the week columns
+   are separated, 2 at once is no longer outlined (the tooltip says it; only 3 at once is
+   tinted), and the deadline is a labelled "Due" cell instead of a solid red triangle that
+   looked like the loudest booking on the row. */
+table.sched:not(.byeng) tbody th{text-transform:none; font-size:13px; font-weight:700;
+  border-bottom:1px solid var(--line)}
+table.sched:not(.byeng) tbody td{height:36px; border-right:1px solid var(--hair);
+  border-bottom:1px solid var(--line)}
+table.sched:not(.byeng) td.cell{padding:3px 2px; text-align:left}
+table.sched:not(.byeng) td.cell .stack{inset:3px 2px; gap:2px; align-items:stretch}
+table.sched:not(.byeng) .bk{display:block; line-height:28px; text-align:left; padding:0 8px;
+  font-size:12px; font-weight:700}
+table.sched:not(.byeng) .stack .bk:not(:only-child){line-height:normal; display:flex; align-items:center}
+/* A bar that starts before the scrolled-to week still says whose it is: the name sticks to
+   the left edge of what is visible, just right of the sticky project column. */
+table.sched:not(.byeng) .bk-l{position:sticky; left:248px; display:inline-block; max-width:100%;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:top}
+/* Sticky pins to the nearest scrolling box. The base rules clip the cell and the bar
+   (overflow:hidden), which made each of them that box, so the name pinned 248px into its own
+   bar and was shoved against the bar's right end. Unclipped here, the name pins to the grid's
+   scroll area as intended; the name itself still clips with an ellipsis. */
+table.sched:not(.byeng) td.cell, table.sched:not(.byeng) td.cell .bk{overflow:visible}
+table.sched:not(.byeng) .stack .bk:not(:only-child){font-size:11px}
+table.sched:not(.byeng) .stack .bk + .bk{border-top:0}
+table.sched:not(.byeng) td.over2{outline:none; font-weight:400; color:inherit}
+table.sched:not(.byeng) td.over3{outline:none; background:var(--tint3); font-weight:400; color:inherit}
+table.sched:not(.byeng) td.over3 .bk{box-shadow:inset 0 -3px 0 var(--red)}
+table.sched:not(.byeng) td.pinned{outline:2px dotted var(--fg1); outline-offset:-3px}
+table.sched:not(.byeng) td.due{background:#fff}
+.duemark{display:inline-block; font-size:10px; font-weight:700; color:var(--red);
+  border:1px solid var(--red); padding:1px 5px; line-height:14px}
+table.sched:not(.byeng) td.cell.due{box-shadow:inset -3px 0 0 var(--red)}
+table.sched tr.donehead td{background:var(--bg2); padding:0; height:auto;
+  border-bottom:1px solid var(--line); text-align:left; overflow:visible}
+/* The row spans all 58 weeks and the grid opens scrolled to this week, so the label is pinned
+   to the left edge; otherwise it sits off screen and the row reads as a blank strip. */
+tr.donehead button{all:unset; cursor:pointer; display:inline-block; position:sticky; left:0;
+  padding:8px 12px; font-size:12px; font-weight:700; color:var(--fg2)}
+tr.donehead button:hover{color:var(--fg1)}
+tr.donehead button:focus-visible{outline:2px solid var(--ink2); outline-offset:-2px}
 
 /* ---- analysis -------------------------------------------------------- */
 .head{display:flex; align-items:baseline; gap:10px; margin:26px 0 10px}

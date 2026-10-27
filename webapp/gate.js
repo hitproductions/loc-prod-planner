@@ -39,7 +39,7 @@ const PAGE = (msg) => `<!doctype html><meta charset="utf-8">
 <style>
  *{box-sizing:border-box;border-radius:0}
  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-   background:#fff;color:#000;font:14px/1.5 "Avenir Next",Avenir,-apple-system,sans-serif}
+   background:#fff;color:#000;font:14px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
  form{width:300px}
  h1{font-size:19px;letter-spacing:-.01em;margin:0 0 4px}
  p{color:#646667;margin:0 0 22px}
