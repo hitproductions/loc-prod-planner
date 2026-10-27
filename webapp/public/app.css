@@ -835,3 +835,27 @@ table.sched thead th.colhi{background:#4A4B4C; color:#fff; box-shadow:inset 0 -3
 /* Engineers: hovering a row darkens its week label only (the cells stay as they are). */
 table.sched tbody tr:hover th{background:#D6D7D8}
 table.sched.byeng tbody tr.nowrow:hover th{background:#EDEDED}
+
+/* Filled Engineers cells, taller (Tara, 2026-10-28). The thin rail layout is retired: each booking
+   is filled edge to edge with its phase colour, as in the prototype, with the same 1px edge as
+   the Projects bars. Cells are taller so a name can wrap to three lines before it is cut. Past
+   weeks use the paler fill. Bookings in one week are divided by a white line. */
+table.sched.byeng tbody td, table.sched.byeng tbody th{height:64px}
+table.sched.byeng td.cell{height:1px}
+table.sched.byeng .stack{min-height:64px}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child), table.sched.byeng .stack .bk.rich:only-child{
+  background:var(--ph); min-height:64px; padding:8px 10px; justify-content:flex-start; text-align:left;
+  box-shadow:inset 0 0 0 1px var(--ph-edge, transparent)}
+table.sched.byeng .stack .bk.rich:not(:only-child){flex:1 0 auto}
+table.sched.byeng .bk.rich::before{display:none}
+table.sched.byeng .bk.rich.dub{--ph-edge:var(--dub-edge)}
+table.sched.byeng .bk.rich.edit{--ph-edge:var(--edit-edge)}
+table.sched.byeng .bk.rich.mix{--ph-edge:var(--mix-edge)}
+table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; white-space:normal;
+  overflow:hidden; text-overflow:clip; font-size:13px; line-height:1.25; word-break:normal; overflow-wrap:anywhere}
+table.sched.byeng tr.past .bk.rich{background:var(--ph-pale)}
+table.sched.byeng .stack .bk.rich + .bk.rich, table.sched.byeng .stack .bk.rich + .bk.rich.samejob{
+  border-top:2px solid #fff; padding-top:8px}
+table.sched.byeng .otag{background:#fff}
+table.sched.byeng .otag.t3{background:var(--red)}
