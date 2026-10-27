@@ -104,16 +104,24 @@ const PHASE_BG = { Dub:'var(--dub)', Edit:'var(--edit)', Mix:'var(--mix)' };
 //
 // `label` differs by orientation: the Engineers grid shows project names, the Projects
 // grid shows engineer names.
-function cellBands(c, label, dragAttrs, rich) {
+function cellBands(c, label, dragAttrs, rich, deep) {
   return '<div class="stack">' + c.items.map((it, i) => {
     const text = label(it, i);
     // Engineers grid: the cell is tall enough to say more than the name. The phase and where
     // the week falls in it ("Dub \u00b7 wk 2/3") are what you otherwise have to hover to learn.
     const meta = rich && it.of ? `${it.ph} \u00b7 ` + (it.of > 1 ? `wk ${it.at}/${it.of}` : '1 wk') : '';
+    // One row per booking, the phase as a rail down its left edge (Tara, 2026-10-27). An
+    // overlapped week says so in words on its first row, so the depth never rests on the
+    // frame colour alone.
+    const tag = rich && i === 0 && deep > 1
+      ? `<span class="otag${deep > 2 ? ' t3' : ''}">${deep} at once</span>` : '';
     const body = rich
-      ? `<span class="bk-n">${esc(text)}</span>` + (meta ? `<span class="bk-m">${esc(meta)}</span>` : '')
+      ? `<span class="bk-n">${esc(text)}</span>` +
+        (meta || tag ? `<span class="bk-m">${esc(meta)}${tag}</span>` : '')
       : esc(text);
-    return `<span class="bk${rich ? ' rich' : ''}" style="background:${PHASE_BG[it.ph] || 'transparent'}"` +
+    const paint = rich ? `--ph:${PHASE_BG[it.ph] || 'var(--line)'}`
+      : `background:${PHASE_BG[it.ph] || 'transparent'}`;
+    return `<span class="bk${rich ? ' rich' : ''}" style="${paint}"` +
       (dragAttrs ? dragAttrs(it) : '') +
       (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"'
         : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + meta)}"` : '')) +
@@ -143,7 +151,7 @@ function scheduleKey() {
   const sw = (css, t, tip) => `<span class="k"${tip ? ` title="${esc(tip)}"` : ''}><i class="sw" style="${css}"></i>${t}</span>`;
   return '<div class="legend key">' +
     sw('background:var(--dub)', 'Dub') + sw('background:var(--edit)', 'Edit') + sw('background:var(--mix)', 'Mix') +
-    sw('border:2px solid var(--warn);background:transparent', '2 at once', 'Someone holds two jobs this week') +
+    sw('border:2px solid var(--ink2);background:transparent', '2 at once', 'Someone holds two jobs this week') +
     sw('border:2px solid var(--red);background:transparent', '3 at once', 'Three jobs in one week \u2014 move one') +
     sw('border:2px dotted var(--fg1);background:transparent', 'By hand',
        READONLY ? 'Moved by hand' : 'Moved by hand \u2014 click the cell to give it back') +
@@ -197,7 +205,7 @@ function renderEngineerGrid() {
         body = cellBands(c, it => it.p, it =>
           (READONLY ? '' : ' draggable="true"') +
           ` data-p="${esc(it.p)}" data-ph="${esc(it.ph)}"` +
-          ` data-from="${esc(n)}" data-wk="${w.start}"`, true);
+          ` data-from="${esc(n)}" data-wk="${w.start}"`, true, deep);
       }
       h += `<td class="${cls.join(' ')}" data-c="${ri}" data-eng="${esc(n)}"` +
            ` data-wk="${w.start}" title="${esc(c ? c.text : '')}">${body}</td>`;
