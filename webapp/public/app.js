@@ -41,8 +41,13 @@ function topRight() {
   const wk = n => n + (n === 1 ? ' week' : ' weeks');
   const bits = [`<span class="pill">${c.projects} projects` +
     (c.done ? ` · ${c.done} done` : '') + ` · ${c.live_rows} bookings</span>`];
+  // From THIS WEEK on. A week that has gone cannot be reassigned, and counting it kept
+  // the warning above zero for good; the earlier ones are said quietly instead.
+  const earlier = (c.over2_past || 0) + (c.over3_past || 0);
   if (c.over2) bits.push(`<span class="pill warn">${wk(c.over2)} with 2 overlaps</span>`);
   if (c.over3) bits.push(`<span class="pill bad">${wk(c.over3)} with 3+ overlaps</span>`);
+  if (earlier) bits.push(`<span class="pill" title="Weeks that have already passed — nothing can be ` +
+    `reassigned in them. They stay visible in the schedule.">${earlier} earlier</span>`);
   if (LAST_MS != null) bits.push(`<span class="pill timing">${LAST_MS.toFixed(0)} ms</span>`);
   // Anything typed straight into the spreadsheet -- a pasted batch of projects above
   // all -- is invisible until the book is re-read. The store re-reads after every
@@ -156,8 +161,8 @@ function renderEngineerGrid() {
   let lastQ = null;
   d.weeks.forEach((w, ci) => {
     const starts = w.quarter !== lastQ; lastQ = w.quarter;
-    const cls = [starts ? 'qstart' : '', w.start === BOOT.today_week ? 'nowrow' : '']
-      .filter(Boolean).join(' ');
+    const cls = [starts ? 'qstart' : '', w.start === BOOT.today_week ? 'nowrow' : '',
+      w.start < BOOT.today_week ? 'past' : ''].filter(Boolean).join(' ');
     h += `<tr${cls ? ` class="${cls}"` : ''}><th>${numLabel(w)}</th>`;
     d.labels.forEach((n, ri) => {
       const c = d.cells[ri][ci];
@@ -201,7 +206,8 @@ function renderProjectGrid() {
   h += '<tr class="monthband"><th class="corner">Project</th>' +
     months.map(m => `<th colspan="${m.n}">${esc(m.m)}</th>`).join('') + '</tr>';
   h += '<tr><th class="corner"></th>' +
-    d.weeks.map((w, ci) => `<th data-c="${ci}">${esc(w.day_range)}</th>`).join('') + '</tr>';
+    d.weeks.map((w, ci) => `<th data-c="${ci}"${w.start === BOOT.today_week ? ' class="nowcol"' : ''}>` +
+      `${esc(w.day_range)}</th>`).join('') + '</tr>';
   h += '</thead><tbody>';
 
   d.labels.forEach((name, ri) => {
@@ -209,6 +215,7 @@ function renderProjectGrid() {
     d.weeks.forEach((w, ci) => {
       const c = d.cells[ri][ci];
       const cls = [];
+      if (w.start < BOOT.today_week) cls.push('past');
       let body = '', text = '';
       if (c) {
         const deep = c.depth || c.count || 1;
@@ -253,13 +260,45 @@ function renderSchedule() {
   return h;
 }
 
-let SORT = 'deadline', SHOW_DONE = false;
+let SORT = 'deadline', SHOW_DONE = false, SEARCH = '';
+
+// "3 Nov", or "3 Nov 2027" when the year is not this one, from an ISO date.
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function shortDate(iso, withYear) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const thisYear = BOOT && BOOT.today_week ? Number(BOOT.today_week.slice(0, 4)) : null;
+  return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] +
+    (withYear || (thisYear && d.getUTCFullYear() !== thisYear) ? ' ' + d.getUTCFullYear() : '');
+}
+
+// The project's dates, in place of the old 2/1/1: its first day to its last, the weeks that
+// is, and each phase's own dates on hover. Since phases have dates, week counts said less
+// than the dates they came from.
+function runsCell(p) {
+  const ds = ['dub', 'edit', 'mix'].map(k => [k, p.dates && p.dates[k]]).filter(([, d]) => d && d.from && d.to);
+  if (!ds.length) return '<span class="muted-inline">\u2014</span>';
+  const from = ds.map(([, d]) => d.from).sort()[0], to = ds.map(([, d]) => d.to).sort().pop();
+  const weeks = Math.round((new Date(to + 'T00:00:00Z') - new Date(from + 'T00:00:00Z')) / 86400000 + 1) / 7;
+  const tip = ds.map(([k, d]) => k[0].toUpperCase() + k.slice(1) + ' ' + shortDate(d.from) + ' \u2013 ' + shortDate(d.to)).join(' \u00b7 ');
+  return `<span class="runs" title="${esc(tip)}">` +
+    `${esc(shortDate(from))} \u2013 ${esc(shortDate(to))}</span>` +
+    `<span class="muted-inline"> \u00b7 ${Math.round(weeks)} wk${Math.round(weeks) === 1 ? '' : 's'}</span>`;
+}
 
 function renderProjects() {
   const byTitle = (a, b) =>
     String(a.title).localeCompare(String(b.title), undefined, { numeric: true });
+  // By deadline, what still has a deadline ahead comes FIRST. Oldest-first put fourteen
+  // finished-looking projects above the ones that need attention. Past deadlines follow,
+  // most recent first, under their own heading.
+  const passed = p => !!p.deadline && p.deadline < BOOT.today_week;
   const all = BOOT.projects.slice().sort(SORT === 'title' ? byTitle : (a, b) =>
-    String(a.deadline || '9999').localeCompare(String(b.deadline || '9999')) || byTitle(a, b));
+    (passed(a) - passed(b)) ||
+    (passed(a) ? String(b.deadline).localeCompare(String(a.deadline))
+               : String(a.deadline || '9999').localeCompare(String(b.deadline || '9999'))) ||
+    byTitle(a, b));
   // Finished work is hidden, not deleted. The point of marking a project complete is
   // that it stops asking for your attention; the record stays one click away.
   const done = all.filter(p => p.status === 'Complete' || p.status === 'Cancelled');
@@ -296,14 +335,22 @@ function renderProjects() {
         `${SHOW_DONE ? 'Hide' : 'Show'} ${done.length} closed</button>`
       : '') +
     '<div class="spacer"></div>' +
+    `<input type="search" id="pSearch" class="search" placeholder="Search projects, clients, engineers" ` +
+      `aria-label="Search projects" value="${esc(SEARCH)}" autocomplete="off">` +
     `<button class="btn small${SORT === 'deadline' ? ' primary' : ''}" data-sort="deadline">Deadline</button>` +
     `<button class="btn small${SORT === 'title' ? ' primary' : ''}" data-sort="title">A\u2013Z</button>` +
     '<span class="hint" style="margin:0 0 0 12px">Click a row to edit it.</span></div>' +
     '<div id="formHost"></div>';
 
   h += '<table class="projects"><thead><tr><th>Deadline</th><th>Project</th><th>Client</th>' +
-    '<th>D/E/M</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th></tr></thead><tbody>';
+    '<th>Dates</th><th>Recordist</th><th>Mixer</th><th>Flags</th><th></th></tr></thead><tbody>';
+  let divided = false;
   ps.forEach(p => {
+    if (SORT === 'deadline' && !divided && passed(p)) {
+      divided = true;
+      h += `<tr class="grp" data-grp="1"><td colspan="8">Deadline passed \u00b7 ` +
+        `${ps.filter(passed).length}</td></tr>`;
+    }
     let flags = '';
     if (p.overlap > 2) flags += '<span class="chip red">3 overlaps</span>';
     else if (p.overlap) flags += '<span class="chip warn">2 overlaps</span>';
@@ -321,10 +368,15 @@ function renderProjects() {
       flags += `<span class="chip">completed ${esc(p.completed || '')}</span>`;
     }
     const cls = [p.status ? 'dim' : '', p.locked ? 'locked' : ''].filter(Boolean).join(' ');
-    h += `<tr data-title="${esc(p.title)}"${cls ? ` class="${cls}"` : ''}>` +
+    const q = [p.title, p.client, who('Dub'), who('Edit'), who('Mix'), p.deadline,
+      p.status, p.music ? 'music' : '', p.special ? 'special' : '', p.atmos ? 'atmos' : '',
+      p.locked ? 'locked' : ''].join(' ').toLowerCase();
+    const hide = SEARCH.trim() && !matchesAll(q, SEARCH);
+    h += `<tr data-title="${esc(p.title)}" data-q="${esc(q)}"${hide ? ' hidden' : ''}` +
+      `${cls ? ` class="${cls}"` : ''}>` +
       `<td>${esc(p.deadline)}</td>` +
       `<td><b>${esc(p.title)}</b></td><td>${esc(p.client)}</td>` +
-      `<td>${p.dub}/${p.edit}/${p.mix}</td><td>${esc(who('Dub'))}</td><td>${esc(who('Mix'))}</td>` +
+      `<td>${runsCell(p)}</td><td>${esc(who('Dub'))}</td><td>${esc(who('Mix'))}</td>` +
       `<td>${flags}</td>` +
       // A frozen project has to be obvious while scanning a long list, which a chip
       // among six other chips is not. Same shape as the Apps Script app's column.
@@ -334,10 +386,36 @@ function renderProjects() {
           : 'Click to freeze: a re-plan will leave this project alone.'}">` +
         `${p.locked ? 'LOCKED' : 'Lock'}</button></td></tr>`;
   });
-  return h + '</tbody></table>';
+  return h + '</tbody></table><div class="hint" id="pNone" hidden>No project matches that.</div>';
+}
+
+// Every word typed has to appear somewhere in the row, in any order: "kyle nov" finds
+// Kyle's November work. Anything fuzzier would hide the project you meant.
+function matchesAll(text, query) {
+  return String(query).toLowerCase().split(/\s+/).filter(Boolean).every(w => text.indexOf(w) !== -1);
+}
+
+// Filters the rows already on the page. It does not repaint: a repaint rebuilds the
+// input and drops the cursor after every keystroke.
+function applySearch() {
+  const rows = [...document.querySelectorAll('table.projects tbody tr[data-title]')];
+  let shown = 0;
+  rows.forEach(tr => {
+    const hide = !!SEARCH.trim() && !matchesAll(tr.dataset.q || '', SEARCH);
+    tr.hidden = hide; if (!hide) shown++;
+  });
+  // A heading with nothing under it is noise.
+  document.querySelectorAll('table.projects tr.grp').forEach(g => {
+    let n = g.nextElementSibling, any = false;
+    while (n && !n.classList.contains('grp')) { if (n.hidden === false) any = true; n = n.nextElementSibling; }
+    g.hidden = !any;
+  });
+  const none = $('pNone'); if (none) none.hidden = shown > 0 || !SEARCH.trim();
 }
 
 function wireProjects() {
+  const sb = $('pSearch');
+  if (sb) { sb.addEventListener('input', () => { SEARCH = sb.value; applySearch(); }); applySearch(); }
   const add = $('addBtn');
   if (add) add.addEventListener('click', () => openForm(null));
   const td = $('toggleDone');
@@ -479,6 +557,19 @@ async function loadHistory(index) {
   paint();
 }
 
+// The log grows with every change, so it can be narrowed by what was done and by any
+// words in it (a project name, an engineer). Kept across repaints: opening an entry
+// repaints the page, and losing your filter each time would defeat it.
+let HF = { q: '', kind: '' };
+const KIND = {
+  'save-project': 'Saved a project', 'reassign': 'Moved a week', 'undo': 'Undid a move',
+  'set-status': 'Completed, cancelled or reopened', 'set-lock': 'Locked or unlocked',
+  'replan-apply': 'Re-plan applied', 'rollback': 'Rolled back', 'clear-ghosts': 'Cleared ghosts',
+};
+const kindLabel = a => KIND[a] || a;
+const histText = e => (String(e.summary || e.action) + ' ' + e.at).toLowerCase();
+const histShown = e => (!HF.kind || e.action === HF.kind) && (!HF.q.trim() || matchesAll(histText(e), HF.q));
+
 function renderHistory() {
   if (!HISTORY) return '<div class="loading">Reading the log\u2026</div>';
   const evs = HISTORY.events || [];
@@ -489,17 +580,25 @@ function renderHistory() {
       'been lost \u2014 but they carry no date, so they cannot be placed on a timeline.</div></div>';
   }
 
+  const kinds = [...new Set(evs.map(e => e.action))];
   let h = '<div class="card"><div class="t">What has changed</div>' +
-    `<div class="s">${evs.length} entr${evs.length === 1 ? 'y' : 'ies'} \u00b7 newest first ` +
+    `<div class="s"><span id="hCount">${evs.length} entr${evs.length === 1 ? 'y' : 'ies'}</span> \u00b7 newest first ` +
     '\u00b7 click one to see what it did</div>' +
+    '<div class="bar-row">' +
+    `<input type="search" id="hQ" class="search" placeholder="Filter by project, engineer or word" ` +
+      `aria-label="Filter the history" value="${esc(HF.q)}" autocomplete="off">` +
+    '<select id="hK" aria-label="Kind of change"><option value="">All changes</option>' +
+    kinds.map(k => `<option value="${esc(k)}"${HF.kind === k ? ' selected' : ''}>${esc(kindLabel(k))}</option>`).join('') +
+    '</select><button class="btn small" id="hClear"' + (HF.q || HF.kind ? '' : ' hidden') + '>Clear</button></div>' +
     '<table class="projects"><thead><tr><th>When</th><th>What</th><th></th>' +
     '</tr></thead><tbody>' +
-    evs.map(e => `<tr data-ev="${e.index}"${OPENED && OPENED.event &&
+    evs.map(e => `<tr data-ev="${e.index}" data-k="${esc(e.action)}" data-q="${esc(histText(e))}"` +
+        `${histShown(e) ? '' : ' hidden'}${OPENED && OPENED.event &&
         OPENED.event.index === e.index ? ' class="on"' : ''}>` +
       `<td class="mono">${esc(e.at)}</td><td>${esc(e.summary || e.action)}</td>` +
       `<td>${e.index === HISTORY.latest
         ? '<span class="chip">most recent</span>' : ''}</td></tr>`).join('') +
-    '</tbody></table></div>';
+    '</tbody></table><div class="hint" id="hNone" hidden>Nothing in the log matches that.</div></div>';
 
   if (OPENED && OPENED.diff) {
     const d = OPENED.diff;
@@ -536,7 +635,25 @@ function renderHistory() {
   return h;
 }
 
+function applyHistoryFilter() {
+  const rows = [...document.querySelectorAll('table.projects tbody tr[data-ev]')];
+  let n = 0;
+  rows.forEach(tr => {
+    const show = (!HF.kind || tr.dataset.k === HF.kind) && (!HF.q.trim() || matchesAll(tr.dataset.q || '', HF.q));
+    tr.hidden = !show; if (show) n++;
+  });
+  const c = $('hCount');
+  if (c) c.textContent = (HF.q.trim() || HF.kind) ? `${n} of ${rows.length}` : `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
+  const none = $('hNone'); if (none) none.hidden = n > 0;
+  const clr = $('hClear'); if (clr) clr.hidden = !(HF.q || HF.kind);
+}
+
 function wireHistory() {
+  const hq = $('hQ'), hk = $('hK'), hc = $('hClear');
+  if (hq) hq.addEventListener('input', () => { HF.q = hq.value; applyHistoryFilter(); });
+  if (hk) hk.addEventListener('change', () => { HF.kind = hk.value; applyHistoryFilter(); });
+  if (hc) hc.addEventListener('click', () => { HF = { q: '', kind: '' }; if (hq) hq.value = ''; if (hk) hk.value = ''; applyHistoryFilter(); });
+  applyHistoryFilter();
   document.querySelectorAll('[data-ev]').forEach(tr =>
     tr.addEventListener('click', () => loadHistory(tr.dataset.ev)));
   const b = $('hRoll');
@@ -579,8 +696,12 @@ function renderAnalysis() {
     `<div class="s">${wk(o.pair_weeks)} with two at once, ${wk(o.deep_weeks)} with three or more` +
     (o.by_engineer.length ? ' \u00b7 carried by ' +
       o.by_engineer.map(e => `${esc(e.engineer)} (${e.forced_rows})`).join(', ') : '') + '</div>';
+  if (o.earlier_weeks) {
+    h += `<div class="hint">${wk(o.earlier_weeks)} with overlaps earlier are not listed \u2014 ` +
+      'those weeks have already passed.</div>';
+  }
   if (!o.collisions.length) {
-    h += '<div class="hint">None \u2014 nobody holds two projects in the same week.</div>';
+    h += '<div class="hint">None \u2014 nobody holds two projects in the same week from now on.</div>';
   } else {
     h += '<table class="projects"><thead><tr><th>Engineer</th><th>Week of</th>' +
       '<th>Colliding work</th></tr></thead><tbody>' +
@@ -855,6 +976,151 @@ async function applyReplan() {
 // Check availability writes nothing and answers "can we take this job". Plot & save
 // commits. Both go through the same engine call, so the answer you were shown is the
 // answer you get.
+// ---------------------------------------------------------------- dates on the form
+// Dates are typed, in whatever form comes naturally (2 Nov, 11/2, 2026-11-02), because a
+// row of calendar widgets made six empty-looking boxes that all read as today's date.
+// A small calendar button beside each box still opens the picker. What was understood is
+// always echoed back as "2 Nov 2026" and as the week it falls in, so a misreading shows.
+// The reading and the rules live in dates.js, which the tests load too.
+const DATES = window.PlannerDates;
+const DAYMS = DATES.DAYMS, isoOf = DATES.isoOf, mondayOf = DATES.mondayOf;
+const parseDay = raw => DATES.parseDay(raw, BOOT.today_week);
+const dayLabel = t => shortDate(isoOf(t), true);
+const dayShort = t => new Date(t).getUTCDate() + ' ' + MONTHS[new Date(t).getUTCMonth()];
+
+// A date box: the typed text plus a calendar button that fills it from the picker.
+function dateBox(id, label, iso, placeholder) {
+  const t = iso ? Date.parse(iso + 'T00:00:00Z') : NaN;
+  return `<span class="dbox"><input type="text" id="${id}" aria-label="${esc(label)}" placeholder="${esc(placeholder || 'optional')}" ` +
+    `value="${Number.isNaN(t) ? '' : esc(dayLabel(t))}" autocomplete="off">` +
+    `<button type="button" class="cal" data-for="${id}" tabindex="-1" aria-label="Pick ${esc(label)} from a calendar" title="Pick from a calendar">` +
+    '<svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><path d="M1.5 3h10v8.5h-10zM1.5 5.5h10M4 1.5v3M9 1.5v3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>' +
+    '<input type="date" class="hidpick" tabindex="-1" aria-hidden="true"></span>';
+}
+
+const PHASES = [['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']];
+
+// What the boxes say, run through the shared rules (dates.js).
+function readDates() {
+  const phases = {};
+  PHASES.forEach(([k]) => { phases[k] = { a: parseDay($('f_' + k + '_from').value), b: parseDay($('f_' + k + '_to').value) }; });
+  const deadline = parseDay($('f_deadline').value);
+  const r = DATES.checkPhases({ deadline, phases });
+  r.deadline = deadline;
+  r.used = PHASES.filter(([k]) => r.phases[k].snapped);
+  return r;
+}
+
+function drawDates() {
+  const d = readDates(), tick = [];
+  PHASES.forEach(([k, label]) => {
+    const ph = d.phases[k], e = d.errors[k];
+    ['from', 'to'].forEach(w => $('f_' + k + '_' + w).classList.remove('bad'));
+    if (e.length) {
+      const bad = (x, w) => { if (x === null || Number.isNaN(x)) $('f_' + k + '_' + w).classList.add('bad'); };
+      if (ph.a === null || ph.b === null || Number.isNaN(ph.a) || Number.isNaN(ph.b)) { bad(ph.a, 'from'); bad(ph.b, 'to'); }
+      else if (/ends before|Ends after/.test(e.join(' '))) $('f_' + k + '_to').classList.add('bad');
+      else $('f_' + k + '_from').classList.add('bad');
+    }
+    const snap = $('s_' + k);
+    if (ph.snapped) {
+      const n = (ph.snapped[1] - ph.snapped[0]) / (7 * DAYMS) + 1;
+      snap.className = 'snap';
+      snap.innerHTML = `<b>${n} wk${n > 1 ? 's' : ''}</b> · ${esc(dayShort(ph.snapped[0]))} – ${esc(dayShort(ph.snapped[1] + 6 * DAYMS))}`;
+    } else { snap.className = 'snap none'; snap.textContent = ph.none ? 'not used' : ''; }
+    const el = $('e_' + k); el.hidden = !e.length; el.textContent = e.join(' ');
+  });
+  const dlBad = $('f_deadline').value.trim() && Number.isNaN(d.deadline);
+  $('f_deadline').classList.toggle('bad', !!dlBad);
+
+  // the strip: the phases as bars on one week axis, the deadline as a marker
+  const used = d.used, strip = $('phStrip'), ov = $('phOv');
+  if (!used.length) {
+    strip.innerHTML = '<div class="empty">Add dates and the phases appear here, week by week.</div>';
+    ov.className = 'ov none'; ov.textContent = '';
+  } else {
+    const dl = d.deadline != null && !Number.isNaN(d.deadline) ? mondayOf(d.deadline) : null;
+    const sn = k => d.phases[k].snapped;
+    const first = Math.min(...used.map(([k]) => sn(k)[0])) - 7 * DAYMS;
+    let last = Math.max(...used.map(([k]) => sn(k)[1]));
+    if (dl != null) last = Math.max(last, dl);
+    last += 7 * DAYMS;
+    const n = Math.round((last - first) / (7 * DAYMS)) + 1;
+    const col = t => Math.round((t - first) / (7 * DAYMS)) + 1;
+    const cover = {};
+    used.forEach(([k]) => { for (let t = sn(k)[0]; t <= sn(k)[1]; t += 7 * DAYMS) (cover[t] = cover[t] || []).push(k); });
+    let html = '<div class="grid">';
+    PHASES.forEach(([k, label]) => {
+      html += `<div class="row" style="grid-template-columns:repeat(${n},1fr)">`;
+      if (sn(k)) {
+        const [a, b] = sn(k), weeks = (b - a) / (7 * DAYMS) + 1;
+        const shared = Object.keys(cover).some(t => +t >= a && +t <= b && cover[t].length > 1);
+        html += `<div class="bk ${k}${shared ? ' under' : ''}" style="grid-column:${col(a)} / ${col(b) + 1}" ` +
+          `title="${label} ${dayShort(a)} – ${dayShort(b + 6 * DAYMS)}">${weeks >= 2 ? label : ''}</div>`;
+      }
+      html += '</div>';
+    });
+    if (dl != null) html += `<div class="dl" style="left:${(((dl - first) / (7 * DAYMS) + 0.5) / n * 100).toFixed(3)}%"><em>Due</em></div>`;
+    html += '</div><div class="axis" style="grid-template-columns:repeat(' + n + ',1fr)">';
+    for (let i = 0; i < n; i++) html += `<span>${n <= 14 || i % 2 === 0 ? dayShort(first + i * 7 * DAYMS) : ''}</span>`;
+    strip.innerHTML = html + '</div>';
+    const parts = [];
+    [['dub', 'edit'], ['edit', 'mix'], ['dub', 'mix']].forEach(([x, y]) => {
+      if (!sn(x) || !sn(y)) return;
+      const w = Object.keys(cover).filter(t => cover[t].includes(x) && cover[t].includes(y)).length;
+      if (w) parts.push(`${x[0].toUpperCase() + x.slice(1)} + ${y} share ${w} wk${w > 1 ? 's' : ''}`);
+    });
+    ov.className = parts.length ? 'ov' : 'ov none';
+    ov.textContent = parts.length ? parts.join('  ·  ') : 'No phases overlap';
+  }
+
+  const bad = Object.values(d.errors).some(e => e.length) || !!dlBad;
+  let note = '';
+  if (bad) note = 'Fix the highlighted dates to continue.';
+  else if (!d.used.length) note = 'Add at least one phase.';
+  else if (d.deadline === null) note = 'Add the deadline.';
+  $('f_save').disabled = $('f_check').disabled = !!note;
+  $('f_note').textContent = note;
+}
+
+function wireDates() {
+  const ids = ['f_deadline', ...PHASES.flatMap(([k]) => ['f_' + k + '_from', 'f_' + k + '_to'])];
+  ids.forEach(id => {
+    const el = $(id);
+    el.addEventListener('input', drawDates);
+    // Say back what was understood once the box is left.
+    el.addEventListener('blur', () => {
+      const t = parseDay(el.value);
+      if (t != null && !Number.isNaN(t)) el.value = dayLabel(t);
+      drawDates();
+    });
+  });
+  document.querySelectorAll('#formHost .cal').forEach(btn => btn.addEventListener('click', () => {
+    const box = $(btn.dataset.for), pick = btn.parentNode.querySelector('.hidpick');
+    const t = parseDay(box.value);
+    if (t != null && !Number.isNaN(t)) pick.value = isoOf(t);
+    pick.onchange = () => { if (pick.value) { box.value = dayLabel(Date.parse(pick.value + 'T00:00:00Z')); drawDates(); } };
+    if (pick.showPicker) { try { pick.showPicker(); } catch (e) { pick.click(); } } else pick.click();
+  }));
+  drawDates();
+}
+
+// A title that is already taken is numbered by the server ("Harbor Lights (2)"). Said here as
+// it is typed, with the same rule (titles.js), so the result is never a surprise.
+function wireTitle(p) {
+  const T = window.PlannerTitles, box = $('f_title'), note = $('f_titlenote');
+  const others = BOOT.projects.map(x => x.title).filter(t => !p || T.key(t) !== T.key(p.title));
+  const show = () => {
+    const wanted = T.clean(box.value);
+    const final = p && T.key(wanted) === T.key(p.title) ? wanted : T.uniqueTitle(wanted, others);
+    const clash = !!wanted && final !== wanted;
+    note.hidden = !clash;
+    if (clash) note.textContent = `Already used \u2014 saved as \u201c${final}\u201d`;
+  };
+  box.addEventListener('input', show);
+  show();
+}
+
 function openForm(title) {
   const p = title ? BOOT.projects.find(x => x.title === title) : null;
   const opts = sel => ['Auto', ...BOOT.engineers]
@@ -862,54 +1128,55 @@ function openForm(title) {
 
   $('formHost').innerHTML = `<div class="form${p ? ' editing' : ''}">
     <h3>${p ? 'Edit ' + esc(p.title) : 'Add project'}</h3>
-    <div class="note">Check availability first if you are deciding whether to take the job.</div>
-    <div class="fields">
-      <div class="f"><label for="f_title">Project</label>
-        <input type="text" id="f_title" value="${p ? esc(p.title) : ''}"></div>
+    <div class="top5">
+      <div class="f titlef"><label for="f_title">Project</label>
+        <input type="text" id="f_title" value="${p ? esc(p.title) : ''}">
+        <div class="titletag" id="f_titlenote" hidden></div></div>
       <div class="f"><label for="f_client">Client</label>
         <input type="text" id="f_client" list="clientList" value="${esc(p ? p.client : 'Netflix')}">
         <datalist id="clientList">${(BOOT.clients || []).map(c => `<option>${esc(c)}</option>`).join('')}</datalist></div>
-      <div class="f"><label for="f_deadline">Deadline</label>
-        <input type="date" id="f_deadline" value="${p ? esc(p.deadline) : ''}"></div>
+      <div class="f"><label for="f_deadline">Deadline</label>${dateBox('f_deadline', 'Deadline', p ? p.deadline : '', 'e.g. 20 Dec')}</div>
       <div class="f"><label for="f_level">Mix level</label><select id="f_level">
         <option${p && p.mix_level === 'Developing' ? '' : ' selected'}>Advanced</option>
         <option${p && p.mix_level === 'Developing' ? ' selected' : ''}>Developing</option></select></div>
+      <div class="f"><span class="lab">Flags</span><div class="checks">
+        <label><input type="checkbox" id="f_music"${p && p.music ? ' checked' : ''}> Music</label>
+        <label title="Special work routes to the specials engineer"><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
+        <label title="The mix needs the Atmos room"><input type="checkbox" id="f_atmos"${p && p.atmos ? ' checked' : ''}> Atmos</label>
+      </div></div>
     </div>
 
-    <div class="fields row2">
-      <div class="f span2"><label>When each phase runs</label>
-        <table class="phasedates"><tbody>${[['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']].map(([k, label]) => {
+    <div class="phases2">
+      <div>
+        <span class="lab">When each phase runs</span>
+        ${[['dub', 'Dub'], ['edit', 'Edit'], ['mix', 'Mix']].map(([k, label]) => {
           const d = (p && p.dates && p.dates[k]) || { from: '', to: '' };
-          return `<tr><th><span class="sw" style="background:var(--${k})"></span>${label}</th>` +
-            `<td><input type="date" id="f_${k}_from" aria-label="${label} start" value="${esc(d.from)}"></td>` +
-            `<td class="to">to</td>` +
-            `<td><input type="date" id="f_${k}_to" aria-label="${label} end" value="${esc(d.to)}"></td></tr>`;
-        }).join('')}</tbody></table>
-        <div class="hint">Leave a phase blank if the project does not have it. Dates snap to
-          their Monday–Sunday week. Any phase can overlap another; a phase just cannot start before
-          the one it follows has started. Everything ends by the deadline.</div></div>
-      <div class="f span2"><label>Flags</label><div class="checks">
-        <label><input type="checkbox" id="f_music"${p && p.music ? ' checked' : ''}> Music</label>
-        <label><input type="checkbox" id="f_special"${p && p.special ? ' checked' : ''}> Special</label>
-        <label><input type="checkbox" id="f_atmos"${p && p.atmos ? ' checked' : ''}> Atmos</label>
-      </div><div class="hint">Atmos is separate from Special: Special routes the work to the
-        specials engineer, Atmos means the mix needs the room.</div></div>
+          return `<div class="ph" id="ph_${k}"><div class="name"><i class="sw" style="background:var(--${k})"></i>${label}</div>` +
+            dateBox(`f_${k}_from`, label + ' start', d.from) + '<span class="arrow">\u2192</span>' +
+            dateBox(`f_${k}_to`, label + ' end', d.to) +
+            `<span class="snap none" id="s_${k}">not used</span><div class="err" id="e_${k}" hidden></div></div>`;
+        }).join('')}
+      </div>
+      <div class="tl">
+        <div class="hd"><span class="lab">The weeks, side by side</span></div>
+        <div id="phStrip"></div><div class="ov" id="phOv"></div>
+      </div>
     </div>
 
     <div class="picks">
       <div class="pickhead">Who does it \u2014 leave on Auto and the engine decides</div>
       <div class="fields">
         <div class="f"><label for="f_rec">Recordist</label><select id="f_rec">${opts(p && p.recordist_pick)}</select></div>
-        <div class="f"><label for="f_rec2">Second recordist</label><select id="f_rec2">${opts(p && p.recordist_pick_2)}</select>
-          <div class="hint">Splits the dub between the two, first name taking the earlier weeks.</div></div>
-        <div class="f"><label for="f_ed">Editor</label><select id="f_ed">${opts(p && p.editor_pick)}</select>
-          <div class="hint">Auto prefers the recordist, and hands the edit to someone else only when that avoids an overlap.</div></div>
-        <div class="f"><label for="f_mixer">Mixer</label><select id="f_mixer">${opts(p && p.mixer_pick)}</select>
-          <div class="hint">A manual pick overrides every rule and is flagged.</div></div>
+        <div class="f" title="Splits the dub between the two, the first name taking the earlier weeks">
+          <label for="f_rec2">Second recordist \u00b7 later weeks</label><select id="f_rec2">${opts(p && p.recordist_pick_2)}</select></div>
+        <div class="f" title="Auto prefers the recordist, and hands the edit to someone else only when that avoids an overlap">
+          <label for="f_ed">Editor</label><select id="f_ed">${opts(p && p.editor_pick)}</select></div>
+        <div class="f" title="A manual pick overrides every rule and is flagged">
+          <label for="f_mixer">Mixer</label><select id="f_mixer">${opts(p && p.mixer_pick)}</select></div>
       </div>
     </div>
     <div class="formactions">
-      <button class="btn" id="f_check">Check availability</button>
+      <button class="btn" id="f_check" title="Shows who would do it and when \u2014 saves nothing">Check availability</button>
       <button class="btn primary" id="f_save">${p ? 'Save &amp; re-plot' : 'Plot &amp; save'}</button>
       ${p ? `<button class="btn" id="f_done">${p.status === 'Complete'
         ? 'Reopen' : 'Mark complete'}</button>` : ''}
@@ -918,8 +1185,11 @@ function openForm(title) {
       ${p && p.status !== 'Complete' ? `<button class="btn" id="f_cancel">${
         p.status === 'Cancelled' ? 'Reinstate' : 'Cancel project'}</button>` : ''}
       <button class="btn" id="f_close">Close</button>
+      <span class="formnote" id="f_note"></span>
     </div>
     <div id="f_out"></div></div>`;
+  wireDates();
+  wireTitle(p);
 
   $('formHost').scrollIntoView({ block: 'nearest' });
   $('f_check').addEventListener('click', () => submitForm(p, true));
@@ -968,14 +1238,16 @@ function openForm(title) {
 }
 
 function formValues(p, dryRun) {
+  // The typed text, as the ISO date the server wants; blank or unreadable goes as blank.
+  const iso = id => { const t = parseDay($(id).value); return t == null || Number.isNaN(t) ? '' : isoOf(t); };
   return {
     title: $('f_title').value.trim(),
     original_title: p ? p.title : '',
     client: $('f_client').value.trim(),
-    deadline: $('f_deadline').value,
-    dub_from: $('f_dub_from').value, dub_to: $('f_dub_to').value,
-    edit_from: $('f_edit_from').value, edit_to: $('f_edit_to').value,
-    mix_from: $('f_mix_from').value, mix_to: $('f_mix_to').value,
+    deadline: iso('f_deadline'),
+    dub_from: iso('f_dub_from'), dub_to: iso('f_dub_to'),
+    edit_from: iso('f_edit_from'), edit_to: iso('f_edit_to'),
+    mix_from: iso('f_mix_from'), mix_to: iso('f_mix_to'),
     mix_level: $('f_level').value,
     music: $('f_music').checked, special: $('f_special').checked, atmos: $('f_atmos').checked,
     recordist: $('f_rec').value, recordist2: $('f_rec2').value,
@@ -988,7 +1260,7 @@ async function submitForm(p, dryRun) {
   $('f_check').disabled = $('f_save').disabled = true;
   $('f_out').innerHTML = '<div class="muted">' + (dryRun ? 'Checking' : 'Plotting') + '\u2026</div>';
   const r = await post('/api/save-project', formValues(p, dryRun));
-  $('f_check').disabled = $('f_save').disabled = false;
+  drawDates();      // back to whatever the dates allow, not blindly enabled
 
   if (!r.ok) {
     $('f_out').innerHTML = '<div class="errs"><b>Not plotted.</b><ul>' +
@@ -1002,6 +1274,8 @@ async function submitForm(p, dryRun) {
     ? (r.boot.projects.find(x => x.title === r.title) || {}).overlap || 0 : 0;
   let h = `<div class="result ${deep > 2 ? 'alarm' : dryRun ? 'dry' : 'saved'}">` +
     `<h4>${dryRun ? 'Availability check \u2014 nothing was written' : 'Saved'}</h4>` +
+    (r.renamed ? `<div class="kv"><b>${dryRun ? 'Would be' : 'Saved'} as</b><span><b>${esc(r.renamed.to)}</b> ` +
+      `<span class="muted-inline">\u2014 \u201c${esc(r.renamed.from)}\u201d was already a project</span></span></div>` : '') +
     `<div class="kv"><b>Recordist</b><span>${esc(r.dubber || r.recordist)}</span></div>` +
     `<div class="kv"><b>Editor</b><span>${esc(r.editor || r.recordist)}</span></div>` +
     `<div class="kv"><b>Mixer</b><span>${esc(r.mixer)}</span></div>`;
@@ -1037,6 +1311,30 @@ const VIEWS = { schedule: renderSchedule, projects: renderProjects,
                 report: renderReport, history: renderHistory };
 let ANALYSIS = null, HISTORY = null, OPENED = null, REPORT = null, MONTH = null;
 
+// The schedule opens on THIS WEEK, not on the first week of the book: most of what a
+// first screen held was finished work. The position is remembered across repaints (a
+// drag redraws the grid) and only re-aimed when the grid itself changes (mode, range).
+let SCROLL = { key: null, top: 0, left: 0 };
+function placeSchedule() {
+  const wrap = document.querySelector('.gridwrap');
+  if (!wrap) return;
+  const key = SCHED.mode + '|' + (RANGE.from || '') + '|' + (RANGE.to || '');
+  wrap.addEventListener('scroll', () => { SCROLL.top = wrap.scrollTop; SCROLL.left = wrap.scrollLeft; });
+  if (SCROLL.key === key) { wrap.scrollTop = SCROLL.top; wrap.scrollLeft = SCROLL.left; return; }
+  SCROLL = { key, top: 0, left: 0 };
+  const w0 = wrap.getBoundingClientRect();
+  if (SCHED.mode === 'project') {
+    const th = wrap.querySelector('th.nowcol');
+    if (th) wrap.scrollLeft = Math.max(0, th.getBoundingClientRect().left - w0.left + wrap.scrollLeft - 240 - 62 * 2);
+  } else {
+    const row = wrap.querySelector('tr.nowrow'), head = wrap.querySelector('thead');
+    // two weeks of the past stay above it, for context
+    if (row) wrap.scrollTop = Math.max(0, row.getBoundingClientRect().top - w0.top + wrap.scrollTop -
+      (head ? head.getBoundingClientRect().height : 0) - row.getBoundingClientRect().height * 2);
+  }
+  SCROLL.top = wrap.scrollTop; SCROLL.left = wrap.scrollLeft;
+}
+
 function paint() {
   $('view').innerHTML = (VIEWS[VIEW] || renderSchedule)();
   topRight();
@@ -1051,6 +1349,7 @@ function paint() {
   if (VIEW === 'replan') { wireReplan(); return; }
   if (VIEW === 'schedule') {
     wireScheduleBar();
+    placeSchedule();
     wireColumnHover();
     // Dragging is an Engineers-mode action: you move a week between engineers, and a
     // Projects row has no engineer column to drop into.

@@ -19,20 +19,30 @@ const todayLocal = () =>
 //
 // Depth counts JOBS, not rows: one person recording and editing the same project in the
 // same week is one job (A.jobKey), so a dub beside its own edit is never an overlap.
-function depths(rows) {
+//
+// two/three count FROM `fromW` ON when it is given (an integer week index): a week that
+// has already gone cannot be fixed, so counting it kept the warning above zero forever
+// and taught people to ignore it. twoPast/threePast are the weeks before it, so the page
+// can still say they exist. `per` always covers every week, because the grid draws them.
+function depths(rows, fromW) {
   const jobs = A.jobsByEngineerWeek(rows);
   const per = {};
   Object.keys(jobs).forEach(k => { per[k] = A.depthOf(jobs[k]); });
-  let two = 0, three = 0;
-  Object.keys(per).forEach(k => { if (per[k] === 2) two++; else if (per[k] > 2) three++; });
-  return { two, three, per };
+  let two = 0, three = 0, twoPast = 0, threePast = 0;
+  Object.keys(per).forEach(k => {
+    const n = per[k]; if (n < 2) return;
+    const past = fromW != null && Number(k.slice(k.lastIndexOf('|') + 1)) < fromW;
+    if (n === 2) { if (past) twoPast++; else two++; } else if (past) threePast++; else three++;
+  });
+  return { two, three, twoPast, threePast, per };
 }
 
-function projectDepth(rows) {
+function projectDepth(rows, fromW) {
   const per = A.jobsByEngineerWeek(rows);
   const out = {};
   Object.keys(per).forEach(k => {
     const n = A.depthOf(per[k]);
+    if (fromW != null && Number(k.slice(k.lastIndexOf('|') + 1)) < fromW) return;   // already past
     if (n > 1) per[k].rows.forEach(b => { if (n > (out[b.project] || 0)) out[b.project] = n; });
   });
   return out;
@@ -92,10 +102,13 @@ function phaseDates(p, rows) {
   return out;
 }
 
-function bootstrap(book) {
+function bootstrap(book, opts) {
   const rows = live(book);
-  const d = depths(rows);
-  const deep = projectDepth(rows);
+  // `opts.today` lets a test pin the clock; the server never passes it.
+  const today = (opts && opts.today) || todayLocal();
+  const fromW = A.widx(today);
+  const d = depths(rows, fromW);
+  const deep = projectDepth(rows, fromW);
   return {
     engineers: book.engineers.map(e => e.name),
     roster: book.engineers,
@@ -125,11 +138,14 @@ function bootstrap(book) {
     // asked, because nothing else in the app can show them -- they are absent from the
     // Projects list by definition.
     orphans: orphans(book),
-    today_week: A.weekStart(A.widx(todayLocal())),
+    today_week: A.weekStart(fromW),
     counts: { projects: book.projects.filter(p => !p.status).length,
               done: book.projects.filter(p => p.status === 'Complete').length,
               live_rows: rows.length,
-              over2: d.two, over3: d.three },
+              over2: d.two, over3: d.three,
+              // Overlaps in weeks that have already gone, so the header can say so
+              // without counting them as problems.
+              over2_past: d.twoPast, over3_past: d.threePast },
   };
 }
 
@@ -265,7 +281,13 @@ function analysis(book, opts) {
   const weeks = cap.weeks.filter(w => w.week_start >= from);
   const ahead = weeks.length ? weeks : cap.weeks;
 
-  const overlaps = A.actualOverlaps_(rows);
+  // Overlaps from THIS WEEK on. The same reasoning as the series above: a week that has
+  // gone cannot be reassigned, so listing it as a problem is noise. They are counted
+  // separately (`earlier`) so the page can say they exist.
+  const thisWeek = A.weekStart(A.widx(from));
+  const allOverlaps = A.actualOverlaps_(rows);
+  const overlaps = allOverlaps.filter(o => o.start >= thisWeek);
+  const earlierOverlaps = allOverlaps.filter(o => o.start < thisWeek);
   const weeksOf = list => {
     const seen = {};
     list.forEach(o => { seen[o.engineer + '|' + o.start] = 1; });
@@ -300,6 +322,7 @@ function analysis(book, opts) {
     overlaps: {
       deep, pair,
       deep_weeks: weeksOf(deep), pair_weeks: weeksOf(pair),
+      earlier_weeks: weeksOf(earlierOverlaps),
       collisions,
       by_engineer: cap.bottleneck.forced_by_engineer,
     },

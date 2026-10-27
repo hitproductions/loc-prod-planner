@@ -9,6 +9,7 @@
 // in the book as history, which is how the Apps Script version works and why a
 // mistake there has always been recoverable.
 const { loadAppsScript } = require('../core/engine.js');
+const T = require('./public/titles.js');
 const A = loadAppsScript();
 
 const live = book => A.activeRows(book.bookings);
@@ -136,8 +137,17 @@ function undoWeekMove(book, payload) {
 
 function saveProject(book, payload) {
   const p = payload || {};
+  // The title is the project's identity, so it has to be unique. A title that is already
+  // taken is numbered ("Harbor Lights (2)") rather than accepted: it used to take over the
+  // existing project's schedule and row without a word. The project being EDITED does not
+  // count against itself, so its own title is fine (even re-cased).
+  const original = String(p.original_title || '').trim();
+  const wanted = T.clean(p.title);
+  const others = (book.projects || []).map(x => x.project_title)
+    .filter(t => !original || T.key(t) !== T.key(original));
+  const title = original && T.key(wanted) === T.key(original) ? wanted : T.uniqueTitle(wanted, others);
   const raw = {
-    project_title: p.title, client: p.client, deadline: p.deadline,
+    project_title: title, client: p.client, deadline: p.deadline,
     dub_from: p.dub_from, dub_to: p.dub_to, edit_from: p.edit_from, edit_to: p.edit_to,
     mix_from: p.mix_from, mix_to: p.mix_to,
     mix_level_required: p.mix_level,
@@ -165,7 +175,6 @@ function saveProject(book, payload) {
   if (norm.errors.length) return { ok: false, errors: norm.errors };
   const project = norm.project;
 
-  const original = String(p.original_title || '').trim();
   const titles = original && original !== project.project_title
     ? [original, project.project_title] : [project.project_title];
 
@@ -191,6 +200,8 @@ function saveProject(book, payload) {
   return {
     ok: true, errors: [], dry_run: !!p.dry_run,
     title: project.project_title,
+    // Set when the title asked for was taken, so the page can say what it was saved as.
+    renamed: title !== wanted ? { from: wanted, to: title } : null,
     revert,
     recordist: out.recordist, dubber: out.dubber || out.recordist,
     editor: out.editor || out.recordist, mixer: out.mixer,
