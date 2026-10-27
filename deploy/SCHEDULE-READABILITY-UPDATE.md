@@ -3,7 +3,7 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the commit titled
-**"Projects grid: shared weeks stack one name per job (row grows 36px per booking); titles not bold in either view"** (`7856512`), which also brings in everything after
+**"Projects grid: uniform 2px margin round every band, fixed 32px bands, grey grid lines on every cell"** (`07304dc`), which also brings in everything after
 the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars with a thin seam between lanes, roomier Engineers cells, dashed dividers between bookings, no Dub/Edit/Mix word on Engineers cells since the rail colour shows it), the Inter font, the
 new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
 should list it. All of it is tested.
@@ -52,7 +52,7 @@ No existing column moves and no data changes.
 - **Add project → the calendar button** opens a small calendar under the date box. It closes
   when a day is picked, on Escape, or on a click outside it. It no longer stays stuck open.
 - Saving a project with a **Series** works (it used to fail with the grid-limits error).
-- **Schedule → Projects**: one engineer name per week cell. Every cell is 104px wide; a row is 36px per booking in its busiest week. Cells are filled with its phase colour, name in regular weight. A week with more than one booking stacks one name per booking, and the row grows 36px per booking in its busiest week; hover lists them all. 3 at once is a red bar at the foot of the cell; past weeks are greyed; the deadline week has a red line on its right edge, with "Due" in it when the week is empty. Finished projects are folded under **Show N finished projects** at the bottom.
+- **Schedule → Projects**: one engineer name per week cell. Every cell is 104px wide with the same grey grid lines; each booking is a 32px phase-coloured band with a 2px margin on every side; a row is 34px per booking in its busiest week (+3px); name in regular weight. A week with more than one booking stacks one name per booking, and the row grows 36px per booking in its busiest week; hover lists them all. 3 at once is a red bar at the foot of the cell; past weeks are greyed; the deadline week has a red line on its right edge, with "Due" in it when the week is empty. Finished projects are folded under **Show N finished projects** at the bottom.
 - **Schedule → Engineers**: week dates are black and readable; this week has a red bar and
   the words "This week"; show names wrap to two lines instead of being cut off; a 2 or 3 at
   once tag names the jobs when you hover over it. Only 3 at once is tinted.
