@@ -732,3 +732,10 @@ table.sched:not(.byeng) tbody tr.lanes td{height:calc(var(--lanes) * var(--laneh
    flush Projects bars get a 1px white seam between lanes so stacked bars still read as separate. */
 table.sched.byeng .stack .bk.rich + .bk.rich.samejob{border-top:1px dashed var(--hair); padding-top:12px}
 .lbar{border-bottom:1px solid #fff; box-sizing:border-box}
+
+/* A bit shorter now the phase word is gone (Tara, 2026-10-28): floor 64 -> 56px, padding 12 -> 8px. */
+table.sched.byeng tbody td, table.sched.byeng tbody th{height:56px}
+table.sched.byeng td.cell{height:1px}
+table.sched.byeng .stack{min-height:56px}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){padding:8px 12px 8px 20px}
+table.sched.byeng .stack .bk.rich + .bk.rich.samejob{padding-top:8px}
