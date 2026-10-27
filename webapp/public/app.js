@@ -119,7 +119,9 @@ function cellBands(c, label, dragAttrs, rich, deep) {
     const text = label(it, i);
     // Engineers grid: the cell is tall enough to say more than the name. The phase and where
     // the week falls in it ("Dub \u00b7 wk 2/3") are what you otherwise have to hover to learn.
-    const meta = rich && it.of ? `${it.ph} \u00b7 ` + (it.of > 1 ? `wk ${it.at}/${it.of}` : '1 wk') : '';
+    const meta = rich && it.of ? (it.of > 1 ? `wk ${it.at}/${it.of}` : '1 wk') : '';
+    // The phase word is not printed (Tara, 2026-10-28): the rail colour says it. Hover still does.
+    const metaFull = meta ? `${it.ph} \u00b7 ${meta}` : '';
     // One row per booking, the phase as a rail down its left edge (Tara, 2026-10-27). An
     // overlapped week says so in words on its first row, so the depth never rests on the
     // frame colour alone.
@@ -146,7 +148,7 @@ function cellBands(c, label, dragAttrs, rich, deep) {
     return `<span class="bk${rich ? ' rich ' + String(it.ph || '').toLowerCase() : ''}${sameJob ? ' samejob' : ''}" style="${paint}"` +
       (dragAttrs ? dragAttrs(it) : '') +
       (it.hand ? ' data-hand="1" title="Moved by hand — click to give it back"'
-        : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + meta)}"` : '')) +
+        : (rich && meta ? ` title="${esc(text + ' \u00b7 ' + metaFull)}"` : '')) +
       `>${body}</span>`;
   }).join('') + '</div>';
 }
