@@ -564,6 +564,17 @@ const MONTH_NAME = m => {
           'September','October','November','December'][Number(mm) - 1] + ' ' + y;
 };
 
+// Work done in every month (Tara, 2026-10-28), under the selected month's report.
+function monthlyTable(r) {
+  if (!r.monthly || !r.monthly.length) return '';
+  return '<h2 style="margin-top:26px">Month by month</h2><table class="projects"><thead><tr><th>Month</th>' +
+    '<th class="n">Projects</th><th class="n">Weeks booked</th><th class="n">Late</th><th>Weeks by engineer</th></tr></thead><tbody>' +
+    r.monthly.map(m => `<tr><td><b>${esc(MONTH_NAME(m.month))}</b></td><td class="n">${m.projects}</td>` +
+      `<td class="n">${m.weeks}</td><td class="n">${m.late || '\u2014'}</td><td class="muted-inline">` +
+      esc(m.engineers.map(e => `${e.name} ${e.weeks}`).join(' \u00b7 ')) + '</td></tr>').join('') +
+    '</tbody></table>';
+}
+
 function renderReport() {
   if (!REPORT) return '<div class="loading">Counting\u2026</div>';
   const r = REPORT;
@@ -591,7 +602,7 @@ function renderReport() {
           `<td class="lockcell"><button class="btn small" data-done="${esc(p.title)}">Mark complete</button></td></tr>`).join('') +
         '</tbody></table>';
     }
-    return h + '</div>';
+    return h + monthlyTable(r) + '</div>';
   }
 
   const t = r.totals;
@@ -634,7 +645,7 @@ function renderReport() {
       esc(Object.keys(e.phases).sort().map(k => `${k} ${e.phases[k]}`).join(' \u00b7 ')) +
       '</td></tr>').join('') + '</tbody></table></div></div>';
 
-  h += '</div>';
+  h += monthlyTable(r) + '</div>';
   return h;
 }
 

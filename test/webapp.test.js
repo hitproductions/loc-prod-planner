@@ -575,6 +575,16 @@ section('The monthly report');
      aug.months.join(', '));
   ok('newest month first', aug.months[0] === '2026-09');
 
+  // Work done per month (Tara, 2026-10-28): one row per month with something in it, oldest first.
+  ok('the report lists work done in every month, oldest first',
+     aug.monthly.length === 2 && aug.monthly[0].month === '2026-08' && aug.monthly[1].month === '2026-09',
+     JSON.stringify(aug.monthly.map(m => m.month)));
+  ok('each month counts its projects, and the same whichever month is selected',
+     aug.monthly[0].projects === 2 && aug.monthly[1].projects === 1 &&
+     JSON.stringify(aug.monthly) === JSON.stringify(sep.monthly));
+  ok('and each month splits its weeks by engineer, adding up to its total',
+     aug.monthly.every(m => m.engineers.reduce((n, e) => n + e.weeks, 0) === m.weeks));
+
   // An unfinished project must never be inferred into a report from its deadline.
   const unmarked = book.projects.filter(p => p.status !== 'Complete').length;
   ok('the book still has unfinished work', unmarked > 0);

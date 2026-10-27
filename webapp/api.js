@@ -457,8 +457,26 @@ function report(book, opts) {
     c.projects++; c.weeks += p.weeks;
   });
 
+  // Work done in every month, for the month-by-month table: what was signed off in it, the
+  // booked weeks behind that, how many were late, and each engineer's weeks.
+  const monthly = months.slice().reverse().map(m => {
+    const ps = book.projects.filter(p => p.status === 'Complete' && String(p.completed || '').slice(0, 7) === m);
+    const eng = {};
+    let weeks = 0, late = 0;
+    ps.forEach(p => {
+      if (p.deadline && Date.parse(p.completed + 'T00:00:00Z') > Date.parse(p.deadline + 'T00:00:00Z')) late++;
+      rows.filter(b => b.project === p.project_title).forEach(b => {
+        weeks += weeksOf(b);
+        eng[b.engineer] = (eng[b.engineer] || 0) + weeksOf(b);
+      });
+    });
+    return { month: m, projects: ps.length, weeks, late,
+      engineers: Object.keys(eng).map(n => ({ name: n, weeks: eng[n] }))
+        .sort((a, b) => b.weeks - a.weeks || a.name.localeCompare(b.name)) };
+  });
+
   return {
-    month, months,
+    month, months, monthly,
     projects,
     totals: {
       projects: projects.length,

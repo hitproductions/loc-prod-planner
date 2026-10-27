@@ -773,3 +773,22 @@ table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){o
 table.sched.byeng .stack .bk.rich:not(:only-child){flex:1 0 auto; min-height:74px; height:auto}
 table.sched.byeng .stack .bk.rich:only-child{min-height:60px}
 table.sched.byeng .bk.rich .bk-n, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-n{overflow:visible}
+
+/* One edge for every bar (Tara, 2026-10-28). Only Edit had an outline, so Dub looked as if it
+   had white margins and Mix looked different again. Now Dub, Edit and Mix all carry the same
+   1px edge, each in a darker shade of its own colour, in both grids. */
+:root{--dub-edge:#D9A400; --mix-edge:#C97272}
+.lbar.dub{box-shadow:inset 0 0 0 1px var(--dub-edge)}
+.lbar.edit{box-shadow:inset 0 0 0 1px var(--edit-edge)}
+.lbar.mix{box-shadow:inset 0 0 0 1px var(--mix-edge)}
+.lbar.gone.dub{box-shadow:inset 0 0 0 1px var(--dub-edge)}
+table.sched.byeng .bk.rich.dub::before{box-shadow:inset -1px 0 0 var(--dub-edge)}
+table.sched.byeng .bk.rich.mix::before{box-shadow:inset -1px 0 0 var(--mix-edge)}
+
+/* Hovering a week: the whole column gets a 2px black frame and a tint, and its header turns
+   white with a black bar under it, so it cannot be missed. */
+table.sched td.colhi, table.sched tbody tr.lanes td.colhi{box-shadow:inset 2px 0 0 #000, inset -2px 0 0 #000;
+  background-color:rgba(0,0,0,.07)}
+table.sched thead th.colhi{background:#fff; color:#000; font-weight:700; box-shadow:inset 0 -4px 0 #000}
+table.sched.byeng tbody tr:hover td, table.sched.byeng tbody tr:hover th{background-color:rgba(0,0,0,.08)}
+table.sched.byeng tbody tr:hover th{box-shadow:inset 4px 0 0 #000}
