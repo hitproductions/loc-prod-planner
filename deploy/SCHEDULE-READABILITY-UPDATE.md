@@ -3,7 +3,7 @@
 Requested by Tara. Repository: https://github.com/hitproductions/loc-prod-planner
 
 Update the server copy to the latest **`main`**. It must include the commit titled
-**"Engineers cells: thin, no week count, one-line names; week hover only darkens the label/header"** (`ee80662`), which also brings in everything after
+**"Engineers cells: filled with the phase colour again, taller, names wrap to three lines"** (`10a95d5`), which also brings in everything after
 the last handoff (`deploy/PHASE-DATES-UPDATE.md`): the schedule redesign (project names layered above scrolling bars and Due, 104px week columns, flush 36px Projects bars with a thin seam between lanes, roomier Engineers cells, dashed dividers between bookings, no Dub/Edit/Mix word on Engineers cells since the rail colour shows it), the Inter font, the
 new calendar popup and a fix that let projects with a series be saved. `git log --oneline -10`
 should list it. All of it is tested.
@@ -61,7 +61,7 @@ No existing column moves and no data changes.
   the words "This week"; show names wrap to two lines instead of being cut off; a 2 or 3 at
   once tag names the jobs when you hover over it. Only 3 at once is tinted.
 - **Report**: below the selected month are two separate tables. **Work done by month** counts booked weeks in the month they actually happened (finished or not, future weeks excluded) with weeks per engineer. **Completed by month** counts projects in the month they were marked complete, with their booked weeks and late ones.
-- Hovering darkens only the header (the engineer name in Projects, the week label in Engineers); cells are not tinted. Engineers cells are thin, one line per booking, with no week count (hover for the full name, phase and week). Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
+- Hovering darkens only the header (the engineer name in Projects, the week label in Engineers); cells are not tinted. Engineers cells are filled edge to edge with the phase colour, at least 64px tall, names wrap to three lines, no week count (hover for the full name, phase and week). Dub, Edit and Mix bars all carry the same thin edge in a darker shade of their own colour.
 - **History** shows 25 entries a page, with Newer / Older buttons under the list. The filter searches the whole log, not just the page.
 - The colour key above the schedule shows Dub, Edit, Mix, By hand and (in Projects) Due.
 - Dragging a week to another engineer still works, in the Engineers view.
