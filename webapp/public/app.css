@@ -727,3 +727,8 @@ table.sched:not(.byeng){--laneh:36px; --lpad:0px}
 table.sched:not(.byeng) tbody tr.lanes td{height:calc(var(--lanes) * var(--laneh))}
 .lbar, .lflag{height:var(--laneh)}
 .lbar{left:calc(var(--c0) * var(--colw)); width:calc(var(--n) * var(--colw)); padding:0 10px}
+
+/* Dividers back (Tara, 2026-10-28). Same-job bookings in one week keep the dashed line, and
+   flush Projects bars get a 1px white seam between lanes so stacked bars still read as separate. */
+table.sched.byeng .stack .bk.rich + .bk.rich.samejob{border-top:1px dashed var(--hair); padding-top:12px}
+.lbar{border-bottom:1px solid #fff; box-sizing:border-box}
