@@ -711,3 +711,19 @@ table.hm2 tr.sumrow td.f-short{color:#fff; background:var(--red); font-weight:70
 .carry .v{font-size:12px; color:var(--fg2)} .carry .v b{color:var(--fg1)}
 .calmbox{border:1px solid var(--line); background:var(--bg2); padding:12px 16px; font-size:13px; color:var(--fg2)}
 .quiet{font-size:12px; color:var(--fg3); margin:10px 0 0}
+
+/* Roomier cells, flush bars (Tara, 2026-10-28).
+   Engineers view: more air round each booking and a taller floor.
+   Projects view: bars fill their week cells edge to edge (no inset, no gap between lanes),
+   lanes are 36px, and the text keeps 10px from the bar edge. */
+table.sched.byeng tbody td, table.sched.byeng tbody th{height:64px}
+table.sched.byeng td.cell{height:1px}
+table.sched.byeng .stack{min-height:64px}
+table.sched.byeng .bk.rich, table.sched.byeng .stack .bk.rich:not(:only-child){padding:12px 12px 12px 20px}
+table.sched.byeng .bk.rich::before{width:8px}
+table.sched.byeng .bk.rich .bk-m, table.sched.byeng .stack .bk.rich:not(:only-child) .bk-m{margin-top:4px}
+table.sched.byeng .stack .bk.rich + .bk.rich.samejob{padding-top:4px}
+table.sched:not(.byeng){--laneh:36px; --lpad:0px}
+table.sched:not(.byeng) tbody tr.lanes td{height:calc(var(--lanes) * var(--laneh))}
+.lbar, .lflag{height:var(--laneh)}
+.lbar{left:calc(var(--c0) * var(--colw)); width:calc(var(--n) * var(--colw)); padding:0 10px}
