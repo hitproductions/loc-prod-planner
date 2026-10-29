@@ -111,7 +111,8 @@ function bootstrap(book, opts) {
   const deep = projectDepth(rows, fromW);
   return {
     engineers: book.engineers.map(e => e.name),
-    roster: book.engineers,
+    // Without the sign-in addresses: the page has no use for them.
+    roster: book.engineers.map(({ email, ...e }) => e),
     // Offered as suggestions on the form, not a closed list — a new client should not
     // need a code change to be typed in.
     clients: [...new Set(book.projects.map(p => String(p.client || '').trim())

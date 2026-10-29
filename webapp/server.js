@@ -54,6 +54,18 @@ if (SOURCE === 'sheets') {
 // still holds for the editing instance. Its cached book can trail the editor's by up
 // to the TTL, which is why the page says how old the read is.
 const READONLY = process.env.PLANNER_READONLY === '1';
+
+// One link for everyone (Tara, 2026-10-29). Signed in with Google, an engineer -- an address
+// in the Email column of the Engineers tab -- gets the read-only engineer view, enforced here
+// exactly as PLANNER_READONLY is. Everyone else at Hit gets the full planner. Read from the
+// book, so a change on the sheet applies within the cache's few minutes, no redeploy.
+const isEngineer = (book, email) => !!email &&
+  (book.engineers || []).some(e => String(e.email || '').trim().toLowerCase() === email);
+async function readOnlyFor(req) {
+  if (READONLY) return true;
+  if (!req.googleUser) return false;
+  return isEngineer(await store.get(), req.googleUser.email);
+}
 const PORT = Number(process.env.PORT || 8127);
 const HOST = process.env.HOST || undefined;
 const store = createStore(SOURCE, { ttlMs: Number(process.env.PLANNER_TTL_MS || 30000) });
@@ -315,6 +327,7 @@ const server = http.createServer(async (req, res) => {
       // Without this the handler's Promise was JSON.stringify'd, which is "{}".
       let payload = await route(book, url.searchParams);
       if (url.pathname === '/api/bootstrap') {
+      payload.readonly = READONLY || !!(req.googleUser && isEngineer(book, req.googleUser.email));
       payload = withPlannerSession(
       payload,
       req
@@ -346,6 +359,10 @@ const server = http.createServer(async (req, res) => {
         return send(res, 403, JSON.stringify({ ok: false, readonly: true,
           error: 'This is a read-only copy of the planner. Changes are made in the ' +
                  'editing app.' }));
+      }
+      if (await readOnlyFor(req)) {
+        return send(res, 403, JSON.stringify({ ok: false, readonly: true,
+          error: 'Engineers have the read-only view. Ask a planner to make this change.' }));
       }
       const body = await readBody(req);
       const book = await store.get();
@@ -384,7 +401,7 @@ result.schedule = api.schedule(
     // Re-plan and History all still on screen, which is not what "view-only" means to
     // the person opening the link.
     let p = url.pathname === '/' ? '/index.html' : url.pathname;
-    if (READONLY && (p === '/index.html' || p === '/view.html')) p = '/view.html';
+    if ((p === '/index.html' || p === '/view.html') && await readOnlyFor(req)) p = '/view.html';
     if (p.includes('..')) return send(res, 400, '{"error":"bad path"}');
     const file = path.join(__dirname, 'public', p);
     if (!fs.existsSync(file)) return send(res, 404, '{"error":"not found"}');
