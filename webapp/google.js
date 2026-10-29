@@ -119,26 +119,121 @@ const origin = (req, c) => c.base ||
 const cookieOut = (req, name, value, age) =>
   `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}` + (https_(req) ? '; Secure' : '');
 
-const PAGE = (msg, c, retry) => `<!doctype html><meta charset="utf-8">
+// Google's own "G", as their sign-in branding asks for.
+const G_MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+// The only page the public ever sees. The artwork is by Hit's own artist (Tara, 2026-10-29),
+// framed as a camera viewfinder: they are being recorded. The picture is still; only the
+// video noise moves (grain, a rolling band, a faint flicker), and it stops for reduced motion.
+const PAGE = (msg, c, retry) => `<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loc Prod Planner</title>
 <style>
+ @font-face{font-family:"Inter";font-weight:400;font-display:swap;src:url("/fonts/Inter-Regular.woff2") format("woff2")}
+ @font-face{font-family:"Inter";font-weight:700;font-display:swap;src:url("/fonts/Inter-Bold.woff2") format("woff2")}
+ :root{--red:#EF4123;--ink:#000;--grey:#646667;--paper:#fff;--vf:rgba(255,255,255,.92)}
  *{box-sizing:border-box;border-radius:0}
- body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-   background:#fff;color:#000;font:14px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
- main{width:300px}
- h1{font-size:19px;letter-spacing:-.01em;margin:0 0 4px}
- p{color:#646667;margin:0 0 22px}
- a.btn{display:block;width:100%;padding:10px;border:1px solid #000;background:#000;color:#fff;
-   font:inherit;font-weight:700;text-align:center;text-decoration:none}
- .err{color:#EF4123;font-weight:700;margin-bottom:14px}
+ html,body{height:100%}
+ body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+   display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,1fr);min-height:100vh}
+ .art{position:relative;overflow:hidden;background:var(--ink)}
+ .art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:64% 40%;display:block}
+ /* The viewfinder. Darkened edges and scan lines, video noise over them, then the camera's
+    own readouts. */
+ .art::before{content:"";position:absolute;inset:0;z-index:1;
+   background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(0,0,0,.45) 100%),
+              repeating-linear-gradient(to bottom,rgba(0,0,0,.08) 0 1px,transparent 1px 3px);
+   animation:flicker 4s steps(1) infinite}
+ .grain{position:absolute;inset:-50%;z-index:1;opacity:.16;pointer-events:none;
+   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+   animation:grain .6s steps(6) infinite}
+ .roll{position:absolute;left:0;right:0;top:0;height:22%;z-index:1;pointer-events:none;
+   background:linear-gradient(to bottom,transparent,rgba(255,255,255,.07) 45%,rgba(255,255,255,.1) 50%,transparent);
+   animation:roll 6.5s linear infinite}
+ @keyframes grain{0%{transform:translate(0,0)}17%{transform:translate(-6%,4%)}33%{transform:translate(5%,-7%)}
+   50%{transform:translate(-3%,8%)}67%{transform:translate(7%,2%)}83%{transform:translate(-8%,-4%)}100%{transform:translate(2%,6%)}}
+ @keyframes roll{from{transform:translateY(-100%)}to{transform:translateY(560%)}}
+ @keyframes flicker{0%,100%{opacity:1}31%{opacity:.82}33%{opacity:1}72%{opacity:.9}73%{opacity:1}}
+ .vf{position:absolute;inset:20px;z-index:2;color:var(--vf);
+   font:700 12px/1 "SF Mono",Menlo,Consolas,monospace;letter-spacing:.06em;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+ .cn{position:absolute;width:34px;height:34px;border:0 solid var(--vf)}
+ .cn.tl{top:0;left:0;border-width:2px 0 0 2px} .cn.tr{top:0;right:0;border-width:2px 2px 0 0}
+ .cn.bl{bottom:0;left:0;border-width:0 0 2px 2px} .cn.br{bottom:0;right:0;border-width:0 2px 2px 0}
+ .top,.bot{position:absolute;left:48px;right:48px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+ .top{top:10px} .bot{bottom:10px;align-items:flex-end}
+ .rec{display:flex;align-items:center;gap:8px}
+ .rec i{width:11px;height:11px;border-radius:50% !important;background:var(--red);box-shadow:0 0 0 2px rgba(239,65,35,.3)}
+ .rec b{color:#fff}
+ .grp{display:flex;align-items:center;gap:14px}
+ .bat{position:relative;width:26px;height:12px;border:2px solid var(--vf);padding:1px}
+ .bat::after{content:"";position:absolute;right:-5px;top:2px;width:3px;height:4px;background:var(--vf)}
+ .bat span{display:block;height:100%;width:72%;background:var(--vf)}
+ .focus{position:absolute;left:50%;top:53%;width:92px;height:92px;transform:translate(-50%,-50%)}
+ .focus::before,.focus::after{content:"";position:absolute;background:var(--vf)}
+ .focus::before{left:50%;top:50%;width:14px;height:2px;transform:translate(-50%,-50%)}
+ .focus::after{left:50%;top:50%;width:2px;height:14px;transform:translate(-50%,-50%)}
+ .focus i{position:absolute;width:14px;height:14px;border:0 solid var(--vf)}
+ .focus i:nth-child(1){top:0;left:0;border-width:2px 0 0 2px} .focus i:nth-child(2){top:0;right:0;border-width:2px 2px 0 0}
+ .focus i:nth-child(3){bottom:0;left:0;border-width:0 0 2px 2px} .focus i:nth-child(4){bottom:0;right:0;border-width:0 2px 2px 0}
+ /* Audio levels: it is a sound studio. */
+ .lv{display:grid;grid-template-columns:auto 1fr;gap:5px 8px;align-items:center;width:min(220px,40%)}
+ .lv .m{height:7px;background:linear-gradient(to right,#3CB371 0 62%,#FFC000 62% 82%,var(--red) 82% 100%);
+   -webkit-mask:linear-gradient(to right,#000 var(--l),rgba(0,0,0,.18) var(--l));mask:linear-gradient(to right,#000 var(--l),rgba(0,0,0,.18) var(--l))}
+ main{display:flex;flex-direction:column;justify-content:center;padding:56px clamp(28px,6vw,80px)}
+ .logo{height:34px;width:auto;align-self:flex-start;margin-bottom:56px}
+ h1{font-size:34px;line-height:1.1;letter-spacing:-.02em;margin:0 0 10px}
+ p{color:var(--grey);margin:0 0 32px;max-width:30ch}
+ .err{color:var(--red);font-weight:700;margin:0 0 18px;max-width:34ch}
+ a.btn{display:flex;align-items:center;gap:14px;width:100%;max-width:340px;padding:6px 18px 6px 6px;
+   background:var(--ink);color:#fff;font-weight:700;text-decoration:none;border:1px solid var(--ink)}
+ a.btn .g{display:grid;place-items:center;width:40px;height:40px;background:#fff}
+ a.btn svg{width:20px;height:20px}
+ a.btn:hover{background:var(--red);border-color:var(--red)}
+ a.btn:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+ small{display:block;color:var(--grey);margin-top:16px;font-size:13px}
+ footer{margin-top:auto;padding-top:56px;color:var(--grey);font-size:12px}
+ @media (max-width:820px){
+   body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+   .art{height:46vh;min-height:260px}
+   .vf{inset:12px;font-size:10px}
+   .cn{width:22px;height:22px}
+   .top,.bot{left:30px;right:30px}
+   .focus{width:64px;height:64px}
+   .hide-s{display:none}
+   main{padding:32px 16px 24px}
+   .logo{height:28px;margin-bottom:28px}
+   h1{font-size:28px}
+   footer{padding-top:32px}
+ }
+ @media (prefers-reduced-motion:reduce){ .art::before,.grain,.roll{animation:none} .roll{display:none} }
 </style>
+<body>
+<div class="art" aria-hidden="true">
+  <img src="/login/trio.webp" alt="" width="900" height="649">
+  <div class="grain"></div><div class="roll"></div>
+  <div class="vf">
+    <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
+    <div class="top">
+      <span class="rec"><i></i><b>REC</b>&nbsp;00:42:17:08</span>
+      <span class="grp"><span class="hide-s">4K&nbsp;24P</span><span class="bat"><span></span></span></span>
+    </div>
+    <div class="focus"><i></i><i></i><i></i><i></i></div>
+    <div class="bot">
+      <div class="lv"><span>L</span><span class="m" style="--l:71%"></span><span>R</span><span class="m" style="--l:64%"></span></div>
+      <span class="hide-s">F2.8&nbsp;&nbsp;1/50&nbsp;&nbsp;ISO&nbsp;800</span>
+    </div>
+  </div>
+</div>
 <main>
+  <img class="logo" src="/login/hit-logo.svg" alt="Hit Productions" width="232" height="31">
   <h1>Loc Prod Planner</h1>
-  <p>Internal — Hit Productions</p>
-  ${msg ? `<div class="err">${msg}</div>` : ''}
-  <a class="btn" href="/auth/google">${retry ? 'Try another account' : 'Sign in with Google'}</a>
-</main>`;
+  <p>Sign in to see who’s booked, and what’s next.</p>
+  ${msg ? `<div class="err" role="alert">${msg}</div>` : ''}
+  <a class="btn" href="/auth/google"><span class="g">${G_MARK}</span>${retry ? 'Try another account' : 'Sign in with Google'}</a>
+  <small>Use your @${c.domain} account.</small>
+  <footer>Hit Productions · Internal</footer>
+</main>
+</body></html>`;
 
 function html(res, status, body) {
   res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -194,6 +289,10 @@ async function googleGate(req, res, url) {
       'set-cookie': cookieOut(req, SESSION, '', 0) });
     return res.end(), false;
   }
+
+  // The sign-in page's own artwork and font are public; nothing else is.
+  if (req.method === 'GET' && (/^\/login\/[\w.-]+\.(svg|webp)$/.test(url.pathname) ||
+                               /^\/fonts\/Inter-(Regular|Bold)\.woff2$/.test(url.pathname))) return true;
 
   const user = readSession(req.headers.cookie, c);
   if (user) { req.googleUser = user; return true; }

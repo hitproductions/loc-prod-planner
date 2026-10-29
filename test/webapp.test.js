@@ -1912,6 +1912,15 @@ section('Sign in with Google (replaces the shared password)');
   const page = await (await hit('/')).text();
   ok('the page offers Sign in with Google, not a password box', /Sign in with Google/.test(page) && !/type="password"/.test(page));
   ok('the API says "Not signed in" as JSON', (await (await hit('/api/bootstrap')).json()).error === 'Not signed in.');
+  const pub = async p => (await hit(p)).status;
+  ok('the sign-in page shows the Hit logo and the artwork', /\/login\/hit-logo\.svg/.test(page) && /\/login\/trio\.webp/.test(page));
+  ok('which load without signing in', await pub('/login/hit-logo.svg') === 200 && await pub('/login/trio.webp') === 200 &&
+     await pub('/fonts/Inter-Bold.woff2') === 200);
+  ok('but nothing else does: the app, its data and a path dressed up as artwork stay shut',
+     await pub('/app.js') === 401 && await pub('/index.html') === 401 && await pub('/login/../app.js') === 401 &&
+     await pub('/login/trio.webp.js') === 401);
+  ok('framed as a camera viewfinder, with moving video noise', /class="vf"/.test(page) && /class="grain"/.test(page) && /@keyframes grain/.test(page));
+  ok('and the noise stops for anyone who asks for less motion', /prefers-reduced-motion:reduce\)\{[^}]*animation:none/.test(page));
 
   const ok1 = await signIn(token({ email: 'Tara@hitproductions.net', name: 'Tara T', hd: 'hitproductions.net' }));
   const q = ok1.loc.searchParams;
