@@ -222,18 +222,19 @@ if (TEST_ID === LIVE_ID) {
     await s.ensureEventsTab();
     const head = (await raw('History!A1:Z1'))[0].map(h => String(h).toLowerCase());
     ok('the log has every header the reader maps by',
-       ['at', 'action', 'summary', 'superseded', 'appended', 'revert']
+       ['at', 'action', 'summary', 'superseded', 'appended', 'revert', 'by']
          .every(h => head.includes(h)), head.join(','));
 
     const before = (await s.readEvents()).length;
     await s.appendEvent({ at: '2026-01-01 00:00:00', action: 'test',
       summary: 'a write-path test entry', superseded: '1,2', appended: '3',
-      revert: JSON.stringify({ title: 'X', fields: ['status'], values: { status: '' } }) });
+      revert: JSON.stringify({ title: 'X', fields: ['status'], values: { status: '' } }), by: 'test@example.com' });
     const events = await s.readEvents();
     ok('the entry comes back', events.length === before + 1);
     const last = events[events.length - 1];
     ok('with its row numbers intact', last.superseded === '1,2' && last.appended === '3',
        `${last.superseded} / ${last.appended}`);
+    ok('and who made it', last.by === 'test@example.com', last.by);
     ok('and its revert blob parses', (() => {
       try { return JSON.parse(last.revert).title === 'X'; } catch (e) { return false; }
     })(), last.revert);
@@ -269,7 +270,7 @@ if (TEST_ID === LIVE_ID) {
     await s.ensureEventsTab();
     const head = (await raw('History!A1:Z1'))[0] || [];
     ok('ensureEventsTab recreates it with every header',
-       ['at', 'action', 'summary', 'superseded', 'appended', 'revert']
+       ['at', 'action', 'summary', 'superseded', 'appended', 'revert', 'by']
          .every(h => head.map(x => String(x).toLowerCase()).includes(h)),
        head.join(','));
     ok('and it reads back empty', (await s.readEvents()).length === 0);

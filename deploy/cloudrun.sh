@@ -24,14 +24,31 @@ SERVICE=${PLANNER_GCP_SERVICE:-planner}
 RO=""
 if [ "${1:-}" = "--view" ] || [ "${2:-}" = "--view" ]; then
   SERVICE="${SERVICE}-view"
-  RO=",PLANNER_READONLY=1"
+  RO="|PLANNER_READONLY=1"
 fi
 SHEET=${PLANNER_SHEET_ID:-1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ}
 SA=planner-app@loc-prod-planner.iam.gserviceaccount.com
 
 AUTH=--no-allow-unauthenticated
-PW_ARG=""
-if [ "${1:-}" = "--public" ]; then
+PW_ENV=""
+if [ "${1:-}" = "--public" ] && [ -n "${PLANNER_GOOGLE_CLIENT_ID:-}" ]; then
+  # Sign in with Google replaces the shared password. Everyone uses their own account, and
+  # History records who changed what. The OAuth client is made in the Google Cloud console
+  # (see deploy/GOOGLE-LOGIN.md); its secret is prompted for, never typed as an argument.
+  AUTH=--allow-unauthenticated
+  if [ -z "${PLANNER_GOOGLE_CLIENT_SECRET:-}" ] && [ -t 0 ]; then
+    printf 'Google OAuth client secret (typing is hidden): ' >&2
+    stty -echo 2>/dev/null; read -r PLANNER_GOOGLE_CLIENT_SECRET; stty echo 2>/dev/null
+    printf '\n' >&2
+  fi
+  if [ -z "${PLANNER_GOOGLE_CLIENT_SECRET:-}" ]; then
+    echo "REFUSING: Google sign-in needs the client secret." >&2
+    exit 1
+  fi
+  PW_ENV="|PLANNER_GOOGLE_CLIENT_ID=$PLANNER_GOOGLE_CLIENT_ID|PLANNER_GOOGLE_CLIENT_SECRET=$PLANNER_GOOGLE_CLIENT_SECRET|PLANNER_GOOGLE_DOMAIN=${PLANNER_GOOGLE_DOMAIN:-hitproductions.net}"
+  [ -n "${PLANNER_GOOGLE_ALLOW:-}" ] && PW_ENV="$PW_ENV|PLANNER_GOOGLE_ALLOW=$PLANNER_GOOGLE_ALLOW"
+  [ -n "${PLANNER_PUBLIC_URL:-}" ] && PW_ENV="$PW_ENV|PLANNER_PUBLIC_URL=$PLANNER_PUBLIC_URL"
+elif [ "${1:-}" = "--public" ]; then
   AUTH=--allow-unauthenticated
   # A public Cloud Run URL with no gate puts the whole schedule, client project names
   # included, on the open internet at a guessable *.run.app address. Refuse rather than
@@ -57,22 +74,25 @@ if [ "${1:-}" = "--public" ]; then
     echo "  This is the only thing between a public URL and the whole schedule." >&2
     exit 1
   fi
-  PW_ARG="--set-env-vars PLANNER_PASSWORD=$PLANNER_PASSWORD"
+  PW_ENV="|PLANNER_PASSWORD=$PLANNER_PASSWORD"
 fi
 
 cd "$(dirname "$0")/.."
 
 echo "project $PROJECT / region $REGION / service $SERVICE"
-[ "$AUTH" = "--allow-unauthenticated" ] && \
-  echo "deploying PUBLIC, behind the shared-password gate." 
+if [ "$AUTH" = "--allow-unauthenticated" ]; then
+  case "$PW_ENV" in
+    *PLANNER_GOOGLE_CLIENT_ID*) echo "deploying PUBLIC, behind Google sign-in." ;;
+    *) echo "deploying PUBLIC, behind the shared-password gate." ;;
+  esac
+fi
 
 gcloud run deploy "$SERVICE" \
   --project "$PROJECT" \
   --region "$REGION" \
   --source . \
   --service-account "$SA" \
-  --set-env-vars "PLANNER_SOURCE=sheets,PLANNER_SHEET_ID=$SHEET$RO" \
-  $PW_ARG \
+  --set-env-vars "^|^PLANNER_SOURCE=sheets|PLANNER_SHEET_ID=$SHEET$RO$PW_ENV" \
   --memory 512Mi \
   --cpu 1 \
   --timeout 120 \

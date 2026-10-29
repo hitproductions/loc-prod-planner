@@ -74,6 +74,7 @@ function createStore(sourceName, opts) {
               .toISOString().slice(0, 19).replace('T', ' '),
             action: meta.action || 'change',
             summary: meta.summary || '',
+            by: meta.by || '',
             superseded: (change.supersede || []).join(','),
             appended: (result.appended_rows || []).join(','),
             // What a rollback needs to put a project row back. Row numbers alone

@@ -13,6 +13,7 @@ const { solveReplan, DEFAULT_RESTARTS } = require('./solver.js');
 const history = require('./history.js');
 const { gate } = require('./gate.js');
 const { ssoGate } = require('./sso.js');
+const google = require('./google.js');
 const { makeCsrfToken, writeGate } = require('./csrf.js');
 
 register('fixture', require('./sources/fixture.js'));
@@ -247,6 +248,11 @@ function readBody(req, raw) {
   });
 }
 function withPlannerSession(payload, req) {
+  // Signed in with Google: say who, so the page can show it and offer Sign out.
+  if (payload && req.googleUser) {
+    return { ...payload, session: { login: req.googleUser.email, name: req.googleUser.name,
+                                    logout_path: '/auth/logout', csrf_token: '' } };
+  }
   if (!payload || !req.plannerUser) {
     return payload;
   }
@@ -284,7 +290,9 @@ const server = http.createServer(async (req, res) => {
     // would leak the book's size and prove the service exists. Off unless
     // PLANNER_PASSWORD is set, so local runs and a LAN box are unaffected.
     if (!(await ssoGate(req, res, url))) return;
-    if (!(await gate(req, res, url, readBody))) return;
+    if (!(await google.googleGate(req, res, url))) return;
+    // Google sign-in replaces the shared password wherever it is configured.
+    if (!google.enabled() && !(await gate(req, res, url, readBody))) return;
 
     if (url.pathname === '/api/health') {
       // A real readiness probe, not a liveness ping. It loads the book if that has not
@@ -331,6 +339,7 @@ const server = http.createServer(async (req, res) => {
         'private, no-store'
       );
 
+      if (!google.writeCheck(req, res)) return;
       if (!writeGate(req, res)) return;
       if (READONLY) {
         return send(res, 403, JSON.stringify({ ok: false, readonly: true,
@@ -345,6 +354,8 @@ const server = http.createServer(async (req, res) => {
       if (result.ok && result.change) {
         await store.write(result.change, { action: url.pathname.replace('/api/', ''),
                                            summary: describe(url.pathname, result),
+                                           by: req.googleUser ? req.googleUser.email
+                                             : (req.plannerUser && req.plannerUser.login) || '',
                                            revert: result.revert });
 const next = await store.get(true);
 

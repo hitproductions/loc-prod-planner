@@ -1872,6 +1872,128 @@ section('Projects grid: one bar per booking, for lanes (Tara, 2026-10-28)');
      clipped.bars.every(b => b.c0 >= 0 && b.c1 < clipped.weeks.length && b.c0 <= b.c1));
 }
 
+section('Sign in with Google (replaces the shared password)');
+{
+  const G = require('../webapp/google.js');
+  const env = { PLANNER_GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com', PLANNER_GOOGLE_CLIENT_SECRET: 'shh-secret',
+    PLANNER_GOOGLE_DOMAIN: 'hitproductions.net', PLANNER_GOOGLE_ALLOW: 'outside@gmail.com' };
+  const saved = {}; Object.keys(env).concat('PLANNER_PASSWORD').forEach(k => { saved[k] = process.env[k]; });
+  Object.assign(process.env, env); delete process.env.PLANNER_PASSWORD;
+  delete require.cache[require.resolve('../webapp/server.js')];
+  const app = require('../webapp/server.js');
+  await new Promise(r => app.server.listen(0, r));
+  const port = app.server.address().port, base = `http://127.0.0.1:${port}`;
+  const hit = (path, opts) => fetch(base + path, { redirect: 'manual', ...(opts || {}) });
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const token = (o) => 'x.' + b64({ iss: 'https://accounts.google.com', aud: env.PLANNER_GOOGLE_CLIENT_ID,
+    exp: now + 600, email_verified: true, ...o }) + '.y';
+  // What Google would answer, per test.
+  let answer = null;
+  const realExchange = G.hooks.exchange;
+  G.hooks.exchange = async () => { if (answer instanceof Error) throw answer; return answer; };
+
+  // Walks the real redirect: start, take the state cookie, come back with a code.
+  const signIn = async (idt, tamper) => {
+    const start = await hit('/auth/google');
+    const loc = new URL(start.headers.get('location'));
+    const st = (start.headers.get('set-cookie') || '').split(';')[0];
+    answer = idt;
+    const back = await hit(`/auth/google/callback?code=abc&state=${tamper || loc.searchParams.get('state')}`, { headers: { cookie: st } });
+    const set = back.headers.getSetCookie ? back.headers.getSetCookie() : [back.headers.get('set-cookie') || ''];
+    const sess = set.map(x => x.split(';')[0]).find(x => /^planner_google=.+/.test(x));
+    return { start, loc, back, sess, set };
+  };
+
+  for (const p of ['/', '/view.html', '/api/bootstrap', '/api/schedule', '/api/health']) {
+    const r = await hit(p);
+    ok(`${p} is refused until you sign in`, r.status === 401, p + ' ' + r.status);
+  }
+  const page = await (await hit('/')).text();
+  ok('the page offers Sign in with Google, not a password box', /Sign in with Google/.test(page) && !/type="password"/.test(page));
+  ok('the API says "Not signed in" as JSON', (await (await hit('/api/bootstrap')).json()).error === 'Not signed in.');
+
+  const ok1 = await signIn(token({ email: 'Tara@hitproductions.net', name: 'Tara T', hd: 'hitproductions.net' }));
+  const q = ok1.loc.searchParams;
+  ok('it sends you to Google with our client id, and the company domain as a hint',
+     ok1.loc.host === 'accounts.google.com' && q.get('client_id') === env.PLANNER_GOOGLE_CLIENT_ID && q.get('hd') === 'hitproductions.net' &&
+     q.get('redirect_uri') === base + '/auth/google/callback' && /openid/.test(q.get('scope')), ok1.loc.href.slice(0, 120));
+  ok('a company account comes in', ok1.back.status === 302 && !!ok1.sess, String(ok1.back.status));
+  ok('with an HttpOnly, SameSite cookie, and no Secure flag over plain http',
+     /HttpOnly/.test(ok1.set.join(';')) && /SameSite=Lax/.test(ok1.set.join(';')) && !/Secure/.test(ok1.set.join(';')));
+  const boot = await (await hit('/api/bootstrap', { headers: { cookie: ok1.sess } })).json();
+  ok('the cookie opens the app, which knows who it is',
+     boot.session && boot.session.login === 'tara@hitproductions.net' && boot.session.logout_path === '/auth/logout',
+     JSON.stringify(boot.session));
+
+  const refused = await signIn(token({ email: 'someone@gmail.com', hd: '' }));
+  ok('a personal Gmail not on the list is refused, with no session', refused.back.status === 403 && !refused.sess, String(refused.back.status));
+  ok('and told which account to use', /@hitproductions\.net/.test(await refused.back.text()));
+  const lookalike = await signIn(token({ email: 'x@hitproductions.net' }));
+  ok('an address that merely ends in the domain, with no Workspace behind it, is refused', lookalike.back.status === 403 && !lookalike.sess);
+  const wrongHd = await signIn(token({ email: 'x@hitproductions.net', hd: 'other.com' }));
+  ok('and so is one whose Workspace is a different domain', wrongHd.back.status === 403 && !wrongHd.sess);
+  const listed = await signIn(token({ email: 'outside@gmail.com' }));
+  ok('an address on the allow list comes in', listed.back.status === 302 && !!listed.sess);
+  const unverified = await signIn(token({ email: 'outside@gmail.com', email_verified: false }));
+  ok('but only if Google says the email is verified', unverified.back.status === 403 && !unverified.sess);
+  const wrongAud = await signIn(token({ email: 'a@hitproductions.net', hd: 'hitproductions.net', aud: 'someone-elses-app' }));
+  ok('a token meant for another app is refused', wrongAud.back.status === 401 && !wrongAud.sess);
+  const expired = await signIn(token({ email: 'a@hitproductions.net', hd: 'hitproductions.net', exp: now - 5 }));
+  ok('an expired token is refused', expired.back.status === 401 && !expired.sess);
+  const wrongIss = await signIn(token({ email: 'a@hitproductions.net', hd: 'hitproductions.net', iss: 'https://evil.example' }));
+  ok('a token from another issuer is refused', wrongIss.back.status === 401 && !wrongIss.sess);
+  const bad = await signIn(token({ email: 'a@hitproductions.net', hd: 'hitproductions.net' }), 'not-the-state');
+  ok('a callback whose state does not match the cookie is refused', bad.back.status === 400 && !bad.sess, String(bad.back.status));
+  const down = await signIn(new Error('Google did not answer'));
+  ok('Google being unreachable fails closed', down.back.status === 401 && !down.sess);
+
+  // The cookie must not be forgeable or outlive the rules.
+  const c = G.cfg();
+  const good = G.makeSession(c, { email: 'tara@hitproductions.net', name: 'T' });
+  ok('a forged cookie is refused', (await hit('/api/bootstrap', { headers: { cookie: 'planner_google=' + good.split('.')[0] + '.AAAA' } })).status === 401);
+  ok('a cookie that was signed with another secret is refused',
+     (await hit('/api/bootstrap', { headers: { cookie: 'planner_google=' + G.makeSession({ ...c, secret: 'other' }, { email: 'tara@hitproductions.net' }) } })).status === 401);
+  ok('an expired cookie is refused',
+     (await hit('/api/bootstrap', { headers: { cookie: 'planner_google=' + G.makeSession(c, { email: 'tara@hitproductions.net' }, now - 8 * 24 * 3600) } })).status === 401);
+  ok('a cookie for an address no longer allowed stops working at once',
+     (await hit('/api/bootstrap', { headers: { cookie: 'planner_google=' + G.makeSession(c, { email: 'gone@gmail.com' }) } })).status === 401);
+  process.env.PLANNER_GOOGLE_ALLOW = '';
+  ok('so removing someone from the list signs them out without waiting a week',
+     (await hit('/api/bootstrap', { headers: { cookie: listed.sess } })).status === 401);
+  process.env.PLANNER_GOOGLE_ALLOW = env.PLANNER_GOOGLE_ALLOW;
+
+  const out = await hit('/auth/logout', { headers: { cookie: ok1.sess } });
+  ok('signing out clears the cookie', out.status === 302 && /Max-Age=0/.test(out.headers.get('set-cookie') || ''));
+
+  // Writes: this site, as JSON, signed in, and the log says who.
+  const lockBody = JSON.stringify({ title: (boot.projects && boot.projects[0] && boot.projects[0].title) || 'x', locked: true });
+  const w = (headers) => hit('/api/set-lock', { method: 'POST', headers: { cookie: ok1.sess, ...headers }, body: lockBody });
+  ok('a change without a session is refused', (await hit('/api/set-lock', { method: 'POST', headers: { 'content-type': 'application/json' }, body: lockBody })).status === 401);
+  ok('a change from another site is refused', (await w({ 'content-type': 'application/json', origin: 'https://evil.example' })).status === 403);
+  ok('a change that is not JSON is refused', (await w({ 'content-type': 'text/plain' })).status === 415);
+  const done = await w({ 'content-type': 'application/json', origin: base });
+  ok('a signed-in change from this site goes through', done.status === 200 && (await done.json()).ok === true, String(done.status));
+  const hist = await (await hit('/api/history', { headers: { cookie: ok1.sess } })).json();
+  ok('and History names who made it', hist.events && hist.events[0] && hist.events[0].by === 'tara@hitproductions.net',
+     JSON.stringify(hist.events && hist.events[0]));
+
+  // Misconfigured: an id with no secret must close the app, not open it.
+  delete process.env.PLANNER_GOOGLE_CLIENT_SECRET;
+  ok('a client id without its secret refuses everything', (await hit('/')).status === 503 && (await hit('/api/bootstrap')).status === 503);
+  process.env.PLANNER_GOOGLE_CLIENT_SECRET = env.PLANNER_GOOGLE_CLIENT_SECRET;
+
+  // With Google on, the shared password is not a way in.
+  process.env.PLANNER_PASSWORD = 'test-password-123';
+  const viaPw = await hit('/login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'password=test-password-123' });
+  ok('the old shared password no longer opens the app', viaPw.status !== 302 && (await hit('/api/bootstrap')).status === 401, String(viaPw.status));
+
+  G.hooks.exchange = realExchange;
+  await new Promise(r => app.server.close(r));
+  Object.keys(saved).forEach(k => { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
+  delete require.cache[require.resolve('../webapp/server.js')];
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud

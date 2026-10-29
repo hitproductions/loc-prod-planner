@@ -31,6 +31,8 @@ async function loadSchedule() {
 async function get(path) {
   const t0 = performance.now();
   const r = await fetch(requestUrl(path));
+  // The Google sign-in lapsed: reloading shows the sign-in page.
+  if (r.status === 401) { window.location.reload(); return new Promise(() => {}); }
   const body = await r.json();
   LAST_MS = performance.now() - t0;
   return body;
@@ -59,6 +61,8 @@ if (
   BOOT.session &&
   BOOT.session.logout_path
 ) {
+  const who = BOOT.session.login || '';
+  if (who) bits.push(`<span class="pill" title="${esc(who)}">${esc(who.split('@')[0])}</span>`);
   bits.push(
     '<button class="btn small" id="logout" title="Sign out of Production Planner">' +
     'Logout</button>'
@@ -682,7 +686,7 @@ const KIND = {
   'replan-apply': 'Re-plan applied', 'rollback': 'Rolled back', 'clear-ghosts': 'Cleared ghosts',
 };
 const kindLabel = a => KIND[a] || a;
-const histText = e => (String(e.summary || e.action) + ' ' + e.at).toLowerCase();
+const histText = e => (String(e.summary || e.action) + ' ' + e.at + ' ' + String(e.by || '').split('@')[0]).toLowerCase();
 const histShown = e => (!HF.kind || e.action === HF.kind) && (!HF.q.trim() || matchesAll(histText(e), HF.q));
 
 function renderHistory() {
@@ -702,12 +706,13 @@ function renderHistory() {
     '<select id="hK" aria-label="Kind of change"><option value="">All changes</option>' +
     kinds.map(k => `<option value="${esc(k)}"${HF.kind === k ? ' selected' : ''}>${esc(kindLabel(k))}</option>`).join('') +
     '</select><button class="btn small" id="hClear"' + (HF.q || HF.kind ? '' : ' hidden') + '>Clear</button></div>' +
-    '<table class="projects"><thead><tr><th>When</th><th>What</th><th></th>' +
+    '<table class="projects"><thead><tr><th>When</th><th>What</th><th>By</th><th></th>' +
     '</tr></thead><tbody>' +
     evs.map(e => `<tr data-ev="${e.index}" data-k="${esc(e.action)}" data-q="${esc(histText(e))}"` +
         `${histShown(e) ? '' : ' hidden'}${OPENED && OPENED.event &&
         OPENED.event.index === e.index ? ' class="on"' : ''}>` +
       `<td class="mono">${esc(e.at)}</td><td>${esc(e.summary || e.action)}</td>` +
+      `<td class="muted">${esc(String(e.by || '').split('@')[0])}</td>` +
       `<td>${e.index === HISTORY.latest
         ? '<span class="chip">most recent</span>' : ''}</td></tr>`).join('') +
     '</tbody></table><div class="hint" id="hNone" hidden>Nothing in the log matches that.</div>' +
@@ -1954,6 +1959,7 @@ async function post(path, body) {
  },
     body: JSON.stringify({ ...body, mode: MODE, from: RANGE.from, to: RANGE.to }) });
 
+  if (r.status === 401) { window.location.reload(); return new Promise(() => {}); }
   const out = await r.json();
   LAST_MS = performance.now() - t0;
   return out;
