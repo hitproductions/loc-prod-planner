@@ -1987,6 +1987,29 @@ section('Sign in with Google (replaces the shared password)');
   ok('and History names who made it', hist.events && hist.events[0] && hist.events[0].by === 'tara@hitproductions.net',
      JSON.stringify(hist.events && hist.events[0]));
 
+  // One link (Tara, 2026-10-29): an engineer, matched by the Engineers tab's Email column,
+  // gets the read-only engineer view; everyone else at Hit gets the full planner.
+  const engJson = require('../validation/engineers.json');
+  const eng0 = engJson[0];
+  eng0.email = 'Jek.Eng@HitProductions.net';                 // typed by hand, any capitals
+  const engIn = await signIn(token({ email: 'jek.eng@hitproductions.net', hd: 'hitproductions.net' }));
+  const asEng = { headers: { cookie: engIn.sess } }, asTara = { headers: { cookie: ok1.sess } };
+  const eb = await (await hit('/api/bootstrap?fresh=1', asEng)).json();
+  ok('an engineer signs in on the same link and is read-only', eb.readonly === true, String(eb.readonly));
+  ok('their page is the engineer view, at / and at /index.html',
+     /window\.READONLY = true/.test(await (await hit('/', asEng)).text()) &&
+     /window\.READONLY = true/.test(await (await hit('/index.html', asEng)).text()));
+  const engWrite = await hit('/api/set-lock', { method: 'POST', headers: { cookie: engIn.sess, 'content-type': 'application/json', origin: base }, body: lockBody });
+  ok('and a change sent by hand is refused by the server, not just hidden', engWrite.status === 403 && (await engWrite.json()).readonly === true,
+     String(engWrite.status));
+  const tb = await (await hit('/api/bootstrap', asTara)).json();
+  ok('someone who is not an engineer gets the full planner', tb.readonly === false &&
+     !/window\.READONLY = true/.test(await (await hit('/', asTara)).text()));
+  ok('the engineers’ sign-in addresses are not sent to the page', (eb.roster || []).every(e => !('email' in e)) && (eb.roster || []).length > 0);
+  delete eng0.email;
+  const gone = await (await hit('/api/bootstrap?fresh=1', asEng)).json();
+  ok('the list is read from the sheet: take an address off and that person can edit', gone.readonly === false);
+
   // Misconfigured: an id with no secret must close the app, not open it.
   delete process.env.PLANNER_GOOGLE_CLIENT_SECRET;
   ok('a client id without its secret refuses everything', (await hit('/')).status === 503 && (await hit('/api/bootstrap')).status === 503);

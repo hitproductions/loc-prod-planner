@@ -40,9 +40,23 @@ Optional environment variables, set the same way:
 - History gets a **By** column. On first use the app adds a `by` column to the History tab by itself.
 - If the client ID is set but the secret is missing, the app refuses everything rather than opening up.
 
+## One link: engineers see the read-only view
+
+Everyone uses the same address. Who gets what is decided by the **Engineers** tab:
+
+1. Add a column headed `email` to the Engineers tab (row 1, any position).
+2. Type each engineer's Hit Google address in it, one per engineer. Capitals do not matter.
+
+A signed-in person whose address is in that column gets the read-only engineer view, and the server refuses any change they send. Everyone else at Hit gets the full planner. Edits to the column apply within a few minutes, no redeploy.
+
+**An engineer with no address in the column can edit.** Fill it in for everyone, Daryl included, before sharing the link.
+
+The separate read-only service keeps working, so nothing breaks while people switch. It can be retired later.
+
 ## Check after deploying
 
 1. Open the Cloud Run URL signed out: only the Google button shows.
 2. Sign in with a company account: the schedule opens, your name shows top right, **Logout** works.
 3. Try a personal Gmail: refused.
 4. Make a change, open **History**: your name is in **By**.
+5. Put a test address in the Engineers `email` column and sign in with it: the read-only engineer view opens, on the same link.

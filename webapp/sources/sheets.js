@@ -162,6 +162,9 @@ function createSheetsSource(opts) {
         // renamed 2026-08-30; a sheet set up before that still says specials_only
         does_specials: e.either(r, 'does_specials', 'specials_only'),
         atmos: e(r, 'atmos'),          // undefined on a sheet without the column = No
+        // Their Google sign-in. An engineer who signs in gets the read-only view; anyone else
+        // at Hit gets the full planner (Tara, 2026-10-29). Optional column, typed by hand.
+        email: String(e(r, 'email') || '').trim().toLowerCase(),
       }));
     if (!engineers.length) throw new Error('The Engineers tab is empty.');
 
