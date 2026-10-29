@@ -123,7 +123,8 @@ const cookieOut = (req, name, value, age) =>
 const G_MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
 // The only page the public ever sees. The artwork is by Hit's own artist (Tara, 2026-10-29),
-// framed as a camera viewfinder: they are being recorded. Still, on purpose -- no motion.
+// framed as a camera viewfinder: they are being recorded. The picture is still; only the
+// video noise moves (grain, a rolling band, a faint flicker), and it stops for reduced motion.
 const PAGE = (msg, c, retry) => `<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loc Prod Planner</title>
@@ -137,10 +138,22 @@ const PAGE = (msg, c, retry) => `<!doctype html><html lang="en"><meta charset="u
    display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,1fr);min-height:100vh}
  .art{position:relative;overflow:hidden;background:var(--ink)}
  .art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:64% 40%;display:block}
- /* The viewfinder. Darkened edges and faint scan lines, then the camera's own readouts. */
+ /* The viewfinder. Darkened edges and scan lines, video noise over them, then the camera's
+    own readouts. */
  .art::before{content:"";position:absolute;inset:0;z-index:1;
    background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(0,0,0,.45) 100%),
-              repeating-linear-gradient(to bottom,rgba(0,0,0,.07) 0 1px,transparent 1px 3px)}
+              repeating-linear-gradient(to bottom,rgba(0,0,0,.08) 0 1px,transparent 1px 3px);
+   animation:flicker 4s steps(1) infinite}
+ .grain{position:absolute;inset:-50%;z-index:1;opacity:.16;pointer-events:none;
+   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+   animation:grain .6s steps(6) infinite}
+ .roll{position:absolute;left:0;right:0;top:0;height:22%;z-index:1;pointer-events:none;
+   background:linear-gradient(to bottom,transparent,rgba(255,255,255,.07) 45%,rgba(255,255,255,.1) 50%,transparent);
+   animation:roll 6.5s linear infinite}
+ @keyframes grain{0%{transform:translate(0,0)}17%{transform:translate(-6%,4%)}33%{transform:translate(5%,-7%)}
+   50%{transform:translate(-3%,8%)}67%{transform:translate(7%,2%)}83%{transform:translate(-8%,-4%)}100%{transform:translate(2%,6%)}}
+ @keyframes roll{from{transform:translateY(-100%)}to{transform:translateY(560%)}}
+ @keyframes flicker{0%,100%{opacity:1}31%{opacity:.82}33%{opacity:1}72%{opacity:.9}73%{opacity:1}}
  .vf{position:absolute;inset:20px;z-index:2;color:var(--vf);
    font:700 12px/1 "SF Mono",Menlo,Consolas,monospace;letter-spacing:.06em;text-shadow:0 1px 2px rgba(0,0,0,.6)}
  .cn{position:absolute;width:34px;height:34px;border:0 solid var(--vf)}
@@ -192,10 +205,12 @@ const PAGE = (msg, c, retry) => `<!doctype html><html lang="en"><meta charset="u
    h1{font-size:28px}
    footer{padding-top:32px}
  }
+ @media (prefers-reduced-motion:reduce){ .art::before,.grain,.roll{animation:none} .roll{display:none} }
 </style>
 <body>
 <div class="art" aria-hidden="true">
   <img src="/login/trio.webp" alt="" width="900" height="649">
+  <div class="grain"></div><div class="roll"></div>
   <div class="vf">
     <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
     <div class="top">

@@ -1919,7 +1919,8 @@ section('Sign in with Google (replaces the shared password)');
   ok('but nothing else does: the app, its data and a path dressed up as artwork stay shut',
      await pub('/app.js') === 401 && await pub('/index.html') === 401 && await pub('/login/../app.js') === 401 &&
      await pub('/login/trio.webp.js') === 401);
-  ok('framed as a camera viewfinder, and still: nothing animates', /class="vf"/.test(page) && !/@keyframes|animation:/.test(page));
+  ok('framed as a camera viewfinder, with moving video noise', /class="vf"/.test(page) && /class="grain"/.test(page) && /@keyframes grain/.test(page));
+  ok('and the noise stops for anyone who asks for less motion', /prefers-reduced-motion:reduce\)\{[^}]*animation:none/.test(page));
 
   const ok1 = await signIn(token({ email: 'Tara@hitproductions.net', name: 'Tara T', hd: 'hitproductions.net' }));
   const q = ok1.loc.searchParams;
