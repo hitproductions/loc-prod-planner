@@ -71,15 +71,24 @@ function weekSeries(bookingRows, engineerRows, opts) {
   const recSet = new Set(recedit), advSet = new Set(advMix);
 
   let minW = Infinity, maxW = -Infinity;
-  // week -> { recProjects:Set, mixProjects:Set, busy:Set(engineer) }
+  // week -> { recProjects:Set, mixProjects:Set, busy:Set(engineer), working:Set(engineer) }
+  // `busy` is FULL: at PROJECT_LIMIT projects that week (Rudolf, 2026-10-29), so "free" below
+  // means "has room for another", and supply is people times the limit. `working` is anyone
+  // with any work at all, for the roster-wide occupancy figure.
+  const limit = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;
   const byWeek = new Map();
+  const titles = new Map();          // week -> Map(engineer -> Set(title))
   for (const b of rows) {
     for (const w of weeksOf(b)) {
       if (w < minW) minW = w;
       if (w > maxW) maxW = w;
-      if (!byWeek.has(w)) byWeek.set(w, { recProjects: new Set(), mixProjects: new Set(), busy: new Set() });
-      const cell = byWeek.get(w);
-      cell.busy.add(b.engineer);
+      if (!byWeek.has(w)) byWeek.set(w, { recProjects: new Set(), mixProjects: new Set(), busy: new Set(), working: new Set() });
+      if (!titles.has(w)) titles.set(w, new Map());
+      const cell = byWeek.get(w), t = titles.get(w);
+      cell.working.add(b.engineer);
+      if (!t.has(b.engineer)) t.set(b.engineer, new Set());
+      t.get(b.engineer).add(b.project);
+      if (t.get(b.engineer).size >= limit) cell.busy.add(b.engineer);
       if (RECEDIT_PHASES.includes(b.phase)) cell.recProjects.add(b.project);
       else if (b.phase === 'Mix') cell.mixProjects.add(b.project);
     }
@@ -90,7 +99,7 @@ function weekSeries(bookingRows, engineerRows, opts) {
 
   const weeks = [];
   for (let w = from; w <= to; w++) {
-    const cell = byWeek.get(w) || { recProjects: new Set(), mixProjects: new Set(), busy: new Set() };
+    const cell = byWeek.get(w) || { recProjects: new Set(), mixProjects: new Set(), busy: new Set(), working: new Set() };
 
     // engineers from each role pool who are already committed this week
     const recBooked = recedit.filter(n => cell.busy.has(n));
@@ -108,7 +117,7 @@ function weekSeries(bookingRows, engineerRows, opts) {
       recedit_booked: recBooked.length,
       recedit_free: recedit.length - recBooked.length,
       recedit_free_names: recedit.filter(n => !cell.busy.has(n)),
-      recedit_over: Math.max(0, cell.recProjects.size - recedit.length),
+      recedit_over: Math.max(0, cell.recProjects.size - recedit.length * limit),
 
       // --- Advanced-mix currency (never combined with record/edit) ---
       mix_demand_projects: cell.mixProjects.size,
@@ -117,11 +126,11 @@ function weekSeries(bookingRows, engineerRows, opts) {
       adv_mix_booked: advBooked.length,
       adv_mix_free: advMix.length - advBooked.length,
       adv_mix_free_names: advMix.filter(n => !cell.busy.has(n)),
-      adv_mix_over: Math.max(0, cell.mixProjects.size - advMix.length),
+      adv_mix_over: Math.max(0, cell.mixProjects.size - advMix.length * limit),
 
       // --- roster-wide occupancy (item 2) ---
       roster_size: engineerRows.filter(e => e && e.name).length,
-      roster_booked: cell.busy.size,
+      roster_booked: cell.working.size,
     });
   }
   return {

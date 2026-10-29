@@ -26,15 +26,30 @@ function runAssign(proj, bookingRows, engineerRows) {
       // Atmos is a ROOM, not a skill level. It is separate from mix_level because the
       // two are independent: an Advanced mixer without the room still cannot do it.
       atmos: yes(r.atmos),
-      busy: new Set(), load: 0, last: null };
+      busy: new Set(), load: 0, last: null, at: {} };
   }
+  // Projects at once (Rudolf, 2026-10-29). An engineer may carry up to PROJECT_LIMIT projects
+  // in a week, counted by TITLE: a show's dub, edit and mix are one project. `at` holds the
+  // titles in each week. `busy` is the weeks with no room left for THIS project, so every
+  // "free" below means "has room", and every overlap count means "over the limit".
+  const LIMIT = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;
+  const me = String(proj.project_title || '');
   for (const b of bookingRows) {
     const e = eng[b.engineer]; if (!e || !b.start_date || !b.end_date) continue;
     for (let w = widx(b.start_date); w <= widx(b.end_date); w++) {
-      e.busy.add(w); if (e.last === null || w > e.last) e.last = w;
+      (e.at[w] = e.at[w] || new Set()).add(String(b.project || ''));
+      if (e.last === null || w > e.last) e.last = w;
     }
   }
-  for (const n in eng) eng[n].load = eng[n].busy.size;
+  // Other projects than this one that week, and summed over a set of weeks: the "spread
+  // evenly" measure. Whoever has least else on is preferred, so a third project at once is
+  // allowed but never the first choice while someone has less.
+  const others = (n, w) => { const t = eng[n].at[w]; return t ? t.size - (t.has(me) ? 1 : 0) : 0; };
+  const stack = (n, wks) => { let k = 0; for (const w of wks) k += others(n, w); return k; };
+  for (const n in eng) {
+    eng[n].load = Object.keys(eng[n].at).length;
+    for (const w in eng[n].at) if (others(n, +w) >= LIMIT) eng[n].busy.add(+w);
+  }
 
   // Phase windows. Per-phase dates win when the project has them (Tara, 2026-10-15):
   // the weeks are the ones entered, dub and edit may run side by side, and nothing
@@ -60,15 +75,21 @@ function runAssign(proj, bookingRows, engineerRows) {
 
   const gap = (n, ref) => eng[n].last === null ? 1e9 : ref - eng[n].last;
   const free = (n, wks) => inter(eng[n].busy, wks).length === 0;
+  // This project's own weeks never fill anyone up for it: its phases are one project.
   const commit = (n, wks, weeks) => {
-    for (const w of wks) { eng[n].busy.add(w); if (eng[n].last === null || w > eng[n].last) eng[n].last = w; }
+    for (const w of wks) { (eng[n].at[w] = eng[n].at[w] || new Set()).add(me);
+      if (eng[n].last === null || w > eng[n].last) eng[n].last = w; }
     eng[n].load += weeks;
   };
   // byRank puts music_specialist order ahead of load, so the first choice is taken
   // while free rather than only when they happen to be the cheapest that week. Opt-in:
   // every non-music call behaves exactly as before.
-  const pick = (pool, ref, byRank) => {
+  const pick = (pool, ref, byRank, wks) => {
     if (!pool.length) return null;
+    if (wks && wks.size) {
+      const least = Math.min(...pool.map(n => stack(n, wks)));
+      pool = pool.filter(n => stack(n, wks) === least);
+    }
     if (byRank) {
       const best = Math.min(...pool.map(n => eng[n].musicRank));
       pool = pool.filter(n => eng[n].musicRank === best);
@@ -85,6 +106,7 @@ function runAssign(proj, bookingRows, engineerRows) {
 
   const forcePick = (pool, wks) => pool.slice().sort((a, b) =>
     (inter(eng[a].busy, wks).length - inter(eng[b].busy, wks).length) ||
+    (stack(a, wks) - stack(b, wks)) ||
     (eng[a].load - eng[b].load) ||
     (gap(b, Math.min(...wks)) - gap(a, Math.min(...wks))) || a.localeCompare(b))[0];
 
@@ -130,7 +152,7 @@ function runAssign(proj, bookingRows, engineerRows) {
     if (editWks.size) {
       const able = pool.filter(n => free(n, editWks));
       if (able.length) {
-        editWho = pick(able, Math.min(...editWks), byRank);
+        editWho = pick(able, Math.min(...editWks), byRank, editWks);
       } else if (preferWholeEdit) {
         return null;                                 // edit cannot stay whole
       } else {
@@ -139,7 +161,7 @@ function runAssign(proj, bookingRows, engineerRows) {
           const canDo = pool.filter(n => !eng[n].busy.has(w));
           if (!canDo.length) return null;
           const who = canDo.slice().sort((a, b) =>
-            (eng[a].load - eng[b].load) || a.localeCompare(b))[0];
+            (others(a, w) - others(b, w)) || (eng[a].load - eng[b].load) || a.localeCompare(b))[0];
           if (!editBy[who]) editBy[who] = new Set();
           editBy[who].add(w);
         }
@@ -186,15 +208,18 @@ function runAssign(proj, bookingRows, engineerRows) {
           // Music rank still comes first: a second-choice specialist who started the
           // dub hands it back as soon as the first choice is free (Daryl 1, Josiah 2).
           const bestRank = Math.min(...able.map(rankOf));
-          who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank) ? prev
+          const least = Math.min(...able.map(n => others(n, w)));
+          who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank && others(prev, w) <= least) ? prev
             : able.slice().sort((a, b) =>
                 (rankOf(a) - rankOf(b)) ||
+                (others(a, w) - others(b, w)) ||
                 (runFrom(b, i) - runFrom(a, i)) ||
                 ((b === editWho) - (a === editWho)) ||
                 (projected(a) - projected(b)) || a.localeCompare(b))[0];
         } else {
           who = able.slice().sort((a, b) =>
-            (rankOf(a) - rankOf(b)) || (projected(a) - projected(b)) || a.localeCompare(b))[0];
+            (rankOf(a) - rankOf(b)) || (others(a, w) - others(b, w)) ||
+            (projected(a) - projected(b)) || a.localeCompare(b))[0];
         }
         if (!dubBy[who]) dubBy[who] = new Set();
         dubBy[who].add(w);
@@ -318,7 +343,7 @@ function runAssign(proj, bookingRows, engineerRows) {
   const vetPick = (name, weeks, role, noun, capable) => {
     if (!eng[name]) { warnings.push(`Unknown engineer "${name}" — ${role} left unassigned.`); return false; }
     const overlap = inter(eng[name].busy, weeks).length;
-    if (overlap) warnings.push(`${name} was manually assigned to ${role} but is already booked ${overlap} of those weeks.`);
+    if (overlap) warnings.push(`${name} was manually assigned to ${role} but already has ${LIMIT} project${LIMIT === 1 ? '' : 's'} on in ${overlap} of those weeks.`);
     if (isSpecial && !eng[name].specials) warnings.push(`Special projects normally route to the specials engineer; ${name} was chosen manually instead.`);
     if (!capable(eng[name])) warnings.push(`${name} is not normally ${noun} but was assigned manually.`);
     // Worth saying out loud: the reserve is the thing the whole objective spends
@@ -382,12 +407,12 @@ function runAssign(proj, bookingRows, engineerRows) {
       const freeEd = pool.filter(n => inter(eng[n].busy, editw)
         .filter(w => !(ownDub[n] && ownDub[n].has(w))).length === 0);
       const dubEd = freeEd.filter(n => ownDub[n]);
-      if (dubEd.length) edName = pick(dubEd, Math.min(...editw), isMusic);
-      else if (freeEd.length) edName = pick(freeEd, Math.min(...editw), isMusic);
+      if (dubEd.length) edName = pick(dubEd, Math.min(...editw), isMusic, editw);
+      else if (freeEd.length) edName = pick(freeEd, Math.min(...editw), isMusic, editw);
       else if (pool.length) {
         edName = forcePick(pool, editw);
-        notes.push(`FORCED OVERLAP on the edit — ${edName} was already committed ` +
-          `${inter(eng[edName].busy, editw).length} of those weeks elsewhere.`);
+        notes.push(`FORCED OVERLAP on the edit — ${edName} already had ${LIMIT} at once ` +
+          `in ${inter(eng[edName].busy, editw).length} of those weeks.`);
       }
     }
     if (edName && edName !== 'UNRESOLVED' && editw.size) {
@@ -419,11 +444,11 @@ function runAssign(proj, bookingRows, engineerRows) {
     } else if (dubw.size) {
       // engine chooses the dub around the hand-picked editor
       const freeDub = pool.filter(n => free(n, dubw));
-      if (freeDub.length) dubName = pick(freeDub, Math.min(...dubw));
+      if (freeDub.length) dubName = pick(freeDub, Math.min(...dubw), false, dubw);
       else if (pool.length) {
         dubName = forcePick(pool, dubw);
-        notes.push(`FORCED OVERLAP on the dub — ${dubName} was already committed ` +
-          `${inter(eng[dubName].busy, dubw).length} of those weeks elsewhere.`);
+        notes.push(`FORCED OVERLAP on the dub — ${dubName} already had ${LIMIT} at once ` +
+          `in ${inter(eng[dubName].busy, dubw).length} of those weeks.`);
       }
     }
 
@@ -442,11 +467,13 @@ function runAssign(proj, bookingRows, engineerRows) {
     rec = '—';
   } else {
     const samePool = pool.filter(n => free(n, recedit));
-    const samePick = samePool.length ? pick(samePool, Math.min(...recedit), isMusic) : null;
+    const reserveRE = (isSpecial || isMusic) ? [] : Object.keys(eng).filter(n =>
+      eng[n].overflow && eng[n].record && eng[n].edit && free(n, recedit));
+    const samePick = samePool.length ? pick(samePool, Math.min(...recedit), isMusic, recedit) : null;
     const dubPool = pool.filter(n => !dubw.size || free(n, dubw));
     const editPool = pool.filter(n => !editw.size || free(n, editw));
-    const dubPick = dubw.size ? (dubPool.length ? pick(dubPool, Math.min(...dubw), isMusic) : null) : (pool[0] || null);
-    const editPick = editw.size ? (editPool.length ? pick(editPool, Math.min(...editw), isMusic) : null) : (pool[0] || null);
+    const dubPick = dubw.size ? (dubPool.length ? pick(dubPool, Math.min(...dubw), isMusic, dubw) : null) : (pool[0] || null);
+    const editPick = editw.size ? (editPool.length ? pick(editPool, Math.min(...editw), isMusic, editw) : null) : (pool[0] || null);
     const splitOk = (!dubw.size || dubPick) && (!editw.size || editPick);
     // ---- the ladder, in order ------------------------------------------------
     // 1. divide the dub between engineers          (the cheap split — tried FIRST)
@@ -488,11 +515,18 @@ function runAssign(proj, bookingRows, engineerRows) {
         recNote = 'Split by necessity —' + phaseSpan(dubw, editw, ' nobody was free for') + '.';
         assignments.push(['Dub', dubPick, dubw], ['Edit', editPick, editw]);
       }
+    } else if (reserveRE.length) {
+      // The reserve for recording and editing (Mat, Rudolf 2026-10-29): only when every
+      // regular recordist/editor is at the limit, and still before anyone goes over it.
+      const r = pick(reserveRE, Math.min(...recedit), false, recedit);
+      commit(r, recedit, recedit.size); rec = r;
+      recNote = `${r} \u2014 reserve; every regular recordist/editor already had ${LIMIT} projects those weeks.`;
+      assignments.push(['Dub', r, dubw], ['Edit', r, editw]);
     } else {
       const f = forcePick(pool, recedit);
       const ov = inter(eng[f].busy, recedit).length;
       commit(f, recedit, recedit.size); rec = f;
-      recNote = `FORCED OVERLAP to hit the deadline — ${f} was already committed ${ov} of these weeks elsewhere.` +
+      recNote = `FORCED OVERLAP to hit the deadline — ${f} already had ${LIMIT} at once in ${ov} of these weeks.` +
         phaseSpan(dubw, editw, ' No engineer was free for') +
         ', and dividing the dub did not cover it either.';
       assignments.push(['Dub', f, dubw], ['Edit', f, editw]);
@@ -532,12 +566,12 @@ function runAssign(proj, bookingRows, engineerRows) {
     if (isMusic) {
       const tier = musicPool(n => eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n));
       const free_ = tier.filter(n => free(n, mixw));
-      if (free_.length) { mixer = pick(free_, Math.min(...mixw), true); commit(mixer, mixw, m); }
+      if (free_.length) { mixer = pick(free_, Math.min(...mixw), true, mixw); commit(mixer, mixw, m); }
       else if (tier.length) {
         const f = forcePick(tier, mixw);
         const ov = inter(eng[f].busy, mixw).length;
         commit(f, mixw, m); mixer = f;
-        mixNote = `FORCED OVERLAP — music mixing is restricted to ${tier.join(', ')}, and every one was already booked ${ov} of these weeks.`;
+        mixNote = `FORCED OVERLAP — music mixing is restricted to ${tier.join(', ')}, and every one already had ${LIMIT} at once in ${ov} of these weeks.`;
       } else {
         mixer = 'UNRESOLVED';
         warnings.push('No music specialist can mix at this level — set music_specialist on the Engineers tab.');
@@ -549,11 +583,11 @@ function runAssign(proj, bookingRows, engineerRows) {
 
     let mixPool = regular.filter(n => free(n, mixw));
     if (!mixPool.length) mixPool = fallback.filter(n => free(n, mixw));
-    if (mixPool.length) { mixer = pick(mixPool, Math.min(...mixw)); commit(mixer, mixw, m); }
+    if (mixPool.length) { mixer = pick(mixPool, Math.min(...mixw), false, mixw); commit(mixer, mixw, m); }
     else {
       const overflow = Object.keys(eng).filter(n => eng[n].overflow && eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n) && free(n, mixw));
       if (overflow.length) {
-        mixer = pick(overflow, Math.min(...mixw)); commit(mixer, mixw, m);
+        mixer = pick(overflow, Math.min(...mixw), false, mixw); commit(mixer, mixw, m);
         mixNote = `${mixer} — overflow; every eligible ${needAdv ? 'Advanced' : ''} mixer was busy those weeks.`;
       } else {
         const all = regular.concat(fallback)
@@ -561,7 +595,7 @@ function runAssign(proj, bookingRows, engineerRows) {
         const f = forcePick(all, mixw);
         const ov = inter(eng[f].busy, mixw).length;
         commit(f, mixw, m); mixer = f;
-        mixNote = `FORCED OVERLAP to hit the deadline — ${f} was already committed ${ov} of these weeks elsewhere. Developing-level engineers stay barred from Advanced mixing unless assigned by hand.`;
+        mixNote = `FORCED OVERLAP to hit the deadline — ${f} already had ${LIMIT} at once in ${ov} of these weeks. Developing-level engineers stay barred from Advanced mixing unless assigned by hand.`;
       }
     }
     }

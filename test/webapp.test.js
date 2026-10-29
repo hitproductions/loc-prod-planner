@@ -5,11 +5,21 @@
 // the validation book everything else uses.
 //
 // Run: node test/webapp.test.js
+// The suite tests the overlap mechanics against the small sample book, which only contends
+// under the rule it was written for (any second project at once is an overlap), so the web
+// app's engine is loaded with PROJECT_LIMIT 1 here -- see test/loader.js. The studio's limit
+// of 3 (Rudolf, 2026-10-29) is tested in its own section with fresh modules.
+const engineModule = require('../core/engine.js');
+const realLoad = engineModule.loadAppsScript;
+engineModule.loadAppsScript = (dir, opts) => {
+  if (dir && typeof dir === 'object') { opts = dir; dir = null; }
+  return realLoad(dir, { limit: 1, ...(opts || {}) });
+};
 const api = require('../webapp/api.js');
 const actions = require('../webapp/actions.js');
 const { register, createStore } = require('../webapp/store.js');
 const fixture = require('../webapp/sources/fixture.js');
-const { loadAppsScript } = require('../core/engine.js');
+const { loadAppsScript } = engineModule;
 
 // Per-phase dates are required on the form since 2026-10-15. Most saving tests predate
 // them and were written as weeks-per-phase; this turns those into the dates the old
@@ -1684,6 +1694,59 @@ section('Layout fixes, 2026-10-27: what the new pages are fed');
      row && row.dates && ['dub', 'edit', 'mix'].every(k => k in row.dates), JSON.stringify(row && row.dates));
 }
 
+
+section('Up to 3 projects at once, through the web app (Rudolf, 2026-10-29)');
+{
+  // Fresh modules on the studio's real limit; the rest of this suite runs on 1 (see the top).
+  const pinned = engineModule.loadAppsScript;
+  const fresh = () => ['../webapp/api.js', '../webapp/actions.js', '../webapp/history.js']
+    .forEach(m => { delete require.cache[require.resolve(m)]; });
+  engineModule.loadAppsScript = realLoad; fresh();
+  const api3 = require('../webapp/api.js'), act3 = require('../webapp/actions.js');
+  const A3 = realLoad();
+
+  const fb = await freshBook();
+  const E = fb.engineers[0].name, F = fb.engineers[1].name;
+  const wk0 = '2028-01-03', wk1 = '2028-01-09', wi = A3.widx(wk0);
+  ok('precondition: nobody in the sample book works that far ahead',
+     !fb.bookings.some(b => A3.widx(b.end_date) >= wi));
+  const stack = n => Array.from({ length: n }, (_, i) => ({ project: `Stack ${i}`, phase: 'Dub', engineer: E,
+    start_date: wk0, end_date: wk1, source: 'plot', note: '', status: '', row_number: 900 + i }));
+  const mover = { project: 'Mover', phase: 'Edit', engineer: F, start_date: wk0, end_date: wk1,
+    source: 'plot', note: '', status: '', row_number: 950 };
+  const withN = n => ({ ...fb, bookings: fb.bookings.concat(stack(n), [mover]) });
+  const cellOf = (book) => {
+    const sch = api3.schedule(book, { mode: 'engineer' });
+    let found = null;
+    sch.cells.forEach(row => row.forEach(c => { if (c && c.items.some(x => x.p === 'Stack 0')) found = c; }));
+    return found;
+  };
+
+  ok('the page is told the limit', api3.bootstrap(withN(1), { today: '2027-01-04' }).limit === 3);
+  const c3 = cellOf(withN(3)), c4 = cellOf(withN(4));
+  ok('three projects at once is not flagged in the schedule', c3 && c3.depth === 1 && c3.items.every(x => x.n === 3),
+     JSON.stringify(c3 && { d: c3.depth, n: c3.items.map(x => x.n) }));
+  ok('four is, and the cell knows it is four, not "2"', c4 && c4.depth === 2 && c4.items.every(x => x.n === 4),
+     JSON.stringify(c4 && { d: c4.depth, n: c4.items.map(x => x.n) }));
+  const b3 = api3.bootstrap(withN(3), { today: '2027-01-04' }), b4 = api3.bootstrap(withN(4), { today: '2027-01-04' });
+  ok('the header counts no overlap at three, and one at four', b3.counts.over2 === 0 && b4.counts.over2 >= 1,
+     JSON.stringify([b3.counts.over2, b4.counts.over2]));
+
+  const an = api3.analysis(withN(4), { from: wk0 });
+  const cell = an.grid.engineers.find(e => e.name === E).cells[0];
+  ok('Analysis gets the limit and each week’s real project count', an.limit === 3 && cell.projects === 4 && cell.depth === 2,
+     JSON.stringify({ limit: an.limit, cell: { p: cell.projects, d: cell.depth } }));
+  ok('and lists the fourth as a clash', an.overlaps.collisions.some(c => c.engineer === E));
+  ok('three is not a clash', !api3.analysis(withN(3), { from: wk0 }).overlaps.collisions.some(c => c.engineer === E));
+
+  const warn = n => act3.reassignWarnings(mover, wi, E, A3.activeRows(withN(n).bookings), fb.engineers)
+    .filter(w => w.kind === 'double');
+  ok('moving a week onto someone with two projects does not warn', warn(2).length === 0, JSON.stringify(warn(2)));
+  ok('onto someone with three, it warns and says the limit', warn(3).length === 1 && /the most at once is 3/.test(warn(3)[0].text),
+     JSON.stringify(warn(3)));
+
+  engineModule.loadAppsScript = pinned; fresh();
+}
 
 section('The form reads and checks typed dates (webapp/public/dates.js)');
 {

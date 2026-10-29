@@ -24,14 +24,15 @@ const nextRow = book => book.bookings.reduce((n, b) => Math.max(n, b.row_number 
 function reassignWarnings(row, wi, to, rows, engineers) {
   const out = [];
   const t = engineers.find(e => e.name === to) || {};
-  // The same project's dub or edit is not a clash: recording and editing one title in
-  // the same week is one job (A.jobKey).
+  // Only a clash when it takes them OVER the limit (Rudolf, 2026-10-29): up to
+  // A.PROJECT_LIMIT projects at once is normal, and the same title is the same project.
   const clash = rows.filter(b => b.engineer === to && b !== row &&
     A.jobKey(b) !== A.jobKey(row) &&
     A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date));
-  if (clash.length) {
-    out.push({ kind: 'double', text: `${to} already has ` +
-      clash.map(b => `${b.project} / ${b.phase}`).join(' and ') + ' that week.' });
+  const others = [...new Set(clash.map(b => b.project))];
+  if (others.length >= A.PROJECT_LIMIT) {
+    out.push({ kind: 'double', text: `${to} already has ${others.length} project${others.length === 1 ? '' : 's'} that week (` +
+      others.join(', ') + `), the most at once is ${A.PROJECT_LIMIT}.` });
   }
   // Reserve first: the objective protects reserve double-booking above everything
   // else, so spending it by hand is a different kind of decision.
@@ -121,10 +122,12 @@ function undoWeekMove(book, payload) {
     return { ok: false, error: `${was} is no longer on the roster — move it by hand instead.` };
   }
 
-  const clash = rows.filter(b => b.engineer === was && b !== row &&
+  // Listed only when giving it back would take them over the limit (see reassignWarnings).
+  const theirs = rows.filter(b => b.engineer === was && b !== row &&
     A.jobKey(b) !== A.jobKey(row) &&
-    A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date))
-    .map(b => `${b.project} / ${b.phase}`);
+    A.widx(b.start_date) <= wi && wi <= A.widx(b.end_date));
+  const clash = new Set(theirs.map(b => b.project)).size >= A.PROJECT_LIMIT
+    ? theirs.map(b => `${b.project} / ${b.phase}`) : [];
 
   return { ok: true, to: was, project, phase, week_start: week, clash,
            change: { supersede: [row.row_number],
@@ -398,13 +401,13 @@ function clearOrphans(book, payload) {
 // assignments and resolves no overlaps looks pointless until you can see that what it
 // actually improved was how evenly the work sits.
 const TERM_NAMES = {
-  reserve_double_booked: 'weeks the reserve is doubled up',
-  three_deep_weeks: 'weeks needing a reassignment (three at once)',
-  deepest_week: 'most jobs on one person in a single week',
-  three_deep: 'jobs stacked above two',
-  max_three_deep: 'three-at-once weeks on the worst-hit person',
-  total_double_booked: 'overlapped weeks',
-  max_double_booked: 'overlapped weeks on the worst-hit person',
+  reserve_double_booked: 'weeks the reserve is over the limit',
+  three_deep_weeks: 'weeks needing a reassignment (two or more over the limit)',
+  deepest_week: 'most projects over the limit on one person in a week',
+  three_deep: 'projects stacked beyond one over the limit',
+  max_three_deep: 'badly overloaded weeks on the worst-hit person',
+  total_double_booked: 'weeks over the project limit',
+  max_double_booked: 'weeks over the limit on the worst-hit person',
   forced_projects: 'projects the engine had to compromise on',
   regular_spread: 'gap between the busiest and quietest engineer',
   max_consecutive: 'longest unbroken run of booked weeks',
@@ -412,6 +415,7 @@ const TERM_NAMES = {
   developing_mix_weeks: 'mix weeks assigned to Developing mixers',
   split_dub_edit: 'projects whose dub and edit are with different people',
   series_continuity: 'phases done by someone new to their series',
+  stacked_weeks: 'second and third projects held at once',
   regular_peak: 'weeks on the busiest engineer',
 };
 
@@ -430,8 +434,8 @@ function whyBetter(before, after) {
 // Shapes a replanBook result into the preview payload. Split out so the search can run
 // wherever it likes — inline, or on a worker thread with a far deeper search — without
 // two places deciding what a preview looks like.
-// Engineer-weeks holding two or more JOBS from `fromW` on, keyed engineer|week. A
-// project's dub beside its own edit is one job (A.jobKey), so it never appears here.
+// Engineer-weeks over the project limit from `fromW` on, keyed engineer|week. A show's own
+// phases are one project (A.jobKey), so they never make one.
 function overlapWeeks(rows, fromW) {
   const per = A.jobsByEngineerWeek(rows), out = {};
   Object.keys(per).forEach(k => {
@@ -439,10 +443,8 @@ function overlapWeeks(rows, fromW) {
     const cut = k.lastIndexOf('|'), w = Number(k.slice(cut + 1));
     if (w < fromW) return;
     const rs = per[k].rows;
-    const label = b => b.project + (b.phase === 'Mix' &&
-      rs.some(x => x.project === b.project && x.phase !== 'Mix') ? ' (mix)' : '');
     out[k] = { engineer: k.slice(0, cut), week: w, label: A.weekLabel(w),
-               projects: [...new Set(rs.map(label))] };
+               projects: [...new Set(rs.map(b => b.project))] };
   });
   return out;
 }

@@ -994,3 +994,25 @@ table.sched:not(.byeng) thead tr:nth-child(2) th{width:var(--colw); min-width:va
 /* A week that crosses a month ("27 - Aug 2") is wider than the column: it wraps onto two lines
    instead of being cut. Every header in the row keeps the same height. */
 table.sched:not(.byeng) thead tr:nth-child(2) th{white-space:normal; line-height:14px; height:34px; vertical-align:middle; overflow:hidden}
+
+/* Past is clearly past (Tara, 2026-10-29): in both grids the phase colour is drained to a
+   muted tint -- still telling Dub, Edit and Mix apart -- and a project whose deadline has
+   passed reads grey in the list. Text stays dark; never transparency. */
+table.sched.byeng tr.past td{background:#F3F3F1}
+table.sched.byeng tr.past th{color:#8A8C8D}
+/* :is() lifts this above the .stack rules that paint the phase colour on every booking. */
+table.sched.byeng tr.past .stack .bk.rich:is(:only-child, :not(:only-child)){background:var(--ph); box-shadow:none;
+  filter:saturate(.3) brightness(.96)}
+table.sched.byeng tr.past .bk.rich .bk-n, table.sched.byeng tr.past .bk.rich .bk-m{color:#4A4A4A}
+table.sched:not(.byeng) tbody tr.wk1 td.past .wb{box-shadow:none; color:#3A3A3A; filter:saturate(.3) brightness(.96)}
+table.sched:not(.byeng) thead th.past{color:#8A8C8D}
+table.projects tr.gone td{color:#8A8C8D}
+table.projects tr.gone .chip{opacity:.7}
+
+/* Heat map by projects at once (Rudolf, 2026-10-29): up to the limit is normal work, so the
+   steps run light to dark in one neutral ramp; only over the limit turns red. */
+.hmkey i.p1, table.hm2 td.p1{background:#B9BBBC}
+.hmkey i.p2, table.hm2 td.p2{background:#7D7F80}
+.hmkey i.p3, table.hm2 td.p3{background:#3A3B3C}
+.hmkey i.pover, table.hm2 td.pover{background:var(--red)}
+table.hm2 td.p1{color:#000}

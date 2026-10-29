@@ -126,6 +126,13 @@ var SHARE_PREFER_WHOLE_EDIT = true;
 //                       lengthen. Dividing selectively is what pays.
 var DUB_DIVISION_FIRST = false;
 
+//   PROJECT_LIMIT  how many projects one engineer may carry in the same week before it is an
+//                  overlap, counted by TITLE: a show's dub, edit and mix with one person are one
+//                  project. The planner still spreads work evenly -- whoever has least else on
+//                  is preferred -- so this is a ceiling, not a target. (Rudolf, 2026-10-29:
+//                  some projects are lighter now, and a third at once is normal.)
+var PROJECT_LIMIT = 3;
+
 // ---- Order search -----------------------------------------------------------
 // The engine plots each project's phase windows from its own deadline, so the
 // ORDER in which projects are assigned changes only WHO gets picked — never a
@@ -193,6 +200,8 @@ var SOLVE_OBJECTIVE = [
   'series_continuity',       // keep a series' people: whoever did a phase on an earlier season
                              // or batch is preferred for the same phase on the next, where
                              // nothing above is lost by it (Tara, 2026-10-27)
+  'stacked_weeks',           // spread evenly: fewest second and third projects held at once,
+                             // all within PROJECT_LIMIT (Rudolf, 2026-10-29)
   'regular_spread',          // then flattest load across the regular pool
   'max_consecutive',         // then prefer handing off, all else equal
   'regular_peak',            // then the lowest peak in the regular pool

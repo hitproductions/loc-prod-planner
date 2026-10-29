@@ -77,7 +77,7 @@ window on that title.
 ## Reading the schedule
 
 **Schedule.** It opens on **this week**, with two weeks of the past above it; earlier weeks are
-dimmed but still there. The overlap warnings at the top count **from this week on** — a week
+shown in faded phase colours, so the past reads as done but Dub, Edit and Mix stay distinct. The overlap warnings at the top count **from this week on** — a week
 that has already gone can't be reassigned, so it is shown quietly as "N earlier" instead.
 Colours are the tracker's:
 
@@ -87,10 +87,10 @@ Colours are the tracker's:
 | blue | Edit |
 | pink | Mix |
 | solid red | the deadline week |
-| **red outline** | that engineer is on two projects that week |
+| **red outline** | that engineer is over the limit: more than 3 projects that week |
 | dotted outline | someone you picked by hand |
 
-A red outline marks the **specific week** where someone is doubled — not the whole
+A red outline marks the **specific week** where someone is over the limit — not the whole
 project. If a project has one outlined cell and five clean ones, only that one week
 is a problem.
 
@@ -104,7 +104,7 @@ purpose:
 
 Each booking is a taller box that says what it is: the project, the phase and which week
 of the booking it is (**Dub · wk 2/3**). A key above the grid explains the colours,
-"2 at once" / "3 at once" and "By hand".
+"4 at once" (over the limit) and "By hand".
 
 Hovering a cell highlights its row *and* marks its column — the week header turns red
 and a hairline runs down it. Useful when you're twenty rows down and need to know which
@@ -194,9 +194,24 @@ still plot backward from their deadline.
 The dates live in six columns at the end of the Projects tab (**Dub start** … **Mix
 end**). The app creates them on its first save to a sheet that lacks them.
 
-**One person recording and editing the same project in the same week is one job, not an
-overlap.** It gets no outline, no warning, and doesn't count in Analysis. Mixing beside
-either, or anything on another project, still counts. Keeping a project's dub and edit
+### How many projects at once (Rudolf, 29 Oct 2026)
+
+**Anyone may carry up to 3 projects in the same week.** Projects are counted **by title**:
+recording, editing and mixing one show with the same person is one project. Only a 4th
+project at once is an overlap — that is what gets a red outline, a warning, and a place in
+Analysis. The phase dates say when work happens; the count of titles is the limit.
+
+The planner still **spreads work evenly**: a new project goes to whoever has the least on
+those weeks, so a third project at once is allowed but never the first choice while
+someone has less. The limit is `PROJECT_LIMIT` in `appsscript/20_Config.gs`.
+
+**Mat is a reserve for recording and editing.** Set `overflow_only` to `Yes` on Mat's row
+in the Engineers tab. Mat then gets dub/edit work only when every regular recordist/editor
+already has 3 projects those weeks, and still before anyone is pushed to a 4th. (Daryl,
+also a reserve, is in the same position for recording and editing.) A hand pick always
+wins, as before.
+
+Keeping a project's dub and edit
 with the same person is **preferred, never required**: it ranks below every overlap and
 reserve rule, and above balancing total workload, so they are split only when keeping
 them together would cost an overlap or the reserve.
@@ -261,15 +276,16 @@ Advanced mix projects fit.
 one); each box can stay empty. It answers *OK* or *Check* per phase and names the week and
 role that runs short. It only reads, it never books anything.
 
-**Who is free, week by week.** Every engineer against the next 16 weeks. A darker cell is
-a busier week; a dub beside its own edit with the same person counts once. The last two
-rows total who is free for dub/edit and for Advanced mix. Dub/edit and Advanced mix are
+**Who is free, week by week.** Every engineer against the next 16 weeks, shaded by how
+many projects they have on (1 to 3 in greys, red over 3); a show's phases with one person
+count once. The last two rows total the **room** for dub/edit and for Advanced mix: each
+person can take up to 3, so someone on one project still has room for two more. Dub/edit and Advanced mix are
 always counted separately: a free dub week can't cover a mix, so adding them would invent
 capacity you don't have. Reserve engineers are marked and left out of "free".
 
 **Who is carrying the most.** Booked weeks per person over the same 16 weeks.
 
-**Overlaps.** Weeks from now on where someone holds two projects at once, naming which
+**Overlaps.** Weeks from now on where someone holds more than 3 projects at once, naming which
 projects collide. A long run of weeks is *not* flagged, that is just steady work. Earlier
 weeks are counted quietly as "N earlier".
 

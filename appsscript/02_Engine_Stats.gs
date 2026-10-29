@@ -45,7 +45,9 @@ function computeStats(bookingRows, engineerRows, todayISO) {
       const g = ws[i] - ws[i - 1] - 1;
       if (g > longestGap) { longestGap = g; gapFrom = ws[i - 1] + 1; gapTo = ws[i] - 1; }
     }
-    const doubles = ws.filter(w => byEng[n].weeks.get(w).length > 1)
+    // Over the limit: more distinct projects that week than PROJECT_LIMIT (Rudolf, 2026-10-29).
+    const limit = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;
+    const doubles = ws.filter(w => new Set(byEng[n].weeks.get(w).map(s => s.replace(/ \([^)]*\)$/, ''))).size > limit)
       .map(w => ({ week_of: wstart(w), projects: byEng[n].weeks.get(w) }));
     const future = nowW === null ? ws : ws.filter(w => w >= nowW);
     return {

@@ -476,7 +476,7 @@ section('Rule 11 per role — a named editor splits the dub from the edit');
                   start_date:'2026-04-13', end_date:'2026-04-19', source:'plot', note:'', status:'' }];
   const clash = A.runAssign({ ...base, editor_override:'John' }, busy, engineers);
   ok('a clash on the named editor warns and still applies the pick',
-     /already booked/.test(clash.warnings) && clash.editor === 'John', clash.warnings);
+     /already has \d+ projects? on in \d+ of those weeks/.test(clash.warnings) && clash.editor === 'John', clash.warnings);
 
   const unknown = A.runAssign({ ...base, editor_override:'Nobody' }, [], engineers);
   ok('an unknown editor name is reported, not silently ignored',
@@ -1050,13 +1050,13 @@ section('forced_projects counts overlapped weeks, not FORCED notes');
      A.scorePlan(notedButFine, eng).forced_projects === 0,
      A.scorePlan(notedButFine, eng).forced_projects + '');
 
-  // distinct PROJECTS, not rows: three colliding rows of one project is one project.
-  // A dub beside a mix, because a dub beside its own edit is one job, not a collision.
+  // distinct PROJECTS, not rows: three colliding rows over two projects is two. (One title's
+  // rows never collide with each other: a show's phases are one project, 2026-10-29.)
   const manyRows = [bk('P1', 'A', '2026-01-05', '2026-01-11'),
                     { ...bk('P1', 'A', '2026-01-05', '2026-01-11'), phase: 'Mix' },
-                    { ...bk('P1', 'A', '2026-01-05', '2026-01-11'), phase: 'Mix' }];
+                    bk('P2', 'A', '2026-01-05', '2026-01-11')];
   ok('it counts projects, not booking rows',
-     A.scorePlan(manyRows, eng).forced_projects === 1,
+     A.scorePlan(manyRows, eng).forced_projects === 2,
      A.scorePlan(manyRows, eng).forced_projects + '');
 
   // a project overlapped in only ONE of its weeks still counts once
@@ -1325,8 +1325,10 @@ section('Per-phase dates, and dub + edit on one project is one job (Tara, 2026-1
      A.scorePlan(twoOne, roster, []).total_double_booked === 0,
      A.scorePlan(twoOne, roster, []).total_double_booked + '');
   ok('and Analysis lists no clash for it', A.actualOverlaps_(twoOne).length === 0);
-  ok('the same project’s mix in that week still is',
-     A.scorePlan(twoOne.concat(row('P', 'Mix', 'Ana')), roster, []).total_double_booked === 1);
+  // A project is its title (Rudolf, 2026-10-29): its mix beside its own dub and edit is the
+  // same project, where until then the mix counted as a second job.
+  ok('the same project’s mix in that week is not one either',
+     A.scorePlan(twoOne.concat(row('P', 'Mix', 'Ana')), roster, []).total_double_booked === 0);
   ok('another project in that week still is',
      A.scorePlan(twoOne.concat(row('Q', 'Dub', 'Ana')), roster, []).total_double_booked === 1);
   const three = twoOne.concat(row('Q', 'Dub', 'Ana'), row('R', 'Edit', 'Ana'));
@@ -1551,6 +1553,84 @@ section('Series continuity: the people who did a phase before are preferred (Tar
   const finalRows = frozenS1.concat(planned).filter(b => !rp.rows_to_supersede.includes(b.row_number)).concat(rp.rows_to_append);
   ok('a re-plan keeps or restores the series’ people too', sc(finalRows.concat([row(30, 'Other', 'Dub', 'Kyle', 4, 9)]), [P1, proj2]) <= sc(frozenS1.concat(planned), [P1, proj2]),
      sc(finalRows, [P1, proj2]) + ' vs ' + sc(frozenS1.concat(planned), [P1, proj2]));
+}
+
+// ---------------------------------------------------------------------------
+section('Up to 3 projects at once, counted by title; Mat as the record/edit reserve (Rudolf, 2026-10-29)');
+{
+  const L = loadAppsScript({ limit: 3 });
+  ok('the studio default is 3 projects at once', loadAppsScript({}).PROJECT_LIMIT === 1 &&
+     require('../core/engine.js').loadAppsScript().PROJECT_LIMIT === 3);
+  const R = (name, extra) => ({ name, can_record: 'Yes', can_edit: 'Yes', can_mix: 'No',
+    mix_level: '', music_specialist: 'No', overflow_only: 'No', does_specials: 'No', atmos: 'No', ...extra });
+  const roster = [R('Ana'), R('Ben'), R('Mat', { overflow_only: 'Yes' }),
+    R('Mixy', { can_record: 'No', can_edit: 'No', can_mix: 'Yes', mix_level: 'Advanced' })];
+  const P = L.normalizeProject({ project_title: 'New', client: 'X', deadline: '2027-01-17', mix_level_required: 'Advanced',
+    music_songs: 'No', special_project: 'No', atmos_required: 'No',
+    dub_from: '2026-11-02', dub_to: '2026-11-15', edit_from: '2026-11-16', edit_to: '2026-11-22',
+    mix_from: '2026-11-23', mix_to: '2026-11-29' }).project;
+  // n other projects held by one person across the new project's dub and edit weeks
+  const on = (e, n) => Array.from({ length: n }, (_, i) => ({ project: `${e} other ${i}`, phase: 'Dub', engineer: e,
+    start_date: '2026-11-02', end_date: '2026-11-22', status: '', note: 'manual' }));
+  const plot = (book, eng) => L.runAssign(P, book, eng || roster);
+  const recBy = o => [...new Set(o.booking_rows.filter(b => b.phase !== 'Mix').map(b => b.engineer))].join('+');
+
+  const spread = plot(on('Ana', 2));
+  ok('spread evenly: with Ana on two projects and Ben on none, Ben gets it', recBy(spread) === 'Ben' && !spread.forced, recBy(spread));
+  const third = plot(on('Ana', 2).concat(on('Ben', 2)));
+  ok('a third project at once is allowed, and is not an overlap', ['Ana', 'Ben'].includes(recBy(third)) && !third.forced,
+     recBy(third) + ' ' + third.record_note);
+  ok('and the scorer agrees: nobody is over the limit',
+     L.scorePlan(on('Ana', 2).concat(on('Ben', 2), third.booking_rows), roster, []).total_double_booked === 0);
+  ok('Mat is not used while a regular has room', recBy(third) !== 'Mat');
+  const reserve = plot(on('Ana', 3).concat(on('Ben', 3)));
+  ok('when every regular already has 3, Mat takes the dub and edit', recBy(reserve) === 'Mat' && !reserve.forced,
+     recBy(reserve) + ' ' + reserve.record_note);
+  ok('and the note says why', /reserve; every regular recordist\/editor already had 3/.test(reserve.record_note), reserve.record_note);
+  const noMat = plot(on('Ana', 3).concat(on('Ben', 3)), roster.filter(r => r.name !== 'Mat'));
+  ok('without Mat the same book forces a 4th project onto someone', noMat.forced && /FORCED OVERLAP/.test(noMat.record_note),
+     noMat.record_note);
+  const full = plot(on('Ana', 3).concat(on('Ben', 3), on('Mat', 3)));
+  ok('with Mat at 3 too, it is forced, and the note says the limit', full.forced && /already had 3 at once/.test(full.record_note),
+     full.record_note);
+
+  // the re-plan engine is a second implementation and must agree
+  const rp = book => L.replanBook([P], book, roster, '2026-10-29', { restarts: 0 }).proposed_rows
+    .filter(b => b.project === 'New' && b.phase !== 'Mix').map(b => b.engineer);
+  ok('re-plan: spreads to whoever has least on', rp(on('Ana', 2)).every(n => n === 'Ben'), rp(on('Ana', 2)).join(','));
+  ok('re-plan: allows a third project', rp(on('Ana', 2).concat(on('Ben', 2))).every(n => n === 'Ana' || n === 'Ben'));
+  ok('re-plan: uses Mat only when the regulars all have 3', rp(on('Ana', 3).concat(on('Ben', 3))).every(n => n === 'Mat'),
+     rp(on('Ana', 3).concat(on('Ben', 3))).join(','));
+  // A project's own weeks never count against the people it is being placed on: Mixy already
+  // holds this show's (pinned) edit plus two other projects in its mix weeks, which is two
+  // others, not three -- so Mixy, the only Advanced mixer, still has room for the mix.
+  const P2 = L.normalizeProject({ ...P, project_title: 'Own', mix_from: '2026-11-16', mix_to: '2026-11-29' }).project;
+  const mixyBook = [{ project: 'Own', phase: 'Dub', engineer: 'Ana', start_date: '2026-11-02', end_date: '2026-11-15', status: '', note: 'manual' },
+    { project: 'Own', phase: 'Edit', engineer: 'Mixy', start_date: '2026-11-16', end_date: '2026-11-22', status: '', note: 'manual' }]
+    .concat([0, 1].map(i => ({ project: `Mixy other ${i}`, phase: 'Mix', engineer: 'Mixy',
+      start_date: '2026-11-16', end_date: '2026-11-29', status: '', note: 'manual' })));
+  const ownMix = L.replanBook([P2], mixyBook, roster, '2026-10-29', { restarts: 0 }).proposed_rows
+    .filter(b => b.project === 'Own' && b.phase === 'Mix');
+  ok('re-plan: a project\u2019s own weeks do not fill its people up', ownMix.length > 0 &&
+     ownMix.every(b => b.engineer === 'Mixy' && !/FORCED/.test(b.note || '')), JSON.stringify(ownMix.map(b => [b.engineer, b.note])));
+
+  // counting and scoring
+  const wk = (project, phase, engineer) => ({ project, phase, engineer, start_date: '2026-11-16', end_date: '2026-11-22', note: '', status: '' });
+  const own = [wk('P', 'Dub', 'Ana'), wk('P', 'Edit', 'Ana'), wk('P', 'Mix', 'Ana')];
+  const at = rows => L.jobsByEngineerWeek(rows)['Ana|' + L.widx('2026-11-16')];
+  ok("a show's dub, edit and mix with one person are one project", L.projectsOf(at(own)) === 1 && L.depthOf(at(own)) === 1);
+  const three = own.concat(wk('Q', 'Dub', 'Ana'), wk('R', 'Edit', 'Ana'));
+  ok('three titles at once: no overlap, but counted as stacked so spreading still wins',
+     L.scorePlan(three, roster, []).total_double_booked === 0 && L.scorePlan(three, roster, []).stacked_weeks === 2,
+     JSON.stringify({ d: L.scorePlan(three, roster, []).total_double_booked, s: L.scorePlan(three, roster, []).stacked_weeks }));
+  const four = three.concat(wk('S', 'Dub', 'Ana'));
+  ok('a fourth title is one week over the limit', L.scorePlan(four, roster, []).total_double_booked === 1 &&
+     L.depthOf(at(four)) === 2 && L.projectsOf(at(four)) === 4);
+  ok('and Analysis lists it as a clash', L.actualOverlaps_(four).length > 0 && L.actualOverlaps_(three).length === 0);
+  ok('stacking is ranked below every overlap and preference term, above balancing totals', (() => {
+    const o = L.SOLVE_OBJECTIVE, i = o.indexOf('stacked_weeks');
+    return i > o.indexOf('series_continuity') && i > o.indexOf('total_double_booked') && i < o.indexOf('regular_spread');
+  })(), L.SOLVE_OBJECTIVE.join(','));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
