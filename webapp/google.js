@@ -119,26 +119,104 @@ const origin = (req, c) => c.base ||
 const cookieOut = (req, name, value, age) =>
   `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}` + (https_(req) ? '; Secure' : '');
 
-const PAGE = (msg, c, retry) => `<!doctype html><meta charset="utf-8">
+// Google's own "G", as their sign-in branding asks for.
+const G_MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+// The only page the public ever sees. The artwork is by Hit's own artist (Tara, 2026-10-29);
+// it peeks in, the record light blinks, and the trio leans out now and then. All of it
+// stops for anyone who has asked their system for less motion.
+const PAGE = (msg, c, retry) => `<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loc Prod Planner</title>
 <style>
+ @font-face{font-family:"Inter";font-weight:400;font-display:swap;src:url("/fonts/Inter-Regular.woff2") format("woff2")}
+ @font-face{font-family:"Inter";font-weight:700;font-display:swap;src:url("/fonts/Inter-Bold.woff2") format("woff2")}
+ :root{--red:#EF4123;--ink:#000;--grey:#646667;--line:#D0D0CE;--paper:#fff}
  *{box-sizing:border-box;border-radius:0}
- body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-   background:#fff;color:#000;font:14px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
- main{width:300px}
- h1{font-size:19px;letter-spacing:-.01em;margin:0 0 4px}
- p{color:#646667;margin:0 0 22px}
- a.btn{display:block;width:100%;padding:10px;border:1px solid #000;background:#000;color:#fff;
-   font:inherit;font-weight:700;text-align:center;text-decoration:none}
- .err{color:#EF4123;font-weight:700;margin-bottom:14px}
+ html,body{height:100%}
+ body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+   display:grid;grid-template-columns:minmax(0,1.35fr) minmax(340px,1fr);min-height:100vh}
+ .art{position:relative;overflow:hidden;background:var(--ink);isolation:isolate}
+ .art .pic{position:absolute;inset:-3%;transform:translate3d(var(--mx,0),var(--my,0),0)}
+ .art img{width:100%;height:100%;object-fit:cover;object-position:64% 40%;display:block;
+   animation:peek 1.1s cubic-bezier(.2,.9,.25,1.15) .15s both, lean 9s ease-in-out 2.2s infinite}
+ .art::after{content:"";position:absolute;inset:0;background:var(--ink);z-index:2;
+   animation:door .75s cubic-bezier(.7,0,.2,1) both}
+ @keyframes door{to{transform:translateX(101%)}}
+ @keyframes peek{from{transform:translateX(-14%) rotate(-2deg) scale(1.06)}to{transform:none}}
+ @keyframes lean{0%,70%,100%{transform:none}78%{transform:translateX(1.6%) rotate(.6deg)}86%{transform:translateX(-.4%) rotate(-.2deg)}}
+ .rec{position:absolute;top:22px;left:22px;z-index:3;display:flex;align-items:center;gap:8px;
+   background:rgba(0,0,0,.72);color:#fff;font:700 12px/1 Inter,sans-serif;letter-spacing:.12em;padding:8px 11px;
+   opacity:0;animation:fade .3s ease 1s both}
+ .rec i{width:9px;height:9px;border-radius:50% !important;background:var(--red);animation:blink 1.4s steps(1) 1.3s infinite}
+ @keyframes blink{50%{opacity:0}}
+ @keyframes fade{to{opacity:1}}
+ .say{position:absolute;z-index:3;top:9%;right:7%;max-width:240px;background:#fff;color:var(--ink);
+   font:700 17px/1.3 Inter,sans-serif;padding:14px 16px;border:2px solid var(--ink);
+   transform-origin:0% 100%;animation:pop .45s cubic-bezier(.3,1.6,.5,1) 1.5s both}
+ .say::after{content:"";position:absolute;left:18px;bottom:-14px;width:22px;height:14px;background:var(--ink);
+   clip-path:polygon(0 0,100% 0,0 100%)}
+ .say::before{content:"";position:absolute;left:20px;bottom:-9px;width:16px;height:10px;background:#fff;z-index:1;
+   clip-path:polygon(0 0,100% 0,0 100%)}
+ @keyframes pop{from{opacity:0;transform:scale(.4) rotate(-6deg)}to{opacity:1;transform:none}}
+ main{display:flex;flex-direction:column;justify-content:center;padding:56px clamp(28px,6vw,80px);
+   animation:rise .6s ease .35s both}
+ @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+ .logo{height:34px;width:auto;align-self:flex-start;margin-bottom:56px}
+ h1{font-size:34px;line-height:1.1;letter-spacing:-.02em;margin:0 0 10px}
+ p{color:var(--grey);margin:0 0 32px;max-width:30ch}
+ .err{color:var(--red);font-weight:700;margin:0 0 18px;max-width:34ch}
+ a.btn{display:flex;align-items:center;gap:14px;width:100%;max-width:340px;padding:6px 18px 6px 6px;
+   background:var(--ink);color:#fff;font-weight:700;text-decoration:none;border:1px solid var(--ink);
+   transition:background .15s ease,border-color .15s ease}
+ a.btn .g{display:grid;place-items:center;width:40px;height:40px;background:#fff}
+ a.btn svg{width:20px;height:20px}
+ a.btn:hover{background:var(--red);border-color:var(--red)}
+ a.btn:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+ small{display:block;color:var(--grey);margin-top:16px;font-size:13px}
+ footer{margin-top:auto;padding-top:56px;color:var(--grey);font-size:12px}
+ @media (max-width:820px){
+   body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+   .art{height:46vh;min-height:260px}
+   .say{font-size:14px;max-width:180px;padding:10px 12px;top:7%;right:5%}
+   main{padding:32px 16px 24px}
+   .logo{height:28px;margin-bottom:28px}
+   h1{font-size:28px}
+   footer{padding-top:32px}
+ }
+ @media (prefers-reduced-motion:reduce){
+   *,*::before,*::after{animation:none !important;transition:none !important}
+   .art::after{display:none} .rec{opacity:1}
+ }
 </style>
+<body>
+<div class="art" aria-hidden="true">
+  <div class="pic" id="pic"><img src="/login/trio.webp" alt="" width="900" height="649"></div>
+  <div class="rec"><i></i>REC</div>
+  <div class="say">Psst. Who’s on the mic this week?</div>
+</div>
 <main>
+  <img class="logo" src="/login/hit-logo.svg" alt="Hit Productions" width="232" height="31">
   <h1>Loc Prod Planner</h1>
-  <p>Internal — Hit Productions</p>
-  ${msg ? `<div class="err">${msg}</div>` : ''}
-  <a class="btn" href="/auth/google">${retry ? 'Try another account' : 'Sign in with Google'}</a>
-</main>`;
+  <p>Sign in to see who’s booked, and what’s next.</p>
+  ${msg ? `<div class="err" role="alert">${msg}</div>` : ''}
+  <a class="btn" href="/auth/google"><span class="g">${G_MARK}</span>${retry ? 'Try another account' : 'Sign in with Google'}</a>
+  <small>Use your @${c.domain} account.</small>
+  <footer>Hit Productions · Internal</footer>
+</main>
+<script>
+ // The trio follows the pointer, a little. Not on touch, not with reduced motion.
+ (function(){
+   if (matchMedia('(prefers-reduced-motion: reduce)').matches || !matchMedia('(pointer:fine)').matches) return;
+   var pic = document.getElementById('pic');
+   addEventListener('pointermove', function(e){
+     var x = e.clientX / innerWidth - .5, y = e.clientY / innerHeight - .5;
+     pic.style.setProperty('--mx', (x * -14).toFixed(1) + 'px');
+     pic.style.setProperty('--my', (y * -10).toFixed(1) + 'px');
+   });
+ })();
+</script>
+</body></html>`;
 
 function html(res, status, body) {
   res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -194,6 +272,10 @@ async function googleGate(req, res, url) {
       'set-cookie': cookieOut(req, SESSION, '', 0) });
     return res.end(), false;
   }
+
+  // The sign-in page's own artwork and font are public; nothing else is.
+  if (req.method === 'GET' && (/^\/login\/[\w.-]+\.(svg|webp)$/.test(url.pathname) ||
+                               /^\/fonts\/Inter-(Regular|Bold)\.woff2$/.test(url.pathname))) return true;
 
   const user = readSession(req.headers.cookie, c);
   if (user) { req.googleUser = user; return true; }

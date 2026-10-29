@@ -33,7 +33,7 @@ Optional environment variables, set the same way:
 
 ## How it behaves
 
-- A signed-out visitor sees a single **Sign in with Google** button.
+- A signed-out visitor sees the Hit logo, the animated artwork (by Hit's own artist) and a single **Sign in with Google** button. The artwork, logo and font in `webapp/public/login/` and `fonts/` are the only files served before sign-in.
 - An account outside the domain and not on the allow list is refused and told which account to use.
 - Sessions last 7 days. A person removed from the allow list, or whose Workspace account is closed, is locked out on their next request or next sign-in. Changing the client secret signs everyone out.
 - Changes are accepted only from the app's own page, as JSON, from a signed-in person.
