@@ -278,6 +278,12 @@ and weeks per quarter.
 
 ---
 
+## Signing in
+
+On the Cloud Run copies, everyone signs in with their own @hitproductions.net Google account, and History shows who made each change (the **By** column). Setup is in `deploy/GOOGLE-LOGIN.md`. Local runs ask for nothing.
+
+---
+
 ## When something looks wrong
 
 **The app is showing old information.** Reload the page. It fetches once when it

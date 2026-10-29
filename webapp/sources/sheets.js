@@ -20,7 +20,7 @@ const EVENTS_TAB = 'History';
 // alone cannot express "and it was not cancelled before this". Added 2026-08-31 after
 // rolling back a cancel revived its bookings and left the project marked Cancelled,
 // which is the exact state cancelling exists to prevent.
-const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended', 'revert'];
+const EVENT_HEADERS = ['at', 'action', 'summary', 'superseded', 'appended', 'revert', 'by'];
 // Columns this app writes that an older sheet may not have. Created on demand.
 const MANAGED_COLUMNS = ['Status', 'Completed',
   // Per-phase dates (2026-10-15). Created on the first save, like the two above.
@@ -506,7 +506,7 @@ function createSheetsSource(opts) {
     let res;
     try {
       res = await auth.api(`spreadsheets/${id}/values/` +
-        encodeURIComponent(`${EVENTS_TAB}!A:F`));
+        encodeURIComponent(`${EVENTS_TAB}!A:Z`));
     } catch (e) {
       if (e && e.status === 400 && /unable to parse range/i.test(e.message)) return [];
       throw e;
