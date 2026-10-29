@@ -96,6 +96,29 @@ const REWRITTEN = {
       liveStart: '  // Mirrors assign.js exactly — smallest covering set, any size.',
       end:       '  const projects = projectRows.filter(p => p && p.project_title && p.deadline)',
     },
+    // PROJECTS AT ONCE (Rudolf, 2026-10-29) -- mirrors assign.js. Up to PROJECT_LIMIT projects
+    // per engineer-week, counted by title; whoever has least else on is preferred; the
+    // record/edit reserve (Mat) is used before anyone goes over the limit. These three regions
+    // are the engine state and pickers, the record/edit ladder, and the mix ladder: every
+    // free/pick/force call in them now reads the per-title count instead of a busy set.
+    {
+      what: 'record/edit ladder — room by title, fewest projects first, reserve before forcing (Rudolf, 2026-10-29)',
+      refStart:  '        const samePool = pool.filter(n => free(n, reWks));',
+      liveStart: '        const samePool = pool.filter(n => free(n, reWks));',
+      end:       '    // mix',
+    },
+    {
+      what: 'engine state and pickers — projects at once by title, up to PROJECT_LIMIT (Rudolf, 2026-10-29)',
+      refStart:  '  for (const n in base) eng[n] = { ...base[n], busy: new Set(), load: 0, last: null };',
+      liveStart: '  // Projects at once, counted by title, up to PROJECT_LIMIT -- mirrors the assign engine.',
+      end:       '@@REWRITTEN2@@',
+    },
+    {
+      what: 'mix ladder — room by title, fewest projects first (Rudolf, 2026-10-29)',
+      refStart:  '    // mix',
+      liveStart: '    // mix',
+      end:       '  // ---- diff ----',
+    },
   ],
   'engine/assign.js': [
     {
@@ -119,9 +142,9 @@ const REWRITTEN = {
       end:       '  const isMusic = yes(proj.music_songs);',
     },
     {
-      what: 'the record/edit ladder — dub division first, decided by measurement',
-      refStart:  '    if (samePick) {',
-      liveStart: '    // ---- the ladder, in order',
+      what: 'the record/edit ladder — dub division first, decided by measurement; room by title and the reserve before forcing (Rudolf, 2026-10-29)',
+      refStart:  '    const samePool = pool.filter(n => free(n, recedit));',
+      liveStart: '    const samePool = pool.filter(n => free(n, recedit));',
       end:       "  let mixer = null, mixNote = '';",
     },
     {
@@ -150,6 +173,15 @@ const REWRITTEN = {
       refStart:  "           (phase === 'Mix' ? manual(mixOv) : manual(recOv)) ? 'manual' : ''",
       liveStart: '           // A hand-picked engineer pins only THEIR phase, so with a named editor',
       end:       '  }));',
+    },
+    {
+      // PROJECTS AT ONCE (Rudolf, 2026-10-29): up to PROJECT_LIMIT projects per engineer-week,
+      // counted by title, so `busy` becomes "no room for this project" and the pickers prefer
+      // whoever has least else on. Ends at the sharing helper's mark, which it sits above.
+      what: 'engine state and pickers — projects at once by title, up to PROJECT_LIMIT (Rudolf, 2026-10-29)',
+      refStart:  '      busy: new Set(), load: 0, last: null };',
+      liveStart: '      busy: new Set(), load: 0, last: null, at: {} };',
+      end:       '@@REWRITTEN2@@',
     },
   ],
 };
@@ -183,6 +215,10 @@ function cutRewritten(refRel, refSrc, liveSrc) {
 // than as another rewritten block — the pool SHAPE is byte-identical either side.
 const APPROVED_SUBS = {
   'engine/replan.js': [
+    // PROJECTS AT ONCE (Rudolf, 2026-10-29): the project being placed, so its own weeks never
+    // count against the people it is being placed on.
+    ['    const title = p.project_title;\n',
+     "    const title = p.project_title;\n    cur = String(title || '');\n"],
     // the project-level freeze (Tara, 2026-08-13). A locked project joins the set
     // that already could not move — started weeks and hand-pinned rows — so the
     // engine skips it wholesale instead of superseding rows it will never re-emit.
@@ -378,6 +414,12 @@ const APPROVED_SUBS = {
      'pool = Object.keys(eng).filter(n => eng[n].record && eng[n].edit && !eng[n].overflow);'],
   ],
   'engine/stats.js': [
+    // PROJECTS AT ONCE (Rudolf, 2026-10-29): a doubled week is one with more distinct
+    // projects than PROJECT_LIMIT, not more than one booking row.
+    ['    const doubles = ws.filter(w => byEng[n].weeks.get(w).length > 1)',
+     "    // Over the limit: more distinct projects that week than PROJECT_LIMIT (Rudolf, 2026-10-29).\n" +
+     "    const limit = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;\n" +
+     "    const doubles = ws.filter(w => new Set(byEng[n].weeks.get(w).map(s => s.replace(/ \\([^)]*\\)$/, ''))).size > limit)"],
     ['overflow_only: yes(e.overflow_only), non_netflix_router: yes(e.non_netflix_router) };',
      'overflow_only: yes(e.overflow_only), does_specials: yes(e.does_specials) };'],
     ["roster[n]?.non_netflix_router ? 'non-Netflix router' : ''",

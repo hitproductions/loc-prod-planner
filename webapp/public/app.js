@@ -46,8 +46,10 @@ function topRight() {
   // From THIS WEEK on. A week that has gone cannot be reassigned, and counting it kept
   // the warning above zero for good; the earlier ones are said quietly instead.
   const earlier = (c.over2_past || 0) + (c.over3_past || 0);
-  if (c.over2) bits.push(`<span class="pill warn">${wk(c.over2)} with 2 overlaps</span>`);
-  if (c.over3) bits.push(`<span class="pill bad">${wk(c.over3)} with 3+ overlaps</span>`);
+  // Overlap = more projects at once than the limit (Rudolf, 2026-10-29); over2 is one over.
+  const lim = BOOT.limit || 1;
+  if (c.over2) bits.push(`<span class="pill warn">${wk(c.over2)} with ${lim + 1} at once</span>`);
+  if (c.over3) bits.push(`<span class="pill bad">${wk(c.over3)} with ${lim + 2}+ at once</span>`);
   if (earlier) bits.push(`<span class="pill" title="Weeks that have already passed — nothing can be ` +
     `reassigned in them. They stay visible in the schedule.">${earlier} earlier</span>`);
   if (LAST_MS != null) bits.push(`<span class="pill timing">${LAST_MS.toFixed(0)} ms</span>`);
@@ -129,20 +131,20 @@ function cellBands(c, label, dragAttrs, rich, deep) {
     // One row per booking, the phase as a rail down its left edge (Tara, 2026-10-27). An
     // overlapped week says so in words on its first row, so the depth never rests on the
     // frame colour alone.
-    // The count is of JOBS: a project's dub and its edit with one person are one job (Tara,
-    // 2026-10-15). Three bookings can therefore read "2 at once", so the tag names the jobs on
-    // hover, e.g. "The Take: Dub + Edit \u00b7 Single's Inferno: Edit".
+    // The count is of PROJECTS, by title: a show's dub, edit and mix with one person are one
+    // project (Rudolf, 2026-10-29). The tag appears only OVER the limit -- up to BOOT.limit at
+    // once is normal work -- and names the projects on hover.
     const jobs = () => {
       const by = {};
-      c.items.forEach(x => { const k = x.p + (x.ph === 'Mix' ? '|M' : '|R');
-        (by[k] = by[k] || { p: x.p, ph: [] }).ph.push(x.ph); });
+      c.items.forEach(x => { (by[x.p] = by[x.p] || { p: x.p, ph: [] }).ph.push(x.ph); });
       return Object.values(by).map(j => `${j.p}: ${j.ph.join(' + ')}`).join(' \u00b7 ');
     };
+    const many = Math.max(...c.items.map(x => x.n || 1));
     const tag = rich && i === 0 && deep > 1
-      ? `<span class="otag${deep > 2 ? ' t3' : ''}" title="${esc(`${deep} jobs this week \u2014 ${jobs()}`)}">${deep} at once</span>` : '';
-    // Same job as the booking above it (same project, dub or edit): drawn as one, no divider.
+      ? `<span class="otag${deep > 2 ? ' t3' : ''}" title="${esc(`${many} projects this week, the most at once is ${BOOT.limit || 1} \u2014 ${jobs()}`)}">${many} at once</span>` : '';
+    // Same project as the booking above it: drawn as one, no divider.
     const prev = c.items[i - 1];
-    const sameJob = rich && prev && prev.p === it.p && prev.ph !== 'Mix' && it.ph !== 'Mix';
+    const sameJob = rich && prev && prev.p === it.p;
     const body = rich
       ? `<span class="bk-n">${esc(text)}</span>` +
         (tag ? `<span class="bk-m">${tag}</span>` : '')
@@ -298,12 +300,13 @@ function renderProjectGrid() {
       if (c && c.items && c.items.length) {
         const its = c.items.slice().sort((a, b) => (ORD[a.ph] || 0) - (ORD[b.ph] || 0) || String(a.e).localeCompare(String(b.e)));
         const deep = Math.max(...its.map(x => x.deep || 1));
+        const many = Math.max(...its.map(x => x.n || 1));
         cls.push('wcell');
         if (deep > 2) cls.push('deep3');
         if (its.some(x => x.hand)) cls.push('hand');
         tip = its.map(x => `${x.e} \u00b7 ${x.ph}` + (x.of > 1 ? ` \u00b7 week ${x.at} of ${x.of}` : '') +
           (x.hand ? ' \u00b7 moved by hand' : '')).join('\n') +
-          (deep > 2 ? '\n3 at once' : deep > 1 ? '\n2 at once' : '') + (due ? '\nDue this week' : '');
+          (deep > 1 ? `\n${many} at once (most is ${BOOT.limit || 1})` : '') + (due ? '\nDue this week' : '');
         inner = '<div class="wstack">' + its.map(x =>
           `<span class="wb ${String(x.ph || '').toLowerCase()}">${esc(x.e)}</span>`).join('') + '</div>';
       } else if (due) {
@@ -427,8 +430,8 @@ function renderProjects() {
         `${ps.filter(passed).length}</td></tr>`;
     }
     let flags = '';
-    if (p.overlap > 2) flags += '<span class="chip red">3 overlaps</span>';
-    else if (p.overlap) flags += '<span class="chip warn">2 overlaps</span>';
+    // p.overlap is how far over the limit its worst week is (2 = one over); say it as the count.
+    if (p.overlap > 1) flags += `<span class="chip ${p.overlap > 2 ? 'red' : 'warn'}">${p.overlap + (BOOT.limit || 1) - 1} at once</span>`;
     // Visible in the list, not only inside the form. A locked project is one re-plan
     // will refuse to move, and having to open each project in turn to find that out is
     // how the Locked column came to be ignored.
@@ -442,7 +445,7 @@ function renderProjects() {
     if (p.status === 'Complete') {
       flags += `<span class="chip">completed ${esc(p.completed || '')}</span>`;
     }
-    const cls = [p.status ? 'dim' : '', p.locked ? 'locked' : ''].filter(Boolean).join(' ');
+    const cls = [p.status ? 'dim' : '', passed(p) ? 'gone' : '', p.locked ? 'locked' : ''].filter(Boolean).join(' ');
     const q = [p.title, p.series, p.client, who('Dub'), who('Edit'), who('Mix'), p.deadline,
       p.status, p.music ? 'music' : '', p.special ? 'special' : '', p.atmos ? 'atmos' : '',
       p.locked ? 'locked' : ''].join(' ').toLowerCase();
@@ -837,18 +840,20 @@ function renderAnalysis() {
 
   const o = a.overlaps;
   h += `<div class="head"><span class="bar"></span><h2>Overlaps</h2><span class="n">From this week on</span></div>`;
-  if (!o.collisions.length) h += '<div class="calmbox">None — nobody holds two projects in the same week.</div>';
+  const lim = a.limit || 1;
+  if (!o.collisions.length) h += `<div class="calmbox">None — nobody holds more than ${lim} project${lim === 1 ? '' : 's'} in the same week.</div>`;
   else h += '<div class="orow hd"><span>Week of</span><span>Engineer</span><span>Colliding work</span><span></span></div>' +
     o.collisions.map(c => `<div class="orow"><span>${esc(shortDate(c.start))}</span><span><b>${esc(c.engineer)}</b></span>` +
       `<span>${esc(c.work.join('  +  '))}</span><span class="tags">` +
-      (c.depth > 2 ? `<span class="tag red">${c.depth} at once</span>` : '<span class="tag two">2 at once</span>') + '</span></div>').join('');
+      `<span class="tag ${c.depth > 2 ? 'red' : 'two'}">${c.depth + lim - 1} at once</span>` + '</span></div>').join('');
   if (o.earlier_weeks) h += `<div class="quiet">${plural(o.earlier_weeks, 'earlier overlap')} not shown — past weeks</div>`;
 
   // Kept, not removed: the per-week demand charts, the client pipeline, and weeks per quarter.
   h += fold('Demand against supply, week by week', 'projects per week against the people who can do them',
     '<div class="grid2">' +
-    demandCard(a, 'recedit', 'Dub or edit — projects per week', a.pools.recedit, a.pools.recedit.length) +
-    demandCard(a, 'adv_mix', 'Advanced mix — projects per week', a.pools.adv_mix, a.pools.adv_mix.length,
+    // Supply is people times the projects each may carry at once (Rudolf, 2026-10-29).
+    demandCard(a, 'recedit', 'Dub or edit — projects per week', a.pools.recedit, a.pools.recedit.length * (a.limit || 1)) +
+    demandCard(a, 'adv_mix', 'Advanced mix — projects per week', a.pools.adv_mix, a.pools.adv_mix.length * (a.limit || 1),
                a.pools.adv_mix_incl_overflow.length - a.pools.adv_mix.length) + '</div>' + freeCard(a), false);
   h += fold('Where the work comes from', 'by client', clientCard(a), false);
   h += fold('Weeks booked per engineer, per quarter', 'all weeks in the book', heatmapCard(a), false);
@@ -866,10 +871,15 @@ function anModel(a) {
   const g = a.grid, n = g.weeks.length;
   const pool = k => g.engineers.filter(e => k === 'de' ? e.recedit : e.adv_mix).map(e => e.name);
   const by = {}; g.engineers.forEach(e => { by[e.name] = e; });
-  const free = (name, w) => by[name].cells[w].depth === 0;
+  // Room left in a week: up to a.limit projects at once is normal (Rudolf, 2026-10-29), so a
+  // person with one project still has room for more. Counted in project slots.
+  const lim = a.limit || 1;
+  const room = (name, w) => Math.max(0, lim - (by[name].cells[w].projects || 0));
+  const free = (name, w) => room(name, w) > 0;
   const stOf = c => c === 0 ? 'short' : c <= 1 ? 'tight' : 'ok';
   const m = { a, g, n, by, pool, free, pools: { de: pool('de'), am: pool('am') } };
-  m.freeCount = (k, w) => m.pools[k].filter(e => free(e, w)).length;
+  m.freeCount = (k, w) => m.pools[k].reduce((t, e) => t + room(e, w), 0);
+  m.lim = lim;
   m.stOf = stOf;
   m.cap = k => {
     const ws = [...Array(n).keys()], counts = ws.map(w => m.freeCount(k, w));
@@ -898,22 +908,22 @@ function anVerdict(m, a) {
   const last = AN_MONTHS[new Date(m.g.weeks[m.n - 1] + 'T00:00:00Z').getUTCMonth()];
   const sentence = s => {
     if (s.status === 'ok') return s.k === 'de' ? `room for about ${plural(s.min, 'more dub/edit project')} through ${last}`
-      : `Advanced mixing has at least ${s.min} free every week`;
+      : `room for at least ${plural(s.min, 'more Advanced mix', 'more Advanced mixes')} every week`;
     if (s.status === 'tight') return `${s.k === 'de' ? 'dub and edit are' : 'Advanced mixing is'} tight in ${anWeeks(m, s.tight)}`;
-    return `nobody is free for ${s.k === 'de' ? 'dub or edit' : 'Advanced mixing'} in ${anWeeks(m, s.none)}`;
+    return `no room for ${s.k === 'de' ? 'dub or edit' : 'Advanced mixing'} in ${anWeeks(m, s.none)}`;
   };
   const worst = AN_RANK[S.de.status] >= AN_RANK[S.am.status] ? S.de.status : S.am.status;
   const cap1 = x => x.charAt(0).toUpperCase() + x.slice(1);
   const txt = `${worst === 'short' ? 'Not in every week' : 'Yes'} — ${sentence(S.de)}. ${cap1(sentence(S.am))}.`;
   const future = (a.overlaps.pair_weeks || 0) + (a.overlaps.deep_weeks || 0);
   return `<section class="verdict"><p class="a"><span class="st ${worst}">${AN_STATUS[worst]}</span> ${esc(txt)}` +
-    `<small>${future ? plural(future, 'overlap') + ' planned from this week on, listed at the bottom.' : 'Nobody is double-booked from this week on.'}</small></p>` +
+    `<small>${future ? plural(future, 'overlap') + ' planned from this week on, listed at the bottom.' : `Nobody is over ${m.lim} at once from this week on.`}</small></p>` +
     '<div class="caps">' + ['de', 'am'].map(k => { const s = S[k];
-      const sub = s.status === 'ok' ? `Always at least ${s.min} free`
-        : s.status === 'tight' ? `Only 1 free in ${plural(s.tight.length, 'week')}` : `Nobody free in ${plural(s.none.length, 'week')}`;
+      const sub = s.status === 'ok' ? `Always room for at least ${s.min}`
+        : s.status === 'tight' ? `Room for only 1 in ${plural(s.tight.length, 'week')}` : `No room in ${plural(s.none.length, 'week')}`;
       return `<div class="cap"><div class="row1"><span class="lab">${k === 'de' ? 'Dub or edit' : 'Advanced mix'}</span>` +
         `<span class="st ${s.status}">${AN_STATUS[s.status]}</span></div><div class="big">${s.size} can do it</div>` +
-        `<div class="sub">${sub}</div><div class="sub">Fewest free: ${s.min} in the week of ${esc(shortDate(m.g.weeks[s.minW]))}</div></div>`; }).join('') +
+        `<div class="sub">${sub}</div><div class="sub">Least room: ${s.min} in the week of ${esc(shortDate(m.g.weeks[s.minW]))}</div></div>`; }).join('') +
     '</div></section>';
 }
 
@@ -923,21 +933,23 @@ function anHeat(m) {
   let months = '', i = 0;
   while (i < n) { const mo = dt(i).getUTCMonth(); let j = i; while (j < n && dt(j).getUTCMonth() === mo) j++;
     months += `<th class="mo" colspan="${j - i}">${MONTHS[mo]}</th>`; i = j; }
-  let h = '<div class="hmkey"><span><i class="c0"></i>free</span><span class="k"><i style="background:var(--fg3)"></i>one project</span>' +
-    '<span class="k"><i style="background:var(--warn)"></i>two at once</span><span class="k"><i style="background:var(--black)"></i>three or more</span>' +
-    '<span class="k"><i class="nowkey"></i>this week</span></div>';
+  // Shaded by projects at once: lighter to darker up to the limit (all normal work), red over it.
+  const lim = m.lim;
+  let h = '<div class="hmkey"><span><i class="c0"></i>free</span>' +
+    Array.from({ length: lim }, (_, i) => `<span class="k"><i class="p${Math.min(3, i + 1)}"></i>${i + 1} project${i ? 's' : ''}</span>`).join('') +
+    `<span class="k"><i class="pover"></i>over ${lim}</span><span class="k"><i class="nowkey"></i>this week</span></div>`;
   h += `<table class="hm2"><colgroup><col class="l"></colgroup><thead><tr><th></th>${months}</tr><tr><th></th>` +
     g.weeks.map((w, k) => `<th class="${k === 0 ? 'now' : ''}">${dt(k).getUTCDate()}</th>`).join('') + '</tr></thead><tbody>';
   g.engineers.forEach(e => {
     const tags = [e.recedit ? 'D/E' : '', e.adv_mix ? 'Mix' : '', e.reserve ? 'Reserve' : ''].filter(Boolean).join(' · ');
     h += `<tr><th class="who">${esc(e.name)}<em>${tags}</em></th>` + e.cells.map((c, k) => {
-      const d = Math.min(3, c.depth);
-      return `<td class="c${d}${k === 0 ? ' nowc' : ''}" title="${esc(e.name + ', week of ' + shortDate(g.weeks[k]) + ': ' + (c.work.join(' + ') || 'free'))}">${c.depth > 1 ? c.depth : ''}</td>`; }).join('') + '</tr>';
+      const p = c.projects || 0, cls = p > lim ? 'pover' : p ? 'p' + Math.min(3, p) : 'c0';
+      return `<td class="${cls}${k === 0 ? ' nowc' : ''}" title="${esc(e.name + ', week of ' + shortDate(g.weeks[k]) + ': ' + (c.work.join(' + ') || 'free'))}">${p > 1 ? p : ''}</td>`; }).join('') + '</tr>';
   });
   [['de', 'dub/edit'], ['am', 'Adv. mix']].forEach(([k, label], ix) => {
-    h += `<tr class="sumrow${ix === 0 ? ' first' : ''}"><th class="who">Free for ${label}</th>` +
+    h += `<tr class="sumrow${ix === 0 ? ' first' : ''}"><th class="who">Room for ${label}</th>` +
       g.weeks.map((w, kk) => { const c = m.freeCount(k, kk), st = m.stOf(c);
-        return `<td class="f-${st}${kk === 0 ? ' nowc' : ''}" title="${c} free in the week of ${esc(shortDate(w))}: ${AN_STATUS[st]}">${c}</td>`; }).join('') + '</tr>';
+        return `<td class="f-${st}${kk === 0 ? ' nowc' : ''}" title="Room for ${c} more in the week of ${esc(shortDate(w))}: ${AN_STATUS[st]}">${c}</td>`; }).join('') + '</tr>';
   });
   return h + '</tbody></table>';
 }
@@ -947,7 +959,7 @@ function anCarry(m) {
   const rows = g.engineers.map(e => ({ name: e.name, busy: e.cells.filter(c => c.depth > 0).length, dbl: e.cells.filter(c => c.depth > 1).length }))
     .sort((x, y) => y.busy - x.busy || y.dbl - x.dbl || x.name.localeCompare(y.name));
   return rows.map(r => `<div class="carry"><span class="nm">${esc(r.name)}</span><div class="track"><div class="busy" style="width:${r.busy / n * 100}%"></div>` +
-    `<div class="dbl" style="width:${r.dbl / n * 100}%"></div></div><span class="v"><b>${r.busy}</b> of ${n} weeks${r.dbl ? ` · ${r.dbl} doubled` : ''}</span></div>`).join('');
+    `<div class="dbl" style="width:${r.dbl / n * 100}%"></div></div><span class="v"><b>${r.busy}</b> of ${n} weeks${r.dbl ? ` · ${r.dbl} over the limit` : ''}</span></div>`).join('');
 }
 
 // "Taking a new job": three phases and a deadline, checked against the grid. A rough answer, not
@@ -1060,7 +1072,7 @@ function demandCard(a, role, title, pool, supply, reserve) {
     g += `<rect x="${x(i).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" ` +
       `height="${Math.max(1, ih - (y(v) - PT)).toFixed(1)}" ` +
       `fill="${over ? 'var(--red)' : 'var(--fg2)'}" fill-opacity="${over ? 1 : 0.55}">` +
-      `<title>${esc(w.label)}: ${v} needed, ${supply} can do it` +
+      `<title>${esc(w.label)}: ${v} needed, room for ${supply}` +
       `${over ? ` — over by ${w[oKey]}` : ''}\nfree: ${(w[fKey] || []).join(', ') || 'nobody'}` +
       '</title></rect>';
     // over-capacity weeks are labelled, because that is the one thing on the chart
@@ -1074,7 +1086,7 @@ function demandCard(a, role, title, pool, supply, reserve) {
   g += `<line x1="${PL}" x2="${W - PR}" y1="${y(supply)}" y2="${y(supply)}" ` +
     'stroke="var(--fg1)" stroke-width="2" stroke-dasharray="4 3"></line>' +
     `<text x="${W - PR}" y="${(y(supply) - 6).toFixed(1)}" font-size="11" text-anchor="end" ` +
-    `font-weight="700" fill="var(--fg1)">eligible supply ${supply}</text>`;
+    `font-weight="700" fill="var(--fg1)">room for ${supply}</text>`;
 
   const over = weeks.filter(w => w[oKey] > 0);
   const full = weeks.filter(w => w[oKey] === 0 && (w[fKey] || []).length === 0);
@@ -1084,10 +1096,10 @@ function demandCard(a, role, title, pool, supply, reserve) {
     (reserve ? ` \u00b7 plus ${reserve} in reserve` : '') + '</div>' +
     `<svg viewBox="0 0 ${W} ${H}" width="100%">${g}</svg>` +
     `<div class="sub">${over.length
-      ? `<b>${wk(over.length)} short-handed</b> \u2014 more projects need this role than there ` +
-        'are people who can do it. No arrangement fixes that; only hiring or a later deadline.'
+      ? `<b>${wk(over.length)} short-handed</b> \u2014 more projects need this role than the people ` +
+        `who can do it can carry, at ${a.limit || 1} each. No arrangement fixes that; only hiring or a later deadline.`
       : 'Never short-handed in this horizon.'}` +
-    (full.length ? ` ${wk(full.length)} with everyone busy \u2014 a re-plan may still help there.`
+    (full.length ? ` ${wk(full.length)} with everyone at ${a.limit || 1} \u2014 a re-plan may still help there.`
                  : '') + '</div></div>';
 }
 
@@ -1267,7 +1279,7 @@ function replanBody(r) {
         `<span class="pj">${esc(o.projects.join('  +  '))}</span><span class="tags">` +
         (st === 'cleared' ? '<span class="tag solid">Cleared</span>'
           : (st === 'new' ? '<span class="tag red">New</span>' : '<span class="tag">Stays</span>') +
-            (o.projects.length > 2 ? `<span class="tag red">${o.projects.length} at once</span>` : '<span class="tag two">2 at once</span>')) +
+            `<span class="tag ${o.projects.length > (BOOT.limit || 1) + 1 ? 'red' : 'two'}">${o.projects.length} at once</span>`) +
         '</span></div>').join(''), true);
   }
   return h + leftFold;
@@ -1743,7 +1755,7 @@ async function submitForm(p, dryRun) {
   // the overlap depth is the same blue/red as the schedule's outlines.
   let h = `<div class="result ${deep > 2 ? 'alarm' : dryRun ? 'dry' : 'saved'}">` +
     `<h4>${dryRun ? 'Availability check <span class="tag">Not saved</span>' : 'Saved'}` +
-    (deep > 2 ? ' <span class="tag red">3 at once</span>' : deep ? ' <span class="tag two">2 at once</span>' : '') + '</h4>' +
+    (deep > 1 ? ` <span class="tag ${deep > 2 ? 'red' : 'two'}">${deep + (BOOT.limit || 1) - 1} at once</span>` : '') + '</h4>' +
     (r.renamed ? `<div class="kv"><b>${dryRun ? 'Would be' : 'Saved'} as</b><span><b>${esc(r.renamed.to)}</b> ` +
       `<span class="muted-inline">\u2014 \u201c${esc(r.renamed.from)}\u201d was already a project</span></span></div>` : '') +
     `<div class="kv"><b>Recordist</b><span>${esc(r.dubber || r.recordist)}</span></div>` +

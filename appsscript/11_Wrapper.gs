@@ -298,6 +298,13 @@ function scorePlan(book, engineerRows, projectRows) {
     const cut = k.lastIndexOf('|'), n = k.slice(0, cut), w = Number(k.slice(cut + 1));
     (weeks[n] = weeks[n] || {})[w] = depthOf(perWeek[k]);
   });
+  // Projects held at once WITHIN the limit, beyond the first: a third project is allowed but
+  // spreading is still preferred (Rudolf, 2026-10-29). Ranked low, so it only ever decides
+  // between plans that are equal on every overlap and preference above it.
+  const stacked = Object.keys(perWeek).reduce((a, k) => {
+    const n = projectsOf(perWeek[k]);
+    return a + Math.max(0, Math.min(n, (typeof PROJECT_LIMIT === 'number' ? PROJECT_LIMIT : 1)) - 1);
+  }, 0);
   // Projects whose edit sits with someone who records none of its dub. Preferred
   // against, never forbidden: ranked below every overlap term, so the search splits
   // dub from edit only when keeping them together would cost an overlap or the reserve.
@@ -396,6 +403,7 @@ function scorePlan(book, engineerRows, projectRows) {
     developing_mix_weeks: developingMixWeeks,
     split_dub_edit: splitDubEdit,
     series_continuity: seriesBreaks,
+    stacked_weeks: stacked,
     regular_peak: regLoads.length ? Math.max.apply(null, regLoads) : 0,
     regular_sd: Math.round(sd * 100) / 100,
 
@@ -595,15 +603,15 @@ function continuityPass_(rows, baseBook, engineerRows, projectRows) {
   if (!bestScore.series_continuity) return { rows: best, moved: 0 };
   let moved = 0;
 
-  // Is `name` free for every row in `group`, ignoring the group's own current rows and anything
-  // that is the same job as the row arriving (see jobKey)?
+  // Has `name` room for every row in `group` -- fewer than PROJECT_LIMIT other projects each
+  // week -- ignoring the group's own current rows and anything on the same title (see jobKey)?
   const freeForGroup = (name, group, current) => {
     const occ = jobsByEngineerWeek(baseBook.concat(current));
     return group.every(row => {
       const mine = jobKey(row);
       return weeksOf(row).every(w => {
         const e = occ[name + '|' + w];
-        return !e || !e.rows.some(r => !group.includes(r) && jobKey(r) !== mine);
+        return !e || roomFor_(e.rows.filter(r => !group.includes(r) && jobKey(r) !== mine));
       });
     });
   };
@@ -671,15 +679,15 @@ function improveBySwaps_(rows, baseBook, engineerRows, projectRows, objective, o
 
   // the rows each engineer holds per week, fixed base book plus the current trial
   const occupancy = trial => jobsByEngineerWeek(baseBook.concat(trial));
-  // Free = nothing else that week, where "else" excludes the row being vacated and
-  // anything that is the SAME JOB as the row arriving: recording and editing one
-  // project in the same week is one job (see jobKey).
+  // Free = room for one more project that week (fewer than PROJECT_LIMIT others), where
+  // "others" excludes the row being vacated and anything on the SAME TITLE as the row
+  // arriving: one show's phases are one project (see jobKey).
   const freeFor = (occ, name, row, ignore) => {
     const mine = jobKey(row);
     for (const w of weeksOf(row)) {
       const at = occ[name + '|' + w];
       if (!at) continue;
-      if (at.rows.some(r => r !== ignore && jobKey(r) !== mine)) return false;
+      if (!roomFor_(at.rows.filter(r => r !== ignore && jobKey(r) !== mine))) return false;
     }
     return true;
   };
@@ -764,15 +772,19 @@ function divideDubsIfBetter_(rows, fixedBook, engineerRows, projectRows, objecti
   let bestScore = scorePlan(fixedBook.concat(best), engineerRows, projectRows);
   let divided = 0;
 
-  // Busy weeks per engineer, ignoring this project's own edit: a dubber who also holds
-  // its edit that week is doing one job, so the edit does not block a dub week.
+  // Weeks each engineer has no room in: PROJECT_LIMIT other projects already, not counting
+  // this title, whose phases are one project with the dub being divided.
   const occupancy = (trial, title) => {
-    const occ = {};
+    const t = {};
     fixedBook.concat(trial).forEach(b => {
       if (!b || !b.engineer || !b.start_date || !b.end_date) return;
-      if (b.project === title && b.phase !== 'Mix') return;
-      for (const w of weeksOf(b)) (occ[b.engineer] = occ[b.engineer] || {})[w] = 1;
+      if (b.project === title) return;
+      for (const w of weeksOf(b)) ((t[b.engineer] = t[b.engineer] || {})[w] = t[b.engineer][w] || new Set()).add(b.project);
     });
+    const occ = {};
+    Object.keys(t).forEach(n => Object.keys(t[n]).forEach(w => {
+      if (!roomFor_(t[n][w])) (occ[n] = occ[n] || {})[w] = 1;
+    }));
     return occ;
   };
 
@@ -1148,4 +1160,14 @@ function forcedRowsIn_(rows) {
 
 function stats(bookingRows, engineerRows, todayISO) {
   return computeStats(activeRows(bookingRows), engineerRows, todayISO);
+}
+
+
+// Room for one more project: `others` (booking rows, or a Set of titles) covers fewer than
+// PROJECT_LIMIT distinct projects. The limit is a ceiling (Rudolf, 2026-10-29); the score
+// still prefers spreading work, so having room is not the same as being chosen.
+function roomFor_(others) {
+  const limit = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;
+  const titles = others instanceof Set ? others : new Set((others || []).map(jobKey));
+  return titles.size < limit;
 }

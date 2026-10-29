@@ -53,18 +53,16 @@ function weeksOf(row) {
 
 // ---------------------------------------------------------------- jobs per week
 
-// What one engineer is doing in one week, counted as JOBS rather than booking rows.
+// What one engineer is doing in one week, counted as PROJECTS rather than booking rows.
 //
-// Recording and editing the same project in the same week is one job, not an overlap
-// (Tara, 2026-10-15): with per-phase dates a dub and its edit can run side by side,
-// and the person doing both is working on one title. Mixing alongside either still
-// counts as a second job, and so does anything on a different project.
+// A project is its title (Rudolf, 2026-10-29): recording, editing and mixing one show in the
+// same week is one project, not an overlap. (Since 2026-10-15 a dub and its edit were one job
+// and the mix a second; the title is now the whole unit.) Anything on another title is another.
 function jobKey(row) {
-  return String(row.project || '') + '||' + (String(row.phase || '') === 'Mix' ? 'Mix' : 'RecEdit');
+  return String(row.project || '');
 }
 
 // { 'engineer|week': { jobs: {jobKey: true}, rows: [...] } } for every week a row covers.
-// depthOf(entry) is the number every overlap figure reads.
 function jobsByEngineerWeek(rows) {
   const per = {};
   (rows || []).forEach(b => {
@@ -77,4 +75,17 @@ function jobsByEngineerWeek(rows) {
   });
   return per;
 }
-function depthOf(entry) { return entry ? Object.keys(entry.jobs).length : 0; }
+
+// How many projects one engineer has on in a week.
+function projectsOf(entry) { return entry ? Object.keys(entry.jobs).length : 0; }
+
+// The number every OVERLAP figure reads: 0 for a free week, 1 for a week within the limit,
+// 2 for one project over it, 3 for two over, and so on. Up to PROJECT_LIMIT projects at once
+// is normal work (Rudolf, 2026-10-29), so the overlap rules, scores and flags -- written when
+// any second job was an overlap -- keep their meaning: "doubled" is now "one over the limit".
+// With a limit of 1 this is exactly the project count, as before.
+function depthOf(entry) {
+  const n = projectsOf(entry);
+  const limit = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;
+  return n <= limit ? (n > 0 ? 1 : 0) : n - limit + 1;
+}

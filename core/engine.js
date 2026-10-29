@@ -32,12 +32,12 @@ const EXPORTS = [
   'runAssign', 'replan', 'computeStats',
   // weeks
   'widx', 'weekStart', 'weekEnd', 'weekLabel', 'weekDayRange', 'monthLabel', 'quarterOf', 'weeksOf',
-  'jobKey', 'jobsByEngineerWeek', 'depthOf',
+  'jobKey', 'jobsByEngineerWeek', 'depthOf', 'projectsOf',
   // wrapper
   'activeRows', 'normalizeProject', 'parsePhases', 'validateBook',
   'assertValidBook', 'plot', 'plotBatch', 'replanBook', 'stats', 'PHASES', 'LEVELS',
   // capacity
-  'SHARE_CAP', 'SHARE_PREFER_WHOLE_EDIT', 'SOLVE_RESTARTS', 'SOLVE_OBJECTIVE',
+  'SHARE_CAP', 'SHARE_PREFER_WHOLE_EDIT', 'SOLVE_RESTARTS', 'SOLVE_OBJECTIVE', 'PROJECT_LIMIT',
   'solveOrder', 'scorePlan', 'engineerRoles', 'planIsBetter', 'replayOrder',
   'computeCapacity', 'weekSeries', 'freeCapacityByQuarter', 'bottleneck',
   'streaks', 'pipeline', 'weeksPerEngineer',
@@ -49,7 +49,7 @@ const EXPORTS = [
 
 function appsScriptDir() { return path.join(__dirname, '..', 'appsscript'); }
 
-// opts: { cap, wholeEdit } override the sharing policy, so a test can exercise
+// opts: { cap, wholeEdit, limit } override the sharing policy, so a test can exercise
 // the mechanism independently of whatever the studio's current default is.
 function loadAppsScript(dir, opts) {
   if (dir && typeof dir === 'object') { opts = dir; dir = null; }
@@ -62,6 +62,10 @@ function loadAppsScript(dir, opts) {
   if (opts && opts.wholeEdit !== undefined)
     src = src.replace(/var SHARE_PREFER_WHOLE_EDIT = (true|false);/,
                       `var SHARE_PREFER_WHOLE_EDIT = ${!!opts.wholeEdit};`);
+  // limit: projects one engineer may carry at once before it is an overlap. 1 is the rule the
+  // engine was built and tested under (any second booking is an overlap).
+  if (opts && opts.limit !== undefined)
+    src = src.replace(/var PROJECT_LIMIT = \d+;/, `var PROJECT_LIMIT = ${opts.limit};`);
   if (opts && opts.restarts !== undefined)
     src = src.replace(/var SOLVE_RESTARTS = \d+;/, `var SOLVE_RESTARTS = ${opts.restarts};`);
   const body = `"use strict";\n${src}\n;return { ${EXPORTS.join(', ')} };`;

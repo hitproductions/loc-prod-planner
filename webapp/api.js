@@ -12,8 +12,10 @@ const live = book => A.activeRows(book.bookings);
 const todayLocal = () =>
   new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
-// Overlapped engineer-weeks by DEPTH. Two at once is ordinary — a series still
-// recording while its edit starts — and three is overflow that wants reassigning.
+// Overlapped engineer-weeks by DEPTH. Up to A.PROJECT_LIMIT projects at once is normal work
+// (Rudolf, 2026-10-29); A.depthOf reads 2 for one project over the limit and 3+ for more, so
+// `two` is "one over" and `three` is "two or more over".
+// (Before 2026-10-29 the limit was 1: two at once was "ordinary", three was overflow.)
 // Counted from the weeks, never from a FORCED note: the note records what the engine
 // decided at the time, and misses any overlap a later project created on top of it.
 //
@@ -144,6 +146,7 @@ function bootstrap(book, opts) {
     series: [...new Map(book.projects.map(p => String(p.series || '').trim().replace(/\s+/g, ' '))
       .filter(Boolean).map(x => [x.toLowerCase(), x])).values()].sort((a, b) => a.localeCompare(b)),
     today_week: A.weekStart(fromW),
+    limit: A.PROJECT_LIMIT,
     counts: { projects: book.projects.filter(p => !p.status).length,
               done: book.projects.filter(p => p.status === 'Complete').length,
               live_rows: rows.length,
@@ -225,6 +228,7 @@ function schedule(book, opts) {
   // engineer's calendar, not of the project. In Projects mode the cell still reports
   // the depth of whoever is in it, so the same week reads the same in both views.
   const per = depths(rows).per;
+  const jobs = A.jobsByEngineerWeek(rows);
   rows.forEach(b => {
     const key = byProject ? b.project : b.engineer;
     const ri = idx[key];
@@ -233,9 +237,12 @@ function schedule(book, opts) {
       const ci = col[w];
       if (ci === undefined) continue;        // outside the range: skip the WEEK, not the booking
       const deep = per[b.engineer + '|' + w] || 1;
+      // How many projects this person has on that week, for "4 at once" -- depth says how far
+      // over the limit that is, which is not a number anyone counts in.
+      const n = A.projectsOf(jobs[b.engineer + '|' + w]) || 1;
       const text = byProject ? b.engineer : b.project;
       // Where this week falls in its booking, so a cell can say "Dub, week 2 of 3".
-      const item = { p: b.project, e: b.engineer, deep, ph: b.phase, hand: /moved by hand/i.test(b.note || ''),
+      const item = { p: b.project, e: b.engineer, deep, n, ph: b.phase, hand: /moved by hand/i.test(b.note || ''),
                      at: w - A.widx(b.start_date) + 1, of: A.widx(b.end_date) - A.widx(b.start_date) + 1 };
       const cur = cells[ri][ci];
       if (!cur) cells[ri][ci] = { phase: b.phase, text, depth: deep, count: 1, items: [item] };
@@ -358,13 +365,15 @@ function analysis(book, opts) {
       adv_mix: (cap.pools.adv_mix || []).includes(e.name),
       cells: Array.from({ length: GRID_WEEKS }, (_, i) => {
         const at = jobsAll[e.name + '|' + (startW + i)];
-        return at ? { work: at.rows.map(b => `${b.project} (${b.phase})`), depth: A.depthOf(at) } : { work: [], depth: 0 };
+        return at ? { work: at.rows.map(b => `${b.project} (${b.phase})`), depth: A.depthOf(at), projects: A.projectsOf(at) }
+          : { work: [], depth: 0, projects: 0 };
       }),
     })),
   };
 
   return {
     today: from,
+    limit: A.PROJECT_LIMIT,
     grid,
     horizon: cap.horizon,
     pools: cap.pools,

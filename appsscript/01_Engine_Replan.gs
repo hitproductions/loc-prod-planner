@@ -52,19 +52,31 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
 
   // ---- engineer state, pre-blocked with locked work ----
   const eng = {};
-  for (const n in base) eng[n] = { ...base[n], busy: new Set(), load: 0, last: null };
+  // Projects at once, counted by title, up to PROJECT_LIMIT -- mirrors the assign engine.
+  // `at` holds each week's titles; `cur` is the project being placed, whose own weeks never
+  // fill anyone up for it. "free" means has room; an overlap is a week over the limit.
+  const LIMIT = (typeof PROJECT_LIMIT === 'number' && PROJECT_LIMIT >= 1) ? PROJECT_LIMIT : 1;
+  let cur = '';
+  for (const n in base) eng[n] = { ...base[n], at: {}, load: 0, last: null };
   for (const b of locked) {
     const e = eng[b.engineer]; if (!e) continue;
     for (let w = widx(b.start_date); w <= widx(b.end_date); w++) {
-      e.busy.add(w); e.load++; if (e.last === null || w > e.last) e.last = w;
+      (e.at[w] = e.at[w] || new Set()).add(String(b.project || ''));
+      e.load++; if (e.last === null || w > e.last) e.last = w;
     }
   }
+  const others = (n, w) => { const t = eng[n].at[w]; return t ? t.size - (t.has(cur) ? 1 : 0) : 0; };
+  const full = (n, w) => others(n, w) >= LIMIT;
+  const fullIn = (n, wks) => { let k = 0; for (const w of wks) if (full(n, w)) k++; return k; };
+  const stack = (n, wks) => { let k = 0; for (const w of wks) k += others(n, w); return k; };
 
   const gap = (n, ref) => eng[n].last === null ? 1e9 : ref - eng[n].last;
-  const free = (n, wks) => inter(eng[n].busy, wks).length === 0;
-  const commit = (n, wks) => { for (const w of wks) { eng[n].busy.add(w); eng[n].load++;
-    if (eng[n].last === null || w > eng[n].last) eng[n].last = w; } };
-  const pick = (pool, ref, byRank) => { if (!pool.length) return null;
+  const free = (n, wks) => fullIn(n, wks) === 0;
+  const commit = (n, wks) => { for (const w of wks) { (eng[n].at[w] = eng[n].at[w] || new Set()).add(cur);
+    eng[n].load++; if (eng[n].last === null || w > eng[n].last) eng[n].last = w; } };
+  const pick = (pool, ref, byRank, wks) => { if (!pool.length) return null;
+    if (wks && wks.size) { const least = Math.min(...pool.map(n => stack(n, wks)));
+      pool = pool.filter(n => stack(n, wks) === least); }
     if (byRank) { const best = Math.min(...pool.map(n => eng[n].musicRank));
       pool = pool.filter(n => eng[n].musicRank === best); }
     const m = Math.min(...pool.map(e => eng[e].load));
@@ -74,7 +86,7 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
   const musicPool = can => Object.keys(eng).filter(n => eng[n].musicRank && can(n));
 
   const forcePick = (pool, wks) => pool.slice().sort((a,b) =>
-    (inter(eng[a].busy,wks).length - inter(eng[b].busy,wks).length) ||
+    (fullIn(a, wks) - fullIn(b, wks)) || (stack(a, wks) - stack(b, wks)) ||
     (eng[a].load - eng[b].load) || a.localeCompare(b))[0];
   // Mirrors assign.js exactly — smallest covering set, any size. It has to: this
   // file is a second implementation of the same rules, and when the two disagree
@@ -96,7 +108,7 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
     const weeks = [...needed].sort((x, y) => x - y);
     if (!weeks.length || pool.length < 2) return null;
     const freeOf = {};
-    for (const n of pool) freeOf[n] = new Set(weeks.filter(w => !eng[n].busy.has(w)));
+    for (const n of pool) freeOf[n] = new Set(weeks.filter(w => !full(n, w)));
 
     const allocate = combo => {
       const got = {};
@@ -106,7 +118,7 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
         const able = combo.filter(n => freeOf[n].has(w));
         if (!able.length) return null;
         let who = (prev && able.indexOf(prev) !== -1) ? prev
-          : able.slice().sort((a, b) =>
+          : able.slice().sort((a, b) => (others(a, w) - others(b, w)) ||
               (eng[a].load + got[a].length) - (eng[b].load + got[b].length) || a.localeCompare(b))[0];
         got[who].push(w);
         prev = who;
@@ -167,6 +179,7 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
 
   for (const p of projects) {
     const title = p.project_title;
+    cur = String(title || '');
     // Phase windows -- mirrors assign.js. Per-phase dates win when the project has
     // them (Tara, 2026-10-15); an older row without dates plots backward as before.
     const span = (a, z) => { const s = new Set();
@@ -214,13 +227,13 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
         if (!isSpecial && isMusic) pool = musicPool(n => eng[n].record && eng[n].edit);
         const samePool = pool.filter(n => free(n, reWks));
         if (samePool.length) {
-          const who = pick(samePool, Math.min(...reWks));
+          const who = pick(samePool, Math.min(...reWks), false, reWks);
           commit(who, reWks); emit('Dub', who, dubw); emit('Edit', who, editw);
         } else {
           const dp = pool.filter(n => !dubw.size || free(n, dubw));
           const ep = pool.filter(n => !editw.size || free(n, editw));
-          const dPick = dubw.size ? (dp.length ? pick(dp, Math.min(...dubw)) : null) : null;
-          const ePick = editw.size ? (ep.length ? pick(ep, Math.min(...editw)) : null) : null;
+          const dPick = dubw.size ? (dp.length ? pick(dp, Math.min(...dubw), false, dubw) : null) : null;
+          const ePick = editw.size ? (ep.length ? pick(ep, Math.min(...editw), false, editw) : null) : null;
           if ((!dubw.size || dPick) && (!editw.size || ePick)) {
             if (dPick) { commit(dPick, dubw); emit('Dub', dPick, dubw); }
             if (ePick) { commit(ePick, editw); emit('Edit', ePick, editw); }
@@ -237,8 +250,14 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
                 for (const r of runsOf(new Set([...wks].filter(w => editw.has(w)))))
                   emit('Edit', n, r, `shared phase (${r.size}wk of ${shared.length}-way split)`);
               }
+            } else if (!isSpecial && !isMusic && Object.keys(eng).some(n => eng[n].overflow && eng[n].record && eng[n].edit && free(n, reWks))) {
+              // The reserve for recording and editing (Mat, Rudolf 2026-10-29): only when
+              // every regular is at the limit, and still before anyone goes over it.
+              const res = Object.keys(eng).filter(n => eng[n].overflow && eng[n].record && eng[n].edit && free(n, reWks));
+              const r = pick(res, Math.min(...reWks), false, reWks);
+              commit(r, reWks); emit('Dub', r, dubw, 'reserve'); emit('Edit', r, editw, 'reserve');
             } else {
-              const f = forcePick(pool, reWks); const ov = inter(eng[f].busy, reWks).length;
+              const f = forcePick(pool, reWks); const ov = fullIn(f, reWks);
               commit(f, reWks); forcedCount += (dubw.size?1:0) + (editw.size?1:0);
               emit('Dub', f, dubw, `FORCED OVERLAP (${ov}wk)`); emit('Edit', f, editw, `FORCED OVERLAP (${ov}wk)`);
             }
@@ -271,21 +290,21 @@ function replan(projectRows, bookingRows, engineerRows, todayISO, opts) {
           const tier = musicPool(n => eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n));
           const free_ = tier.filter(n => free(n, mixw));
           if (free_.length) {
-            const who = pick(free_, Math.min(...mixw), true); commit(who, mixw); emit('Mix', who, mixw);
+            const who = pick(free_, Math.min(...mixw), true, mixw); commit(who, mixw); emit('Mix', who, mixw);
           } else if (tier.length) {
-            const f = forcePick(tier, mixw); const ov = inter(eng[f].busy, mixw).length;
+            const f = forcePick(tier, mixw); const ov = fullIn(f, mixw);
             commit(f, mixw); forcedCount += 1;
             emit('Mix', f, mixw, `FORCED OVERLAP (${ov}wk) — music mixing is restricted to ${tier.join(', ')}`);
           }
           // no specialist can mix at this level: fall through, and the warning stands
-        } else if (mp.length) { const who = pick(mp, Math.min(...mixw)); commit(who, mixw); emit('Mix', who, mixw); }
+        } else if (mp.length) { const who = pick(mp, Math.min(...mixw), false, mixw); commit(who, mixw); emit('Mix', who, mixw); }
         else {
           const ofl = Object.keys(eng).filter(n => eng[n].overflow && eng[n].mix &&
             (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n) && free(n, mixw));
-          if (ofl.length) { const who = pick(ofl, Math.min(...mixw)); commit(who, mixw); emit('Mix', who, mixw, 'overflow'); }
+          if (ofl.length) { const who = pick(ofl, Math.min(...mixw), false, mixw); commit(who, mixw); emit('Mix', who, mixw, 'overflow'); }
           else {
             const all = regular.concat(fallback).concat(Object.keys(eng).filter(n => eng[n].overflow && eng[n].mix && (!needAdv || eng[n].lvl === 'Advanced') && hasAtmos(n)));
-            const f = forcePick(all, mixw); const ov = inter(eng[f].busy, mixw).length;
+            const f = forcePick(all, mixw); const ov = fullIn(f, mixw);
             commit(f, mixw); forcedCount += 1; emit('Mix', f, mixw, `FORCED OVERLAP (${ov}wk)`);
           }
         }
