@@ -7,7 +7,13 @@
 # whole schedule on the open internet.
 #
 #   ./deploy/cloudrun.sh                 # deploy (private)
-#   ./deploy/cloudrun.sh --public        # deploy public — ONLY behind Cloudflare Access
+#   ./deploy/cloudrun.sh --public        # deploy public, behind Google sign-in
+#   ./deploy/cloudrun.sh --public --view # the read-only service, same sign-in
+#   ./deploy/cloudrun.sh --setup-secret  # once: store the Google client secret in Secret Manager
+#
+# The Google client secret lives in Secret Manager, not in a setting typed at each deploy
+# (Tara, 2026-10-30): --setup-secret stores it once, every deploy reads it from there. Run
+# --setup-secret again only if the secret is rotated in the Google Cloud console.
 #
 # Then, to use it:
 #   gcloud run services proxy planner --region asia-southeast1 --port 8127
@@ -29,23 +35,48 @@ fi
 SHEET=${PLANNER_SHEET_ID:-1_9A1gzFlr8xOkmmzRdH75JBS5KmkqEoS0lLO3GWOGiQ}
 SA=planner-app@loc-prod-planner.iam.gserviceaccount.com
 
+# The Google sign-in client. The ID is not a secret; set PLANNER_GOOGLE_CLIENT_ID to an empty
+# string to deploy behind the old shared password instead.
+GOOGLE_CLIENT_ID=${PLANNER_GOOGLE_CLIENT_ID-63803252709-9m03lkbc51eslcgu1vjs7lr5qk1ves12.apps.googleusercontent.com}
+SECRET_NAME=${PLANNER_GOOGLE_SECRET_NAME:-planner-google-client-secret}
+
+if [ "${1:-}" = "--setup-secret" ]; then
+  # Prompted, never an argument: an argument lands in ~/.zsh_history in the clear.
+  printf 'Google OAuth client secret (typing is hidden): ' >&2
+  stty -echo 2>/dev/null || true; read -r SECRET; stty echo 2>/dev/null || true
+  printf '\n' >&2
+  if [ -z "${SECRET:-}" ]; then echo "REFUSING: no secret given." >&2; exit 1; fi
+  gcloud services enable secretmanager.googleapis.com --project "$PROJECT"
+  # printf is a shell builtin, so the secret never appears in the process list.
+  if gcloud secrets describe "$SECRET_NAME" --project "$PROJECT" >/dev/null 2>&1; then
+    printf '%s' "$SECRET" | gcloud secrets versions add "$SECRET_NAME" --project "$PROJECT" --data-file=-
+  else
+    printf '%s' "$SECRET" | gcloud secrets create "$SECRET_NAME" --project "$PROJECT" \
+      --replication-policy=automatic --data-file=-
+  fi
+  unset SECRET
+  # The planner runs as $SA, so that account is the one that must be able to read it.
+  gcloud secrets add-iam-policy-binding "$SECRET_NAME" --project "$PROJECT" \
+    --member "serviceAccount:$SA" --role roles/secretmanager.secretAccessor >/dev/null
+  echo "Stored as $SECRET_NAME. Deploy with: deploy/cloudrun.sh --public"
+  exit 0
+fi
+
 AUTH=--no-allow-unauthenticated
 PW_ENV=""
-if [ "${1:-}" = "--public" ] && [ -n "${PLANNER_GOOGLE_CLIENT_ID:-}" ]; then
+SECRETS_ARG=""
+if [ "${1:-}" = "--public" ] && [ -n "$GOOGLE_CLIENT_ID" ]; then
   # Sign in with Google replaces the shared password. Everyone uses their own account, and
   # History records who changed what. The OAuth client is made in the Google Cloud console
-  # (see deploy/GOOGLE-LOGIN.md); its secret is prompted for, never typed as an argument.
+  # (see deploy/GOOGLE-LOGIN.md); its secret is read from Secret Manager at run time.
   AUTH=--allow-unauthenticated
-  if [ -z "${PLANNER_GOOGLE_CLIENT_SECRET:-}" ] && [ -t 0 ]; then
-    printf 'Google OAuth client secret (typing is hidden): ' >&2
-    stty -echo 2>/dev/null; read -r PLANNER_GOOGLE_CLIENT_SECRET; stty echo 2>/dev/null
-    printf '\n' >&2
-  fi
-  if [ -z "${PLANNER_GOOGLE_CLIENT_SECRET:-}" ]; then
-    echo "REFUSING: Google sign-in needs the client secret." >&2
+  if ! gcloud secrets describe "$SECRET_NAME" --project "$PROJECT" >/dev/null 2>&1; then
+    echo "REFUSING: the Google client secret is not in Secret Manager yet." >&2
+    echo "  Run once:  deploy/cloudrun.sh --setup-secret" >&2
     exit 1
   fi
-  PW_ENV="|PLANNER_GOOGLE_CLIENT_ID=$PLANNER_GOOGLE_CLIENT_ID|PLANNER_GOOGLE_CLIENT_SECRET=$PLANNER_GOOGLE_CLIENT_SECRET|PLANNER_GOOGLE_DOMAIN=${PLANNER_GOOGLE_DOMAIN:-hitproductions.net}"
+  SECRETS_ARG="--set-secrets PLANNER_GOOGLE_CLIENT_SECRET=$SECRET_NAME:latest"
+  PW_ENV="|PLANNER_GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID|PLANNER_GOOGLE_DOMAIN=${PLANNER_GOOGLE_DOMAIN:-hitproductions.net}"
   [ -n "${PLANNER_GOOGLE_ALLOW:-}" ] && PW_ENV="$PW_ENV|PLANNER_GOOGLE_ALLOW=$PLANNER_GOOGLE_ALLOW"
   [ -n "${PLANNER_PUBLIC_URL:-}" ] && PW_ENV="$PW_ENV|PLANNER_PUBLIC_URL=$PLANNER_PUBLIC_URL"
 elif [ "${1:-}" = "--public" ]; then
@@ -93,6 +124,7 @@ gcloud run deploy "$SERVICE" \
   --source . \
   --service-account "$SA" \
   --set-env-vars "^|^PLANNER_SOURCE=sheets|PLANNER_SHEET_ID=$SHEET$RO$PW_ENV" \
+  $SECRETS_ARG \
   --memory 512Mi \
   --cpu 1 \
   --timeout 120 \

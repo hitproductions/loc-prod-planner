@@ -15,15 +15,24 @@ Local runs and a LAN box are unchanged: with no `PLANNER_GOOGLE_CLIENT_ID` set, 
 
 ## Deploy
 
-Run from the repository root. The secret is prompted for (hidden), not typed as an argument:
+**Once**, store the client secret in Google Secret Manager. Run from the repository root; it
+asks for the secret with hidden typing, and also lets the planner's service account read it:
 
 ```bash
-export PLANNER_GOOGLE_CLIENT_ID=<client id>
+deploy/cloudrun.sh --setup-secret
+```
+
+Run it again only if the secret is changed in the Google Cloud console.
+
+**Every deploy** after that needs nothing typed. The client ID is built into the script and the
+secret is read from Secret Manager:
+
+```bash
 deploy/cloudrun.sh --public            # editing copy
 deploy/cloudrun.sh --public --view     # read-only copy
 ```
 
-Optional environment variables, set the same way:
+Optional settings, exported in the same terminal before deploying:
 
 | Variable | Meaning |
 |---|---|
