@@ -296,7 +296,7 @@ and weeks per quarter.
 
 ## Signing in
 
-On the Cloud Run copies, everyone signs in with their own @hitproductions.net Google account, and History shows who made each change (the **By** column). Engineers (anyone whose address is in the Engineers tab's `email` column) get the read-only engineer view on the same link; everyone else gets the full planner. Setup is in `deploy/GOOGLE-LOGIN.md`. Local runs ask for nothing.
+On the Cloud Run copies, everyone signs in with their own @hitproductions.net Google account, and History shows who made each change (the **By** column). Engineers (anyone whose address is in the Engineers tab's `email` column) get the read-only engineer view on the same link. With an **Access** tab on the sheet (an `email` column), only the people listed there get the full planner and everyone else is refused; without it, everyone else gets the full planner. Setup is in `deploy/GOOGLE-LOGIN.md`. Local runs ask for nothing.
 
 ---
 
