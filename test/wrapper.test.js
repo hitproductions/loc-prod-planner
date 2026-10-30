@@ -1614,6 +1614,34 @@ section('Up to 3 projects at once, counted by title; Mat as the record/edit rese
   ok('re-plan: a project\u2019s own weeks do not fill its people up', ownMix.length > 0 &&
      ownMix.every(b => b.engineer === 'Mixy' && !/FORCED/.test(b.note || '')), JSON.stringify(ownMix.map(b => [b.engineer, b.note])));
 
+  // Every path that can force tries the reserve first, the half-manual ones included
+  // (found by review, 2026-10-30).
+  const roster2 = roster.concat(R('Eve', { can_record: 'No' }));
+  const fullBook = on('Ana', 3).concat(on('Ben', 3));
+  const phaseBy = (o, ph) => o.booking_rows.filter(b => b.phase === ph).map(b => b.engineer).join('+');
+  const edNamed = L.runAssign(L.normalizeProject({ ...P, editor_override: 'Eve' }).project, fullBook, roster2);
+  ok('editor named by hand: with every regular at 3, the dub goes to Mat, not forced',
+     phaseBy(edNamed, 'Dub') === 'Mat' && phaseBy(edNamed, 'Edit') === 'Eve' && !edNamed.forced, edNamed.record_note);
+  const pairNamed = L.runAssign(L.normalizeProject({ ...P, recordist_override: 'Ana', recordist_override_2: 'Ben' }).project,
+    fullBook, roster2);
+  ok('dub named by hand: with every regular at 3, the edit goes to Mat, not forced',
+     phaseBy(pairNamed, 'Edit') === 'Mat' && !/FORCED OVERLAP on the edit/.test(pairNamed.record_note), pairNamed.record_note);
+
+  // Whoever has the dub keeps it while they have room: a block, not a re-deal every week.
+  // Nobody can take all four weeks (Ana is full in week 4, Ben in week 1); in weeks 2 and 3 each
+  // has one other project in turn, which used to hand the dub Ana, Ben, Ana (review, 2026-10-30).
+  const Blocky = L.normalizeProject({ ...P, project_title: 'Blocky', dub_from: '2026-11-02', dub_to: '2026-11-29',
+    edit_from: '', edit_to: '', mix_from: '', mix_to: '' }).project;
+  const inWeek = (e, a, z, n, tag) => on(e, n).map(b => ({ ...b, project: b.project + tag, start_date: a, end_date: z }));
+  const handBook = [].concat(inWeek('Ana', '2026-11-23', '2026-11-29', 3, ' w4'), inWeek('Ana', '2026-11-09', '2026-11-15', 1, ' w2'),
+    inWeek('Ben', '2026-11-02', '2026-11-08', 3, ' w1'), inWeek('Ben', '2026-11-16', '2026-11-22', 1, ' w3'));
+  const blocky = L.runAssign(Blocky, handBook, [R('Ana'), R('Ben')]);
+  const weekly = [];
+  blocky.booking_rows.filter(b => b.phase === 'Dub').forEach(b => {
+    for (let w = L.widx(b.start_date); w <= L.widx(b.end_date); w++) weekly[w - L.widx('2026-11-02')] = b.engineer; });
+  ok('the dub stays with its holder while they have room, then hands over once',
+     weekly.join(',') === 'Ana,Ana,Ana,Ben' && !blocky.forced, weekly.join(','));
+
   // counting and scoring
   const wk = (project, phase, engineer) => ({ project, phase, engineer, start_date: '2026-11-16', end_date: '2026-11-22', note: '', status: '' });
   const own = [wk('P', 'Dub', 'Ana'), wk('P', 'Edit', 'Ana'), wk('P', 'Mix', 'Ana')];

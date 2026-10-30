@@ -207,9 +207,11 @@ function runAssign(proj, bookingRows, engineerRows) {
         if (blocks) {
           // Music rank still comes first: a second-choice specialist who started the
           // dub hands it back as soon as the first choice is free (Daryl 1, Josiah 2).
+          // Whoever has the dub keeps it while they have room (under PROJECT_LIMIT) -- a block,
+          // not a week-by-week re-deal. Preferring whoever had less on that week let the dub go
+          // A, B, A (found by review, 2026-10-30); spreading decides the hand-over, not the hold.
           const bestRank = Math.min(...able.map(rankOf));
-          const least = Math.min(...able.map(n => others(n, w)));
-          who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank && others(prev, w) <= least) ? prev
+          who = (prev && able.indexOf(prev) !== -1 && rankOf(prev) <= bestRank) ? prev
             : able.slice().sort((a, b) =>
                 (rankOf(a) - rankOf(b)) ||
                 (others(a, w) - others(b, w)) ||
@@ -327,6 +329,13 @@ function runAssign(proj, bookingRows, engineerRows) {
     if (isMusic) pool = musicPool(n => eng[n].record && eng[n].edit);
   }
 
+  // The record/edit reserve (Mat, Rudolf 2026-10-29) for a set of weeks: used only when no
+  // regular has room, and still before anyone is forced over the limit -- on every path that
+  // can force, the half-manual ones included (found by review, 2026-10-30).
+  const reservesFor = wks => (isSpecial || isMusic) ? [] : Object.keys(eng).filter(n =>
+    eng[n].overflow && eng[n].record && eng[n].edit && free(n, wks));
+  const reserveNote = (n, what) => `${n} \u2014 reserve for the ${what}; every regular already had ${LIMIT} projects those weeks.`;
+
   let rec = null, recNote = '', assignments = [];
 
   // Rule 11, per role. The dub and the edit can go to different engineers now, so
@@ -409,6 +418,10 @@ function runAssign(proj, bookingRows, engineerRows) {
       const dubEd = freeEd.filter(n => ownDub[n]);
       if (dubEd.length) edName = pick(dubEd, Math.min(...editw), isMusic, editw);
       else if (freeEd.length) edName = pick(freeEd, Math.min(...editw), isMusic, editw);
+      else if (reservesFor(editw).length) {
+        edName = pick(reservesFor(editw), Math.min(...editw), false, editw);
+        notes.push(reserveNote(edName, 'edit'));
+      }
       else if (pool.length) {
         edName = forcePick(pool, editw);
         notes.push(`FORCED OVERLAP on the edit — ${edName} already had ${LIMIT} at once ` +
@@ -445,6 +458,10 @@ function runAssign(proj, bookingRows, engineerRows) {
       // engine chooses the dub around the hand-picked editor
       const freeDub = pool.filter(n => free(n, dubw));
       if (freeDub.length) dubName = pick(freeDub, Math.min(...dubw), false, dubw);
+      else if (reservesFor(dubw).length) {
+        dubName = pick(reservesFor(dubw), Math.min(...dubw), false, dubw);
+        notes.push(reserveNote(dubName, 'dub'));
+      }
       else if (pool.length) {
         dubName = forcePick(pool, dubw);
         notes.push(`FORCED OVERLAP on the dub — ${dubName} already had ${LIMIT} at once ` +
