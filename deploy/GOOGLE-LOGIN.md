@@ -62,6 +62,18 @@ A signed-in person whose address is in that column gets the read-only engineer v
 
 The separate read-only service keeps working, so nothing breaks while people switch. It can be retired later.
 
+## Locking it to a few people: the Access tab
+
+Without an **Access** tab on the sheet, anyone the sign-in lets in gets the planner. To lock it:
+
+1. Add a tab named `Access`, with `email` in cell A1.
+2. List the planners' Hit emails under it, one per row.
+
+Then only those people get the full planner; engineers (the Engineers tab's `email` column) get
+the read-only view; anyone else is refused with "No access to the planner". Changes apply within
+a few minutes, no redeploy. **An Access tab with no emails locks everyone out except engineers**,
+so add your own email first. Deleting the tab removes the lock.
+
 ## Check after deploying
 
 1. Open the Cloud Run URL signed out: only the Google button shows.

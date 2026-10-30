@@ -15,10 +15,11 @@ function build() {
                                            status: '', completed: '' }));
   const bookings = A.plotBatch(rawProjects, [], engineers).new_rows
     .map((b, i) => ({ ...b, status: '', row_number: i + 2 }));
-  return { engineers, projects, bookings };
+  return { engineers, projects, bookings, access: accessList };
 }
 
 let held = null;
+let accessList = null;          // the Access tab: null = no tab
 let events = [];
 
 module.exports = {
@@ -71,5 +72,6 @@ module.exports = {
   async appendEvent(e) { events.push({ ...e, id: events.length + 1 }); return e; },
 
   // tests reset between cases
-  _reset() { held = null; events = []; },
+  _reset() { held = null; events = []; accessList = null; },
+  _setAccess(list) { accessList = list; if (held) held.access = list; },
 };

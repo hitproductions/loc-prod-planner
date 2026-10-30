@@ -2089,6 +2089,54 @@ section('Sign in with Google (replaces the shared password)');
   delete require.cache[require.resolve('../webapp/server.js')];
 }
 
+section('The Access tab: planners edit, engineers view, nobody else (Tara, 2026-10-30)');
+{
+  const G = require('../webapp/google.js');
+  const env = { PLANNER_GOOGLE_CLIENT_ID: 'cid.apps.googleusercontent.com', PLANNER_GOOGLE_CLIENT_SECRET: 'shh-secret',
+    PLANNER_GOOGLE_DOMAIN: 'hitproductions.net' };
+  const saved = {}; Object.keys(env).concat('PLANNER_PASSWORD', 'PLANNER_SSO_SECRET', 'PLANNER_GOOGLE_ALLOW')
+    .forEach(k => { saved[k] = process.env[k]; delete process.env[k]; });
+  Object.assign(process.env, env);
+  fixture._reset();
+  delete require.cache[require.resolve('../webapp/server.js')];
+  const app = require('../webapp/server.js');
+  await new Promise(r => app.server.listen(0, r));
+  const port = app.server.address().port, base = `http://127.0.0.1:${port}`;
+  const as = email => ({ headers: { cookie: 'planner_google=' + G.makeSession(G.cfg(), { email, name: '' }) } });
+  const st = async (path, email) => (await fetch(base + path, { redirect: 'manual', ...as(email) })).status;
+  const engJson = require('../validation/engineers.json');
+  engJson[0].email = 'jek.eng@hitproductions.net';
+  const setAccess = async list => { fixture._setAccess(list); await app.store.get(true); };
+
+  ok('with no Access tab, anyone the sign-in lets in gets the planner',
+     await st('/api/bootstrap', 'someone@hitproductions.net') === 200);
+  await setAccess(['tara@hitproductions.net', 'rudolf@hitproductions.net']);
+  const tb = await (await fetch(base + '/api/bootstrap', as('tara@hitproductions.net'))).json();
+  ok('a planner on the Access tab gets the full planner', tb.readonly === false);
+  const eb = await (await fetch(base + '/api/bootstrap', as('jek.eng@hitproductions.net'))).json();
+  ok('an engineer not on it still gets the read-only view', eb.readonly === true);
+  ok('anyone else is refused, page and data alike',
+     await st('/', 'finance@hitproductions.net') === 403 && await st('/api/bootstrap', 'finance@hitproductions.net') === 403 &&
+     await st('/api/history', 'finance@hitproductions.net') === 403);
+  const page = await (await fetch(base + '/', as('finance@hitproductions.net'))).text();
+  ok('and told why, with a way to switch account', /not on the planner's access list/.test(page) && /\/auth\/logout/.test(page));
+  const w = await fetch(base + '/api/set-lock', { method: 'POST', headers: { ...as('finance@hitproductions.net').headers,
+    'content-type': 'application/json', origin: base }, body: JSON.stringify({ title: tb.projects[0].title, locked: true }) });
+  ok('a change sent by someone not on the list is refused', w.status === 403);
+  ok('the list is never sent to the page', !('access' in tb) && !JSON.stringify(tb).includes('rudolf@'));
+  ok('the sign-in page and its artwork still load for a refused person, so they can switch',
+     await st('/auth/logout', 'finance@hitproductions.net') === 302);
+  await setAccess([]);
+  ok('an Access tab listing nobody leaves only the engineers', await st('/api/bootstrap', 'tara@hitproductions.net') === 403 &&
+     await st('/api/bootstrap', 'jek.eng@hitproductions.net') === 200);
+
+  delete engJson[0].email;
+  fixture._reset();
+  await new Promise(r => app.server.close(r));
+  Object.keys(saved).forEach(k => { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
+  delete require.cache[require.resolve('../webapp/server.js')];
+}
+
 section('Lokal sign-in: engineers get the read-only view by email too (Tara, 2026-10-30)');
 {
   // The local copy keeps the Lokal WordPress sign-in. Its token carries a `login`; when that

@@ -16,6 +16,8 @@ const { createAuth } = require('./google-auth.js');
 // does not exist yet and the whole read failed with "Unable to parse range".
 const TABS = { projects: 'Projects', bookings: 'Bookings', engineers: 'Engineers' };
 const EVENTS_TAB = 'History';
+// Who may use the planner (Tara, 2026-10-30). Optional: no tab, no lock.
+const ACCESS_TAB = 'Access';
 // `revert` carries what a rollback needs to put a PROJECT ROW back — the row numbers
 // alone cannot express "and it was not cancelled before this". Added 2026-08-31 after
 // rolling back a cancel revived its bookings and left the project marked Cancelled,
@@ -240,7 +242,23 @@ function createSheetsSource(opts) {
       rowOf: projects.reduce((m, p) => { m[p.project_title] = p._row; return m; }, {}),
       nextRow: HEADER_ROW.Projects + 1 + projects.length,
     };
-    return { engineers, projects, bookings };
+
+    // ---- Access (optional). With the tab, only its emails get the planner and engineers get
+    // the read-only view; anyone else signed in is refused. Without it nothing is locked. Read
+    // on its own, because a batch read fails whole when one of its tabs does not exist.
+    let access = null;
+    try {
+      const r = await auth.api(`spreadsheets/${id}/values/` + encodeURIComponent(`${ACCESS_TAB}!A:Z`));
+      const vals = r.values || [];
+      const a = mapper(vals[0] || []);
+      access = a.has('email')
+        ? vals.slice(1).map(row => String(a(row, 'email') || '').trim().toLowerCase()).filter(Boolean)
+        : [];
+      if (!access.length) console.warn('The Access tab lists nobody (it needs an "email" column): only engineers can sign in.');
+    } catch (e) {
+      if (!(e && e.status === 400 && /unable to parse range/i.test(e.message))) throw e;
+    }
+    return { engineers, projects, bookings, access };
   }
 
   // Nothing is ever deleted. A row that stops being true has its status set to
