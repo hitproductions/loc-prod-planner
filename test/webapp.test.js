@@ -2089,6 +2089,57 @@ section('Sign in with Google (replaces the shared password)');
   delete require.cache[require.resolve('../webapp/server.js')];
 }
 
+section('Lokal sign-in: engineers get the read-only view by email too (Tara, 2026-10-30)');
+{
+  // The local copy keeps the Lokal WordPress sign-in. Its token carries a `login`; when that
+  // is an email in the Engineers tab, the person gets the read-only view, as with Google.
+  const crypto = require('crypto');
+  const { makeCsrfToken } = require('../webapp/csrf.js');
+  const SECRET = 'lokal-test-secret';
+  const saved = {}; ['PLANNER_SSO_SECRET', 'PLANNER_SSO_LOGIN_URL', 'PLANNER_GOOGLE_CLIENT_ID', 'PLANNER_PASSWORD']
+    .forEach(k => { saved[k] = process.env[k]; delete process.env[k]; });
+  process.env.PLANNER_SSO_SECRET = SECRET;
+  process.env.PLANNER_SSO_LOGIN_URL = 'https://lokal.hitpromanila.net/login';
+  delete require.cache[require.resolve('../webapp/server.js')];
+  const app = require('../webapp/server.js');
+  await new Promise(r => app.server.listen(0, r));
+  const port = app.server.address().port;
+  const hit = (path, opts) => fetch(`http://127.0.0.1:${port}${path}`, { redirect: 'manual', ...(opts || {}) });
+  const now = Math.floor(Date.now() / 1000);
+  const user = (login, extra) => ({ v: 1, aud: 'lokal-production-planner', uid: 7, login, nonce: 'n-' + login,
+    iat: now, exp: now + 600, ...(extra || {}) });
+  const cookieFor = u => {
+    const body = Buffer.from(JSON.stringify(u)).toString('base64url');
+    const sig = crypto.createHmac('sha256', SECRET).update(body).digest('base64url');
+    return 'lokal_planner_sso=' + encodeURIComponent(body + '.' + sig);
+  };
+  const engJson = require('../validation/engineers.json');
+  const eng0 = engJson[0];
+  eng0.email = 'jek.eng@hitproductions.net';
+  const as = u => ({ headers: { cookie: cookieFor(u) } });
+  const boot = async u => (await hit('/api/bootstrap?fresh=1', as(u))).json();
+
+  const engineer = user('Jek.Eng@hitproductions.net');
+  ok('an engineer signed in through Lokal is read-only', (await boot(engineer)).readonly === true);
+  ok('and gets the engineer view at /', /window\.READONLY = true/.test(await (await hit('/', as(engineer))).text()));
+  const bodyOf = JSON.stringify({ title: (await boot(user('planner@hitproductions.net'))).projects[0].title, locked: true });
+  const write = u => hit('/api/set-lock', { method: 'POST', body: bodyOf, headers: { cookie: cookieFor(u),
+    'content-type': 'application/json', origin: 'https://lokal.hitpromanila.net', 'x-planner-csrf': makeCsrfToken(u, SECRET) } });
+  const refused = await write(engineer);
+  ok('and the server refuses a change they send', refused.status === 403 && (await refused.json()).readonly === true, String(refused.status));
+  const planner = user('planner@hitproductions.net');
+  ok('someone not in the Engineers tab gets the full planner', (await boot(planner)).readonly === false &&
+     (await write(planner)).status === 200);
+  ok('a Lokal login that is not an email matches nobody, so it is the full planner as before',
+     (await boot(user('jek'))).readonly === false);
+  ok('an email carried beside a non-email login is used', (await boot(user('jek', { email: 'jek.eng@hitproductions.net' }))).readonly === true);
+
+  delete eng0.email;
+  await new Promise(r => app.server.close(r));
+  Object.keys(saved).forEach(k => { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
+  delete require.cache[require.resolve('../webapp/server.js')];
+}
+
 section('The password gate, for when the URL is public');
 {
   // The app authenticates nobody, which is fine on a LAN and not fine on a public Cloud
