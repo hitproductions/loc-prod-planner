@@ -7,7 +7,8 @@ Update the server copy to the latest **`main`**. It must include the merge title
 in everything after the last handoff (`deploy/SCHEDULE-READABILITY-UPDATE.md`): Google sign-in,
 the new sign-in page, one link for engineers, and the 3-projects-at-once rule. The local copy
 **keeps the Lokal sign-in**: see **Sign-in on the local copy**. Pull the latest `main`, not
-`70358bf` itself: later merges make the engineer read-only view work with the Lokal sign-in.
+`70358bf` itself: later merges make the engineer read-only view and the planner access list
+work with the Lokal sign-in.
 `git log --oneline -10` should list it. All of it is tested.
 
 ## What to do
@@ -40,23 +41,26 @@ copy only.
 - **Leave the Lokal settings as they are** (`PLANNER_SSO_SECRET`, `PLANNER_SSO_LOGIN_URL`,
   `PLANNER_REQUIRE_SSO`) and any `PLANNER_PASSWORD`. Nothing about sign-in changes.
 
-**One question for IT (please answer Tara):** when someone signs in through Lokal, is the
-`login` in the planner's sign-in token their **@hitproductions.net email**?
+**Who gets what.** The Lokal login is the person's **@hitproductions.net email** (confirmed by
+Tara), and the planner uses it to decide what each person sees:
 
-- **If yes**, nothing more to do. Engineers (anyone whose email is in the Engineers tab's
-  `email` column) get the read-only view on the main local link, and the server refuses any
-  change they send.
-- **If not**, add the person's email to the token as an `email` field, next to `login`, signed
-  the same way. The planner uses `email` when it is there.
-- Until one of those is true, engineers get full editing on the main link, exactly as today.
-  Keep giving them the read-only service's link until then.
+- **Planners listed on the sheet's `Access` tab** get the full planner.
+- **Engineers** (the Engineers tab's `email` column) get the read-only view on the main local
+  link, and the server refuses any change they send. They no longer need the separate
+  read-only link.
+- **Anyone else** who signs in through Lokal sees *"No access to the planner"*.
+
+Tara manages both lists in the sheet; changes apply within a few minutes, no restart. If the
+Lokal login ever stops being the email, the planner cannot tell who someone is and lets them in
+with full editing, as before this update.
 
 **Check**
 
-- Sign in through Lokal as a planner: the full planner opens and saving works.
+- Sign in through Lokal as a planner on the Access tab: the full planner opens and saving works.
 - Sign in as an engineer whose email is in the Engineers tab: the read-only view opens on the
-  main link (once the question above is settled).
-- Make a change, then open **History**: the **By** column shows who made it (their Lokal login).
+  main link.
+- Sign in as anyone else at Hit (not a planner, not an engineer): "No access to the planner".
+- Make a change, then open **History**: the **By** column shows who made it.
 
 ## What to expect on the sheet
 
@@ -65,6 +69,8 @@ copy only.
   delete it by hand.
 - **Engineers tab:** Tara has already added an `email` column and set Mat's `overflow_only` to
   `Yes`. Leave both as they are. The `email` column decides who gets the read-only view.
+- **Access tab:** Tara has added it, with the planners' emails. It decides who gets the full
+  planner. Do not rename or delete it: deleting it removes the lock.
 
 ## Check after the update
 
