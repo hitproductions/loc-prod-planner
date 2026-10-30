@@ -61,10 +61,21 @@ const READONLY = process.env.PLANNER_READONLY === '1';
 // book, so a change on the sheet applies within the cache's few minutes, no redeploy.
 const isEngineer = (book, email) => !!email &&
   (book.engineers || []).some(e => String(e.email || '').trim().toLowerCase() === email);
+// Who is signed in, as an email: Google's address, or the Lokal WordPress sign-in's (Tara,
+// 2026-10-30: the local copy keeps Lokal). Lokal sends a `login`; it counts when it is an
+// email address, or when the token also carries an `email`. Anything else matches nobody, so
+// that person gets the full planner, as before.
+function signedInEmail(req) {
+  if (req.googleUser) return req.googleUser.email;
+  const u = req.plannerUser;
+  const v = u ? String(u.email || u.login || '').trim().toLowerCase() : '';
+  return /^[^@\s]+@[^@\s]+$/.test(v) ? v : '';
+}
 async function readOnlyFor(req) {
   if (READONLY) return true;
-  if (!req.googleUser) return false;
-  return isEngineer(await store.get(), req.googleUser.email);
+  const email = signedInEmail(req);
+  if (!email) return false;
+  return isEngineer(await store.get(), email);
 }
 const PORT = Number(process.env.PORT || 8127);
 const HOST = process.env.HOST || undefined;
@@ -327,7 +338,7 @@ const server = http.createServer(async (req, res) => {
       // Without this the handler's Promise was JSON.stringify'd, which is "{}".
       let payload = await route(book, url.searchParams);
       if (url.pathname === '/api/bootstrap') {
-      payload.readonly = READONLY || !!(req.googleUser && isEngineer(book, req.googleUser.email));
+      payload.readonly = READONLY || isEngineer(book, signedInEmail(req));
       payload = withPlannerSession(
       payload,
       req

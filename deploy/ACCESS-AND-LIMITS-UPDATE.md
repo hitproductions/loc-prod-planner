@@ -6,7 +6,8 @@ Update the server copy to the latest **`main`**. It must include the merge title
 **"Merge pull request #12 from hitproductions/rudolf-limits"** (`70358bf`), which also brings
 in everything after the last handoff (`deploy/SCHEDULE-READABILITY-UPDATE.md`): Google sign-in,
 the new sign-in page, one link for engineers, and the 3-projects-at-once rule. The local copy
-should also switch to the Google sign-in page: see **Turn on the new Google sign-in page**.
+**keeps the Lokal sign-in**: see **Sign-in on the local copy**. Pull the latest `main`, not
+`70358bf` itself: later merges make the engineer read-only view work with the Lokal sign-in.
 `git log --oneline -10` should list it. All of it is tested.
 
 ## What to do
@@ -29,56 +30,39 @@ should also switch to the Google sign-in page: see **Turn on the new Google sign
 3. **Update every running copy together.** The Cloud Run editing copy is already on this
    version.
 
-## Turn on the new Google sign-in page (requested by Tara)
+## Sign-in on the local copy (updated 30 Oct 2026)
 
-The local copy should use the same sign-in as the Cloud Run copy: everyone signs in with their
-own **@hitproductions.net** Google account, engineers get the read-only view on the same link,
-and History records who made each change. It is off until the settings below are set.
+The local copy **keeps the Lokal WordPress sign-in**. The Google sign-in is for the Cloud Run
+copy only.
 
-**Before you start**
+- **Do not set any `PLANNER_GOOGLE_*` setting on the local copy.** Lokal and Google sign-in
+  cannot both be on: with both set, every save fails with *"Invalid CSRF token"*.
+- **Leave the Lokal settings as they are** (`PLANNER_SSO_SECRET`, `PLANNER_SSO_LOGIN_URL`,
+  `PLANNER_REQUIRE_SSO`) and any `PLANNER_PASSWORD`. Nothing about sign-in changes.
 
-- The local copy must be reached at an **https** web address (for example through your reverse
-  proxy). Google refuses sign-ins to plain addresses such as `http://192.168.x.x:8127`.
-- If the local copy currently uses the Lokal WordPress sign-in (`PLANNER_SSO_SECRET` is set),
-  tell Tara before turning Google on, so people are not asked to sign in twice.
+**One question for IT (please answer Tara):** when someone signs in through Lokal, is the
+`login` in the planner's sign-in token their **@hitproductions.net email**?
 
-**Steps**
-
-1. **Send Tara the https address** of each service (editing, and read-only if you keep it).
-   She adds `https://<address>/auth/google/callback` for each one to the Google sign-in client
-   in the Google Cloud console. Sign-in fails with *redirect_uri_mismatch* until she has.
-2. **Get the client secret from Tara** privately, through a password manager. Never by email,
-   chat, or in the repository.
-3. **Set these on both services** (editing and read-only), in the same place as the other
-   `PLANNER_*` settings, e.g. the `environment:` block of `deploy/docker-compose.planner.yml`
-   or an `.env` file it reads:
-
-   | Setting | Value |
-   |---|---|
-   | `PLANNER_GOOGLE_CLIENT_ID` | `63803252709-9m03lkbc51eslcgu1vjs7lr5qk1ves12.apps.googleusercontent.com` |
-   | `PLANNER_GOOGLE_CLIENT_SECRET` | the secret from step 2 |
-   | `PLANNER_PUBLIC_URL` | the service's own https address, e.g. `https://planner.example.com` (no trailing slash) |
-
-   `PLANNER_PUBLIC_URL` makes the callback address exact behind a proxy. If `PLANNER_PASSWORD`
-   is set, remove it: Google sign-in replaces the shared password.
-4. **Rebuild and restart** both services.
-
-If the client ID is set without the secret, the app refuses everyone rather than opening up,
-so set both together.
+- **If yes**, nothing more to do. Engineers (anyone whose email is in the Engineers tab's
+  `email` column) get the read-only view on the main local link, and the server refuses any
+  change they send.
+- **If not**, add the person's email to the token as an `email` field, next to `login`, signed
+  the same way. The planner uses `email` when it is there.
+- Until one of those is true, engineers get full editing on the main link, exactly as today.
+  Keep giving them the read-only service's link until then.
 
 **Check**
 
-- Open the address in a private window: only the camera-style **Sign in with Google** page shows.
-- Your Hit account opens the full planner, with your name top right and **Logout**.
-- An engineer's account (any address in the Engineers tab's `email` column) opens the
-  read-only view on the same link.
-- A personal Gmail is refused.
-- Make a change, then open **History**: your name is in the **By** column.
+- Sign in through Lokal as a planner: the full planner opens and saving works.
+- Sign in as an engineer whose email is in the Engineers tab: the read-only view opens on the
+  main link (once the question above is settled).
+- Make a change, then open **History**: the **By** column shows who made it (their Lokal login).
 
 ## What to expect on the sheet
 
 - **History tab:** a `by` column is added automatically on the first change after the update.
-  It holds the signed-in person's email. Do not add or delete it by hand.
+  It holds who made the change (the Lokal login locally, the email on Cloud Run). Do not add or
+  delete it by hand.
 - **Engineers tab:** Tara has already added an `email` column and set Mat's `overflow_only` to
   `Yes`. Leave both as they are. The `email` column decides who gets the read-only view.
 
@@ -96,5 +80,6 @@ so set both together.
 
 ## If something goes wrong
 
-Check out the commit you noted before pulling and restart. The `by` column on the History tab
-can stay; the older version ignores it.
+Check out the commit you noted before pulling and restart. Sign-in settings were not changed,
+so nothing else needs putting back. The `by` column on the History tab can stay; the older
+version ignores it.
