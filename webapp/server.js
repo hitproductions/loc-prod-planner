@@ -81,12 +81,15 @@ color:#000;font:15px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-
 h1{font-size:22px;margin:0 0 8px}p{color:#646667;margin:0 0 20px}a{color:#000;font-weight:700}</style>
 <main><h1>No access to the planner</h1><p>Your account is signed in, but it is not on the planner's access list. Ask Tara to add you.</p>
 ${logout ? '<a href="/auth/logout">Sign in with another account</a>' : ''}</main>`;
+// Read-only: an engineer, or someone the Access tab lists with a "view" role.
+const isViewer = (book, email) => isEngineer(book, email) ||
+  (!!email && (book.viewers || []).includes(email));
 async function accessGate(req, res) {
   const email = signedInEmail(req);
   if (!email) return true;
   const book = await store.get();
   if (!Array.isArray(book.access)) return true;
-  if (book.access.includes(email) || isEngineer(book, email)) return true;
+  if (book.access.includes(email) || isViewer(book, email)) return true;
   res.writeHead(403, { 'content-type': req.url.startsWith('/api/') ? 'application/json' : 'text/html; charset=utf-8',
                        'cache-control': 'no-store' });
   res.end(req.url.startsWith('/api/') ? '{"ok":false,"error":"Not on the planner access list."}' : DENIED(!!req.googleUser));
@@ -96,7 +99,7 @@ async function readOnlyFor(req) {
   if (READONLY) return true;
   const email = signedInEmail(req);
   if (!email) return false;
-  return isEngineer(await store.get(), email);
+  return isViewer(await store.get(), email);
 }
 const PORT = Number(process.env.PORT || 8127);
 const HOST = process.env.HOST || undefined;
@@ -360,7 +363,7 @@ const server = http.createServer(async (req, res) => {
       // Without this the handler's Promise was JSON.stringify'd, which is "{}".
       let payload = await route(book, url.searchParams);
       if (url.pathname === '/api/bootstrap') {
-      payload.readonly = READONLY || isEngineer(book, signedInEmail(req));
+      payload.readonly = READONLY || isViewer(book, signedInEmail(req));
       payload = withPlannerSession(
       payload,
       req

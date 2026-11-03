@@ -246,19 +246,25 @@ function createSheetsSource(opts) {
     // ---- Access (optional). With the tab, only its emails get the planner and engineers get
     // the read-only view; anyone else signed in is refused. Without it nothing is locked. Read
     // on its own, because a batch read fails whole when one of its tabs does not exist.
-    let access = null;
+    // An optional `role` column (Tara, 2026-11-03): blank or "edit" is the full planner; anything
+    // else ("view") is the read-only view, like an engineer's, for people who are not engineers.
+    // Only blank or "edit" grants editing, so a typo can never give someone more than they had.
+    let access = null, viewers = [];
     try {
       const r = await auth.api(`spreadsheets/${id}/values/` + encodeURIComponent(`${ACCESS_TAB}!A:Z`));
       const vals = r.values || [];
       const a = mapper(vals[0] || []);
-      access = a.has('email')
-        ? vals.slice(1).map(row => String(a(row, 'email') || '').trim().toLowerCase()).filter(Boolean)
-        : [];
-      if (!access.length) console.warn('The Access tab lists nobody (it needs an "email" column): only engineers can sign in.');
+      const rows = a.has('email') ? vals.slice(1)
+        .map(row => ({ email: String(a(row, 'email') || '').trim().toLowerCase(),
+                       role: String(a(row, 'role') || '').trim().toLowerCase() }))
+        .filter(x => x.email) : [];
+      access = rows.filter(x => !x.role || x.role === 'edit').map(x => x.email);
+      viewers = rows.filter(x => x.role && x.role !== 'edit').map(x => x.email);
+      if (!rows.length) console.warn('The Access tab lists nobody (it needs an "email" column): only engineers can sign in.');
     } catch (e) {
       if (!(e && e.status === 400 && /unable to parse range/i.test(e.message))) throw e;
     }
-    return { engineers, projects, bookings, access };
+    return { engineers, projects, bookings, access, viewers };
   }
 
   // Nothing is ever deleted. A row that stops being true has its status set to
