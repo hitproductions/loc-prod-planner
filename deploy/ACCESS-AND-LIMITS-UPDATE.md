@@ -45,9 +45,10 @@ copy only.
 Tara), and the planner uses it to decide what each person sees:
 
 - **Planners listed on the sheet's `Access` tab** get the full planner.
-- **Engineers** (the Engineers tab's `email` column) get the read-only view on the main local
-  link, and the server refuses any change they send. They no longer need the separate
-  read-only link.
+- **Read-only people** get the read-only view on the main local link, and the server refuses any
+  change they send. That is every **engineer** (the Engineers tab's `email` column) and anyone
+  the Access tab lists with `view` in its `role` column (for people who are not engineers).
+  They no longer need the separate read-only link.
 - **Anyone else** who signs in through Lokal sees *"No access to the planner"*.
 
 Tara manages both lists in the sheet; changes apply within a few minutes, no restart. If the
@@ -59,6 +60,8 @@ with full editing, as before this update.
 - Sign in through Lokal as a planner on the Access tab: the full planner opens and saving works.
 - Sign in as an engineer whose email is in the Engineers tab: the read-only view opens on the
   main link.
+- Sign in as someone the Access tab lists with `view`: the same read-only view, and a change
+  sent by hand is refused.
 - Sign in as anyone else at Hit (not a planner, not an engineer): "No access to the planner".
 - Make a change, then open **History**: the **By** column shows who made it.
 
@@ -69,8 +72,9 @@ with full editing, as before this update.
   delete it by hand.
 - **Engineers tab:** Tara has already added an `email` column and set Mat's `overflow_only` to
   `Yes`. Leave both as they are. The `email` column decides who gets the read-only view.
-- **Access tab:** Tara has added it, with the planners' emails. It decides who gets the full
-  planner. Do not rename or delete it: deleting it removes the lock.
+- **Access tab:** Tara has added it, with the planners' emails and a `role` column. Blank or
+  `edit` is the full planner; `view` is the read-only view. It decides who gets in at all. Do not
+  rename or delete it or its columns: deleting the tab removes the lock.
 
 ## Check after the update
 
