@@ -71,7 +71,13 @@ Without an **Access** tab on the sheet, anyone the sign-in lets in gets the plan
 
 Then only those people get the full planner; engineers (the Engineers tab's `email` column) get
 the read-only view; anyone else is refused with "No access to the planner". Changes apply within
-a few minutes, no redeploy. **An Access tab with no emails locks everyone out except engineers**,
+a few minutes, no redeploy.
+
+To give someone who is not an engineer the **read-only view**, add a `role` column (cell B1) and
+write `view` beside their email. Blank or `edit` is the full planner. Anything other than blank
+or `edit` counts as view, so a typo never gives someone editing.
+
+**An Access tab with no emails locks everyone out except engineers**,
 so add your own email first. Deleting the tab removes the lock.
 
 ## Check after deploying

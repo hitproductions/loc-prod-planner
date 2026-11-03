@@ -2126,6 +2126,16 @@ section('The Access tab: planners edit, engineers view, nobody else (Tara, 2026-
   ok('the list is never sent to the page', !('access' in tb) && !JSON.stringify(tb).includes('rudolf@'));
   ok('the sign-in page and its artwork still load for a refused person, so they can switch',
      await st('/auth/logout', 'finance@hitproductions.net') === 302);
+  // A "view" role on the Access tab: read-only without being an engineer (Tara, 2026-11-03).
+  fixture._setAccess(['tara@hitproductions.net'], ['viewer@hitproductions.net']); await app.store.get(true);
+  const vb = await (await fetch(base + '/api/bootstrap', as('viewer@hitproductions.net'))).json();
+  ok('someone with a view role gets in, read-only', vb.readonly === true);
+  ok('with the engineer view at /', /window\.READONLY = true/.test(await (await fetch(base + '/', as('viewer@hitproductions.net'))).text()));
+  const vw = await fetch(base + '/api/set-lock', { method: 'POST', headers: { ...as('viewer@hitproductions.net').headers,
+    'content-type': 'application/json', origin: base }, body: JSON.stringify({ title: tb.projects[0].title, locked: true }) });
+  ok('and the server refuses their changes', vw.status === 403 && (await vw.json()).readonly === true);
+  ok('a planner on the same tab still edits', (await (await fetch(base + '/api/bootstrap', as('tara@hitproductions.net'))).json()).readonly === false);
+
   await setAccess([]);
   ok('an Access tab listing nobody leaves only the engineers', await st('/api/bootstrap', 'tara@hitproductions.net') === 403 &&
      await st('/api/bootstrap', 'jek.eng@hitproductions.net') === 200);
